@@ -4,7 +4,7 @@ import Synchronization
 
 /// Exclusive transferable native point session. Configuration and topology are immutable.
 public struct OSDIPreparedModel: ~Copyable, Sendable {
-    private struct State { var handle: OpaquePointer? }
+    internal struct State { var handle: OpaquePointer? }
     private let state: Mutex<State>
     private var lease: OSDIStorageLease?
     private let limits: OSDIEvaluationLimits

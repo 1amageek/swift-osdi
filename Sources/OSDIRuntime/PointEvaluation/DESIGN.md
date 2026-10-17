@@ -68,6 +68,12 @@ have the advertised state count. Unknown/terminal vectors are not conflated.
 | Native model/instance/solve/results/state | COSDI exclusive session | Destroy before lease |
 | Immutable facts | Sendable copied values | Ordinary value lifetime |
 
+The nested `OSDIPreparedModel.State` has internal visibility so the fixed Swift
+6.4 compiler can emit valid layout metadata when an importing module stores the
+public noncopyable model inside its own Mutex-protected session. The stored Mutex
+remains private; this visibility does not grant public state or pointer access.
+The imported layout must compile and link without introducing a second owner.
+
 Explicit close takes the pointer under Mutex, destroys it outside Mutex, then drops
 the lease. Deinit destroys native storage before stored lease destruction. Closed
 models reject evaluation. A failed evaluation never invokes the result consumer.
@@ -89,3 +95,9 @@ generated setup/eval, explicit/given parameters,
 collapse/internal variables, state input, typed failures and close/lease lifetime.
 Pinned-toolchain typecheck, SIL region checks and negative view-escape probes cover
 the ownership seam; runtime/allocation evidence is required for performance claims.
+
+S3 cross-module regression evidence belongs to CoreSpiceOSDI: its concrete session
+stores `OSDIPreparedModel` under Mutex, then exercises preparation, point evaluation
+and close. The failing compiler metadata linkage and corrected consumer build/link
+are required alongside the existing native S1/S2 behavior tests; a same-module build
+alone does not verify this boundary.
