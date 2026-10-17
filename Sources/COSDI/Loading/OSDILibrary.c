@@ -358,3 +358,29 @@ int32_t cs_osdi_descriptor_info(const cs_osdi_library *library, uint32_t index,
 }
 void *cs_osdi_allocate_zeroed(uint64_t bytes) { return bytes && bytes <= SIZE_MAX ? calloc(1, (size_t)bytes) : NULL; }
 void cs_osdi_free(void *storage) { free(storage); }
+
+/* Internal borrows are protected by the caller's library/evaluator lease. */
+int32_t cs_osdi_borrow_descriptor(const cs_osdi_library *library, uint32_t index,
+                                 const OsdiDescriptor **out, cs_osdi_error *error) {
+    if (!library || !library->validated || !out)
+        return failure(error, CS_OSDI_INVALID_ARGUMENT, UINT32_MAX, "owner", "A validated owner and descriptor output are required");
+    if (index >= library->count)
+        return failure(error, CS_OSDI_DESCRIPTOR_INDEX_OUT_OF_RANGE, index, "descriptor_index", "Descriptor index is out of range");
+    *out = (const OsdiDescriptor *)(library->descriptors + (uint64_t)index * library->stride);
+    return CS_OSDI_SUCCESS;
+}
+int32_t cs_osdi_bind_logger(cs_osdi_library *library,
+                            void (*logger)(void *, const char *, uint32_t), cs_osdi_error *error) {
+#if defined(__APPLE__) && defined(__aarch64__)
+    if (!library || !library->validated || !logger)
+        return failure(error, CS_OSDI_INVALID_ARGUMENT, UINT32_MAX, "owner", "A validated owner and logger are required");
+    void (**slot)(void *, const char *, uint32_t) = dlsym(library->handle, "osdi_log");
+    if (!slot || (uintptr_t)slot % _Alignof(void *))
+        return failure(error, CS_OSDI_MISSING_SYMBOL, UINT32_MAX, "osdi_log", "A writable native logger slot is required for execution");
+    *slot = logger;
+    return CS_OSDI_SUCCESS;
+#else
+    (void)library; (void)logger;
+    return failure(error, CS_OSDI_UNSUPPORTED_HOST, UINT32_MAX, "host", "Only macOS arm64 is qualified");
+#endif
+}

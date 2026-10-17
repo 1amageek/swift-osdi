@@ -1,0 +1,26 @@
+nature Voltage;
+    units = "V";
+    access = V;
+endnature
+nature Current;
+    units = "A";
+    access = I;
+endnature
+discipline electrical;
+    potential Voltage;
+    flow Current;
+enddiscipline
+module collapsible_rc(p, n);
+    inout p, n;
+    electrical p, n, x;
+    parameter integer collapse = 1 from [0:1];
+    analog begin
+        if (collapse == 1) V(x, n) <+ 0;
+        else begin
+            I(x, n) <+ 0.002 * V(x, n);
+            I(x, n) <+ ddt(3.0e-12 * V(x, n));
+        end
+        I(p, x) <+ 0.001 * V(p, x);
+        I(p, x) <+ ddt(2.0e-12 * V(p, x));
+    end
+endmodule

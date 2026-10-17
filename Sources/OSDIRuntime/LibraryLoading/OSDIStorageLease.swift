@@ -1,14 +1,22 @@
+import COSDI
 import OSDIContracts
 
-/// Stored after native blocks so their owner releases this lease after freeing them.
-internal struct OSDIStorageLease: ~Copyable {
+/// Keeps image authority alive until all dependent native storage is destroyed.
+internal struct OSDIStorageLease: ~Copyable, Sendable {
     let descriptor: OSDIDescriptorInfo
     private let owner: OSDILibraryOwner
+    private let evaluation: Bool
 
-    internal init(descriptor: OSDIDescriptorInfo, owner: OSDILibraryOwner) {
+    internal init(descriptor: OSDIDescriptorInfo, owner: OSDILibraryOwner, evaluation: Bool = false) {
         self.descriptor = descriptor
         self.owner = owner
+        self.evaluation = evaluation
     }
 
-    deinit { owner.releaseLease() }
+    internal func withNativeLibrary<Result>(_ body: (OpaquePointer) throws(OSDIError) -> Result) throws(OSDIError) -> Result {
+        let handle = try owner.leasedHandle()
+        return try body(handle)
+    }
+
+    deinit { owner.releaseLease(evaluation: evaluation) }
 }

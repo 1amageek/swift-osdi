@@ -3,7 +3,8 @@
 ## Purpose and Scope
 
 COSDI is the native C module of swift-osdi. Parent: [swift-osdi](../../DESIGN.md).
-Its child [Loading](Loading/DESIGN.md) implements the public native owner boundary.
+Its children [Loading](Loading/DESIGN.md) and [DeviceEvaluation](DeviceEvaluation/DESIGN.md)
+implement the public native owner and prepared point-evaluation boundaries.
 The ABI directory holds an unchanged third-party declaration, not another runtime.
 
 ## Responsibilities and Boundaries
@@ -21,6 +22,7 @@ Model physics, compiler implementation and simulator policy are external.
 |---|---|---|---|---|
 | [swift-osdi](../../DESIGN.md) | parent | Native module composition | Swift-to-C boundary | Native-host qualification is explicit |
 | [Loading](Loading/DESIGN.md) | child | Open/inspect/close, zeroed storage | Native owner implementation | Borrowed metadata follows owner lifetime |
+| [DeviceEvaluation](DeviceEvaluation/DESIGN.md) | child | Prepared native model and raw F/Q/G/C | Point evaluation | Exclusive library lease outlives context |
 
 ## Architecture
 
@@ -34,7 +36,8 @@ Swift runtime -> public COSDI opaque owner API
 Public ABI types are declared only once. OSDI structs remain private to C source.
 Loading supplies typed admission and explicit close outcomes; its detailed budget,
 sentinel, retry and unsafe ownership contracts are authoritative in the child design.
-The C module does not call any model setup or evaluation callback in this stage.
+Model setup and evaluation are owned solely by DeviceEvaluation; Loading remains
+free of model callback execution.
 
 ## Verification and Change Impact
 

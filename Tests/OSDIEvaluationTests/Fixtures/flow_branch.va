@@ -1,0 +1,22 @@
+nature Voltage;
+    units = "V";
+    access = V;
+endnature
+nature Current;
+    units = "A";
+    access = I;
+endnature
+discipline electrical;
+    potential Voltage;
+    flow Current;
+enddiscipline
+module flow_branch(p, n);
+    inout p, n;
+    electrical p, n;
+    branch (p, n) drive;
+    parameter real bias = 0.4;
+    analog begin
+        V(drive) <+ bias + 50.0 * I(drive);
+        I(p, n) <+ ddt(2.0e-12 * V(p, n));
+    end
+endmodule

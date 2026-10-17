@@ -1,0 +1,23 @@
+nature Voltage;
+    units = "V";
+    access = V;
+endnature
+nature Current;
+    units = "A";
+    access = I;
+endnature
+discipline electrical;
+    potential Voltage;
+    flow Current;
+enddiscipline
+module auxiliary_coupling(p, n);
+    inout p, n;
+    electrical p, n, aux;
+    analog begin
+        I(p, n) <+ 0.001 * V(p, n) + (0.1 + 0.2 * V(p, n)) * V(aux);
+        I(p, n) <+ ddt(2.0e-12 * V(p, n) + 3.0e-9 * V(aux));
+        I(aux) <+ V(aux);
+        I(aux) <+ ddt((2.0e-9 + 0.3e-9 * V(p, n)) * V(aux));
+        I(aux) <+ white_noise(1.0e-23, "auxiliary");
+    end
+endmodule

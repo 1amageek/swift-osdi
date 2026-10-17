@@ -1,0 +1,1149 @@
+{
+  "schema": "osdi.independent-inputs.v1",
+  "cases": [
+    {
+      "id": "bsim-n-basic",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 4,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 2
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": 1,
+        "g": 1.2,
+        "s": 0,
+        "b": -0.2,
+        "t": 0,
+        "di": 1,
+        "di1": 1,
+        "si": 0,
+        "si1": 0,
+        "gi": 1.2,
+        "gm": 1.2,
+        "bi": -0.2,
+        "sbulk": -0.2,
+        "dbulk": -0.2,
+        "ddbulk": 1,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-p-basic",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 4,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": -1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 2
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": -1,
+        "g": -1.2,
+        "s": 0,
+        "b": 0.2,
+        "t": 0,
+        "di": -1,
+        "di1": -1,
+        "si": 0,
+        "si1": 0,
+        "gi": -1.2,
+        "gm": -1.2,
+        "bi": 0.2,
+        "sbulk": 0.2,
+        "dbulk": 0.2,
+        "ddbulk": -1,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-n-reverse",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 4,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 2
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": -0.5,
+        "g": 1.2,
+        "s": 0,
+        "b": -0.7,
+        "t": 0,
+        "di": -0.5,
+        "di1": -0.5,
+        "si": 0,
+        "si1": 0,
+        "gi": 1.2,
+        "gm": 1.2,
+        "bi": -0.7,
+        "sbulk": -0.7,
+        "dbulk": -0.7,
+        "ddbulk": -0.5,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-p-reverse",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 4,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": -1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 2
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": 0.5,
+        "g": -1.2,
+        "s": 0,
+        "b": 0.7,
+        "t": 0,
+        "di": 0.5,
+        "di1": 0.5,
+        "si": 0,
+        "si1": 0,
+        "gi": -1.2,
+        "gm": -1.2,
+        "bi": 0.7,
+        "sbulk": 0.7,
+        "dbulk": 0.7,
+        "ddbulk": 0.5,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-n-series0",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 4,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 0
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RSH",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 10
+          }
+        },
+        {
+          "name": "NRS",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1
+          }
+        },
+        {
+          "name": "NRD",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": 1,
+        "g": 1.2,
+        "s": 0,
+        "b": -0.2,
+        "t": 0,
+        "di": 0.97,
+        "di1": 0.97,
+        "si": 0.015,
+        "si1": 0.015,
+        "gi": 1.2,
+        "gm": 1.2,
+        "bi": -0.2,
+        "sbulk": -0.2,
+        "dbulk": -0.2,
+        "ddbulk": 1,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-n-hv-all",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 310,
+      "connectedTerminalCount": 5,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RSH",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 10
+          }
+        },
+        {
+          "name": "NRS",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1
+          }
+        },
+        {
+          "name": "NRD",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1
+          }
+        },
+        {
+          "name": "HVMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "HVCAP",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDLCW",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.1
+          }
+        },
+        {
+          "name": "RSLCW",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.1
+          }
+        },
+        {
+          "name": "RBODYMOD",
+          "scope": "instance",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RBODYHVMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RGATEMOD",
+          "scope": "instance",
+          "value": {
+            "kind": "integer",
+            "integer": 3
+          }
+        },
+        {
+          "name": "SHMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RTH0",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.01
+          }
+        },
+        {
+          "name": "CTH0",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "KFND",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 1e-20
+          }
+        },
+        {
+          "name": "KFNS",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 2e-20
+          }
+        },
+        {
+          "name": "XPART",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.3
+          }
+        },
+        {
+          "name": "IGCMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "IGBMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": 1,
+        "g": 1.2,
+        "s": 0,
+        "b": -0.2,
+        "t": 15,
+        "di": 0.97,
+        "di1": 0.99,
+        "si": 0.015,
+        "si1": 0.005,
+        "gi": 1.17,
+        "gm": 1.19,
+        "bi": -0.18,
+        "sbulk": -0.19,
+        "dbulk": -0.17,
+        "ddbulk": 0.98,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-p-selfheat",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 330,
+      "connectedTerminalCount": 5,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": -1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 2
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "SHMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RTH0",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.01
+          }
+        },
+        {
+          "name": "CTH0",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": -1,
+        "g": -1.2,
+        "s": 0,
+        "b": 0.2,
+        "t": 20,
+        "di": -1,
+        "di1": -1,
+        "si": 0,
+        "si1": 0,
+        "gi": -1.2,
+        "gm": -1.2,
+        "bi": 0.2,
+        "sbulk": 0.2,
+        "dbulk": 0.2,
+        "ddbulk": -1,
+        "N1": 0,
+        "N2": 0
+      },
+      "readParameters": []
+    },
+    {
+      "id": "rc-linear",
+      "library": "linear_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": []
+    },
+    {
+      "id": "rc-first",
+      "library": "two_models",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": []
+    },
+    {
+      "id": "rc-second",
+      "library": "two_models",
+      "descriptorIndex": 1,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": []
+    },
+    {
+      "id": "typed-default",
+      "library": "typed_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": [
+        "conductance",
+        "polarity",
+        "mode",
+        "scale",
+        "fingers"
+      ]
+    },
+    {
+      "id": "typed-model-default",
+      "library": "typed_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [
+        {
+          "name": "scale",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 3
+          }
+        }
+      ],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": [
+        "conductance",
+        "polarity",
+        "mode",
+        "scale",
+        "fingers"
+      ]
+    },
+    {
+      "id": "typed-instance-override",
+      "library": "typed_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [
+        {
+          "name": "scale",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 3
+          }
+        },
+        {
+          "name": "scale",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 4
+          }
+        }
+      ],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": [
+        "conductance",
+        "polarity",
+        "mode",
+        "scale",
+        "fingers"
+      ]
+    },
+    {
+      "id": "typed-alias-string-integer-hot",
+      "library": "typed_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 330.15,
+      "connectedTerminalCount": 2,
+      "parameters": [
+        {
+          "name": "gain",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.002
+          }
+        },
+        {
+          "name": "mode",
+          "scope": "model",
+          "value": {
+            "kind": "string",
+            "string": "boost"
+          }
+        },
+        {
+          "name": "polarity",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": -1
+          }
+        },
+        {
+          "name": "fingers",
+          "scope": "instance",
+          "value": {
+            "kind": "integer",
+            "integer": 3
+          }
+        },
+        {
+          "name": "scale_alias",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 0.5
+          }
+        }
+      ],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2
+      },
+      "readParameters": [
+        "conductance",
+        "polarity",
+        "mode",
+        "scale",
+        "fingers"
+      ]
+    },
+    {
+      "id": "collapse-on",
+      "library": "collapsible_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [
+        {
+          "name": "collapse",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2,
+        "x": -0.2
+      },
+      "readParameters": []
+    },
+    {
+      "id": "collapse-off",
+      "library": "collapsible_rc",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [
+        {
+          "name": "collapse",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 0
+          }
+        }
+      ],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2,
+        "x": 0.3
+      },
+      "readParameters": []
+    },
+    {
+      "id": "flow-unit",
+      "library": "flow_branch",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2,
+        "flow(drive)": 0.004
+      },
+      "readParameters": []
+    },
+    {
+      "id": "bsim-n-hv-all-nonzero-aux",
+      "library": "bsim",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 310,
+      "connectedTerminalCount": 5,
+      "parameters": [
+        {
+          "name": "L",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "W",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "TYPE",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDSMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "TNOIMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RSH",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 10
+          }
+        },
+        {
+          "name": "NRS",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1
+          }
+        },
+        {
+          "name": "NRD",
+          "scope": "instance",
+          "value": {
+            "kind": "real",
+            "real": 1
+          }
+        },
+        {
+          "name": "HVMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "HVCAP",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RDLCW",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.1
+          }
+        },
+        {
+          "name": "RSLCW",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.1
+          }
+        },
+        {
+          "name": "RBODYMOD",
+          "scope": "instance",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RBODYHVMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RGATEMOD",
+          "scope": "instance",
+          "value": {
+            "kind": "integer",
+            "integer": 3
+          }
+        },
+        {
+          "name": "SHMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "RTH0",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.01
+          }
+        },
+        {
+          "name": "CTH0",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 1e-05
+          }
+        },
+        {
+          "name": "KFND",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 1e-20
+          }
+        },
+        {
+          "name": "KFNS",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 2e-20
+          }
+        },
+        {
+          "name": "XPART",
+          "scope": "model",
+          "value": {
+            "kind": "real",
+            "real": 0.3
+          }
+        },
+        {
+          "name": "IGCMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        },
+        {
+          "name": "IGBMOD",
+          "scope": "model",
+          "value": {
+            "kind": "integer",
+            "integer": 1
+          }
+        }
+      ],
+      "rawPotentials": {
+        "d": 1,
+        "g": 1.2,
+        "s": 0,
+        "b": -0.2,
+        "t": 15,
+        "di": 0.97,
+        "di1": 0.99,
+        "si": 0.015,
+        "si1": 0.005,
+        "gi": 1.17,
+        "gm": 1.19,
+        "bi": -0.18,
+        "sbulk": -0.19,
+        "dbulk": -0.17,
+        "ddbulk": 0.98,
+        "N1": 0.01,
+        "N2": 0.02
+      },
+      "readParameters": []
+    },
+    {
+      "id": "auxiliary-coupling",
+      "library": "auxiliary_coupling",
+      "descriptorIndex": 0,
+      "temperatureKelvin": 300.15,
+      "connectedTerminalCount": 2,
+      "parameters": [],
+      "rawPotentials": {
+        "p": 0.8,
+        "n": -0.2,
+        "aux": 0.03
+      },
+      "readParameters": []
+    }
+  ]
+}

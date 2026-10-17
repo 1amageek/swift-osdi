@@ -10,6 +10,7 @@ internal final class OSDILibraryOwner: Sendable {
         var handle: OpaquePointer?
         var lifecycle: Lifecycle = .open
         var leaseCount = 0
+        var evaluationActive = false
     }
     private let state: Mutex<State>
     private let stagingDirectory: URL
@@ -75,20 +76,33 @@ internal final class OSDILibraryOwner: Sendable {
         }
     }
 
-    internal func acquireLease(descriptor: OSDIDescriptorInfo) throws(OSDIError) -> OSDIStorageLease {
+    internal func acquireLease(descriptor: OSDIDescriptorInfo, evaluation: Bool = false) throws(OSDIError) -> OSDIStorageLease {
         try state.withLock { state throws(OSDIError) in
             guard case .open = state.lifecycle else { throw .closed }
+            guard !evaluation || !state.evaluationActive else { throw .libraryInUse }
             let (next, overflow) = state.leaseCount.addingReportingOverflow(1)
             guard !overflow else { throw .resourceLimit }
             state.leaseCount = next
+            if evaluation { state.evaluationActive = true }
         }
-        return OSDIStorageLease(descriptor: descriptor, owner: self)
+        return OSDIStorageLease(descriptor: descriptor, owner: self, evaluation: evaluation)
     }
 
-    internal func releaseLease() {
+    internal func leasedHandle() throws(OSDIError) -> OpaquePointer {
+        try state.withLock { state throws(OSDIError) in
+            guard case .open = state.lifecycle, state.leaseCount > 0, let handle = state.handle else { throw .closed }
+            return handle
+        }
+    }
+
+    internal func releaseLease(evaluation: Bool = false) {
         state.withLock { state in
             precondition(state.leaseCount > 0, "Unbalanced OSDI storage lease")
             state.leaseCount -= 1
+            if evaluation {
+                precondition(state.evaluationActive, "Unbalanced OSDI evaluation lease")
+                state.evaluationActive = false
+            }
         }
     }
 

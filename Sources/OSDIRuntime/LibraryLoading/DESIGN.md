@@ -58,7 +58,11 @@ Native owner construction and publication accept a `sending OpaquePointer`: call
 relinquish the disconnected native-handle region on entry, including publication
 failure. The initializer transfers that region into the sole Mutex-owned State.
 No caller may retain an independently usable native handle after transfer; immutable
-metadata contains only copied values. This is an ownership boundary, not unchecked
+metadata contains only copied values. Evaluation leases additionally admit at most
+one prepared session per shared image under this same Mutex; ordinary S1 storage
+leases remain independent and may coexist. Internal synchronous handle borrowing
+requires a live lease and runs its foreign-operation body after releasing Mutex.
+Session destruction precedes evaluation-lease release. This is an ownership boundary, not unchecked
 Sendable conformance or a target-specific synchronization exception.
 
 ## Failure, Concurrency, and Constraints
