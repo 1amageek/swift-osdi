@@ -381,3 +381,24 @@ finite-difference outcome. A generated manifest with failed checks remains a
 qualification failure. Retain its exact library path/digest and request inputs
 when comparing API and CLI results. Ordinary `osdi-evaluate` execution only loads
 the resulting artifact and never invokes the compiler or either fixture builder.
+
+## Dynamic point evaluation
+
+The context overload accepts explicit DC, AC, transient, transient initialization
+and noise phases. Noise evaluates AC|NOISE at an explicit positive frequency in
+hertz and returns independent source densities with descriptor-coordinate source
+metadata. `noiseDensities` and `maximumTimestep` borrow prepared native storage;
+copy only at an output or retained-history boundary. The caller owns accepted
+state, integration and rejection. Positive infinity means no timestep bound.
+
+The `osdi-evaluate` CLI preserves schema 1 `dc-static-point`. Schema 2 requires
+`profile: dynamic-point` and `context` containing `mode`, `timeSeconds`, and
+`noiseFrequencyHz` only for noise. It saves source metadata, raw PSD and optional
+maximum timestep with the existing exact artifact/request bindings. Native images
+remain trusted code. These point values do not establish solved circuit results.
+
+Dynamic runtime tests additionally require `OSDI_S4_FAMILIES_MANIFEST` pointing to
+the exact four-family capture manifest produced by the CoreSpice qualification
+tools. The focused `OSDIDynamicEvaluationTests` suite uses its solved raw node
+values to compare AC, IC, transient and two noise frequencies with the independent
+point ABI oracle. Existing S1/S2 filtered suites retain their prior inputs.

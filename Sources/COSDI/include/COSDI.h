@@ -152,6 +152,18 @@ typedef struct cs_osdi_evaluator_info_record {
     uint32_t diagnostic_count;
     const cs_osdi_diagnostic *diagnostics;
 } cs_osdi_evaluator_info_record;
+/* Stable mode numbers: DC=0, AC=1, transient=2, transient IC=3, noise=4. */
+typedef struct cs_osdi_evaluation_context {
+    uint32_t mode;
+    double time_seconds;
+    double noise_frequency_hz; /* Required only for noise; zero otherwise. */
+} cs_osdi_evaluation_context;
+typedef struct cs_osdi_noise_source_info_record {
+    cs_osdi_string_view name;
+    uint32_t kind;
+    uint32_t positive_node;
+    uint32_t negative_node; /* UINT32_MAX ground. */
+} cs_osdi_noise_source_info_record;
 typedef struct cs_osdi_result_view {
     uint32_t node_count;
     uint32_t active_unknown_count;
@@ -161,6 +173,10 @@ typedef struct cs_osdi_result_view {
     const double *g; /* Raw row-major node_count squared. */
     const double *c; /* Raw row-major node_count squared. */
     const double *next_state;
+    uint32_t noise_count;
+    const double *noise_densities;
+    uint32_t has_maximum_timestep;
+    double maximum_timestep;
     uint32_t model_flags;
     uint32_t diagnostic_count;
     const cs_osdi_diagnostic *diagnostics;
@@ -190,6 +206,15 @@ int32_t cs_osdi_evaluate(cs_osdi_evaluator *evaluator, const double *active_valu
                          uint64_t active_count, const double *previous_state,
                          uint64_t state_count, cs_osdi_result_view *out_result,
                          cs_osdi_error *error);
+/* Same scoped views and lifetime as the DC entry point. */
+int32_t cs_osdi_evaluate_context(cs_osdi_evaluator *evaluator,
+                                const cs_osdi_evaluation_context *context,
+                                const double *active_values, uint64_t active_count,
+                                const double *previous_state, uint64_t state_count,
+                                cs_osdi_result_view *out_result, cs_osdi_error *error);
+int32_t cs_osdi_noise_source_info(const cs_osdi_library *library, uint32_t descriptor,
+                                 uint32_t source, cs_osdi_noise_source_info_record *out_info,
+                                 cs_osdi_error *error);
 void cs_osdi_evaluator_destroy(cs_osdi_evaluator *evaluator);
 
 #ifdef __cplusplus

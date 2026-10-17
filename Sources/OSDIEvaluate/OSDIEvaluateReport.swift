@@ -93,16 +93,30 @@ struct OSDIEvaluateReport: Codable {
         let message: String
         init(_ value: OSDIDiagnostic) { level = value.level; message = value.message }
     }
+    struct NoiseSource: Codable {
+        let index: Int
+        let name: String
+        let kind: UInt32
+        let positiveNodeIndex: Int
+        let negativeNodeIndex: Int?
+        init(_ value: OSDINoiseSourceInfo) {
+            index = value.index; name = value.name; kind = value.kind.rawValue
+            positiveNodeIndex = value.positiveNodeIndex; negativeNodeIndex = value.negativeNodeIndex
+        }
+    }
     struct Evaluation: Codable {
         let f: [Double]
         let q: [Double]
         let g: [Double]
         let c: [Double]
         let nextState: [Double]
+        let noiseDensities: [Double]?
+        let maximumTimestep: Double?
         let modelFlags: UInt32
         let diagnostics: [Diagnostic]
     }
     struct Prepared: Codable {
+        let noiseSources: [NoiseSource]?
         let topology: Topology
         let parameterMetadata: [ParameterInfo]
         let resolvedParameters: [ResolvedParameter]
@@ -136,7 +150,7 @@ struct OSDIEvaluateReport: Codable {
     init(succeeded: Bool, requestBinding: Binding?, input: OSDIEvaluateRequest?,
          descriptor: Descriptor? = nil, prepared: Prepared? = nil,
          evaluation: Evaluation? = nil, failure: Failure? = nil) {
-        schemaVersion = 1; toolVersion = "swift-osdi/S2-schema1"; osdiABIVersion = "0.4"
+        schemaVersion = input?.schemaVersion ?? 1; toolVersion = schemaVersion == 1 ? "swift-osdi/S2-schema1" : "swift-osdi/S4-schema2"; osdiABIVersion = "0.4"
         stage = input?.operation == "prepare" ? "osdi-preparation" : "osdi-point-evaluation"
         self.succeeded = succeeded
         self.requestBinding = requestBinding; self.input = input

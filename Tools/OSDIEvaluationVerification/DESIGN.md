@@ -64,3 +64,7 @@ Cold capture measures cost before full regression. Wrong artifact digest, unknow
 parameters, duplicate alias assignments and native failure flags remain explicit.
 Numeric tolerances for finite differences are tied to measured stencil disagreement
 and floating roundoff; these are ordinary point checks, not interval certificates.
+
+S4 direct-ABI capture accepts explicit mode/time/frequency and emits raw independent
+noise topology/densities and the model timestep bound. It does not call COSDI and
+keeps state/integration ownership outside the oracle point operation.

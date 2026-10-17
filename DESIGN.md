@@ -146,3 +146,11 @@ differences. These validate the consumer of the selected generated artifact, not
 the underlying BSIM physical equations. [Evaluation tests](Tests/OSDIEvaluationTests/DESIGN.md)
 and [evaluation tools](Tools/OSDIEvaluationVerification/DESIGN.md) own that evidence.
 [Progress](PROGRESS.md) is the sole task ledger.
+
+## S4 Dynamic Evaluation
+
+The user extends the immutable exact local Git availability exception to S4.
+[CoreSpice dynamic composition](../CoreSpice/DESIGN.md#s4-dynamic-osdi-composition-contract)
+owns solver, acceptance, integration and finalization. This package owns explicit
+mode/time/IC context, independent noise-source facts, fresh scoped PSD and a
+per-evaluation optional timestep limit. Existing DC calls and schema 1 stay fixed.

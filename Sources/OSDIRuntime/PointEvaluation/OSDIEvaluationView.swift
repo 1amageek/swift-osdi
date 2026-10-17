@@ -8,16 +8,19 @@ public struct OSDIEvaluationView: ~Escapable {
     public let g: Span<Double>
     public let c: Span<Double>
     public let nextState: Span<Double>
+    public let noiseDensities: Span<Double>
+    public let maximumTimestep: Double?
     public let modelFlags: UInt32
     public let diagnosticCount: Int
     private let nativeDiagnostics: UnsafePointer<cs_osdi_diagnostic>?
     private let maximumDiagnosticBytes: UInt64
 
-    @_lifetime(copy f, copy q, copy g, copy c, copy nextState)
+    @_lifetime(copy f, copy q, copy g, copy c, copy nextState, copy noiseDensities)
     internal init(f: Span<Double>, q: Span<Double>, g: Span<Double>, c: Span<Double>,
-                  nextState: Span<Double>, modelFlags: UInt32, diagnosticCount: Int,
+                  nextState: Span<Double>, noiseDensities: Span<Double>, maximumTimestep: Double?, modelFlags: UInt32, diagnosticCount: Int,
                   nativeDiagnostics: UnsafePointer<cs_osdi_diagnostic>?, maximumDiagnosticBytes: UInt64) {
         self.f = f; self.q = q; self.g = g; self.c = c; self.nextState = nextState
+        self.noiseDensities = noiseDensities; self.maximumTimestep = maximumTimestep
         self.modelFlags = modelFlags; self.diagnosticCount = diagnosticCount
         self.nativeDiagnostics = nativeDiagnostics; self.maximumDiagnosticBytes = maximumDiagnosticBytes
     }

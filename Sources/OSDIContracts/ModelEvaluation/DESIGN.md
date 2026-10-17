@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Parent: [OSDIContracts](../DESIGN.md). No children. Own typed preparation inputs,
-local topology, parameter facts and diagnostics for S2 point evaluation.
+local topology, parameter facts, explicit phase/time context and noise-source facts.
 
 ## Responsibilities and Boundaries
 
@@ -67,3 +67,13 @@ types and given flags. Analytic RC and an independent direct-ABI BSIM harness ch
 all raw values and topology. Finite differences use alias-consistent active
 coordinates and independently reduced Jacobians. Value and dimensional refusals
 must reach API and CLI as failures. Changes affect both owning execution designs.
+
+## S4 Context and Noise Values
+
+`OSDIEvaluationContext` owns a validated mode, nonnegative finite absolute seconds
+and a positive finite noise frequency only for noise mode. Modes are DC, AC,
+transient, explicit transient initialization, and noise. Initialization is at zero
+and is independent of how the caller selected OP or UIC initial values.
+`OSDINoiseSourceInfo` retains stable source index/name/kind and raw positive/negative
+node indices; nil negative index is ground. Equation units/natures come from the
+prepared node metadata. Sources are independent PSD channels, not correlated pairs.

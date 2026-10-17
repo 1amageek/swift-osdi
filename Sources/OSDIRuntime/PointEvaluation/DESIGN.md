@@ -10,8 +10,8 @@ sessions over actual OSDI setup/eval callbacks; no circuit assembly or solver.
 Bridge explicit model/default and instance assignments, Kelvin temperature and
 connected terminals to COSDI. Copy immutable topology, parameter facts and setup
 diagnostics. Expose raw F/Q and row-major G/C plus explicit next state as scoped
-views. The fixed profile is F/Q/G/C + OP + DC + STATIC at time zero with limiting
-disabled. Previous state is caller supplied; no implicit accepted-history commit.
+views. The legacy overload retains F/Q/G/C + OP + DC + STATIC at time zero;
+the context overload selects the explicit S4 phase below. Limiting remains disabled. Previous state is caller supplied; no implicit accepted-history commit.
 
 ## Related Designs
 
@@ -111,3 +111,25 @@ The Swift 6.4 Release regression additionally compiles the actual OSDIRuntime an
 CoreSpiceOSDI consumer with normal optimized settings. A reduced local accumulator
 reproduces the borrowed-field capture compiler assertion; preparation budget
 success/failure tests verify that the immutable limits snapshot preserves behavior.
+
+## S4 Dynamic Evaluation Contract
+
+The context overload maps DC to DC|STATIC, AC to AC, transient to TRAN, explicit
+initialization to TRAN|IC|STATIC, and noise to AC|NOISE with CALC_NOISE. All request
+F/Q/G/C and OP; limiting stays disabled. Existing overloads select DC at time zero.
+Native previous state and Q/integrator history remain separate. Every trial uses
+caller-provided accepted state and returns a candidate without committing it.
+
+Prepared noise facts copy descriptor identities and raw endpoints under the same
+library lease. Noise evaluation loads PSD for the explicit frequency immediately
+after the same model callback. The scoped density span is empty in other modes.
+The optional maximum timestep comes from this call's fresh native bound slot;
+absent offset or positive infinity means no bound, finite positive values mean
+seconds, and other values fail. Neither a result view nor native pointer escapes.
+
+The same exclusive Mutex-backed noncopyable owner serializes all operations.
+Callbacks and native destruction remain outside locks. No new accepted history,
+heap owner or per-call allocation is introduced. Workspace includes a stable PSD
+buffer sized by admitted descriptor source count. Analytic mode/time/IC/noise and
+state controls, all four exact model families, Debug/Release consumers and scoped
+allocation measurements own the new evidence.

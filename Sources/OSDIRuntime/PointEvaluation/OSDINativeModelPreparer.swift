@@ -27,7 +27,7 @@ public struct OSDINativeModelPreparer: OSDIModelPreparing {
             let snapshot = try lease.withNativeLibrary { handle throws(OSDIError) in
                 try OSDIMetadataSnapshot(library: handle, evaluator: evaluator, descriptor: descriptor, limits: options.limits)
             }
-            return OSDIPreparedModel(handle: evaluator, lease: consume lease, topology: snapshot.topology,
+            return OSDIPreparedModel(handle: evaluator, lease: consume lease, topology: snapshot.topology, noiseSources: snapshot.noiseSources,
                 parameterMetadata: snapshot.parameters, resolvedParameters: snapshot.resolved,
                 diagnostics: snapshot.diagnostics, limits: options.limits)
         } catch {

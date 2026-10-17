@@ -108,7 +108,7 @@ enum OSDIEvaluateEntry {
         var model = try OSDINativeModelPreparer().prepare(library: library,
             descriptorIndex: request.descriptorIndex, options: options)
         defer { model.close() }
-        let prepared = OSDIEvaluateReport.Prepared(topology: .init(model.topology),
+        let prepared = OSDIEvaluateReport.Prepared(noiseSources: request.schemaVersion == 2 ? model.noiseSources.map(OSDIEvaluateReport.NoiseSource.init) : nil, topology: .init(model.topology),
             parameterMetadata: model.parameterMetadata.map(OSDIEvaluateReport.ParameterInfo.init),
             resolvedParameters: model.resolvedParameters.map(OSDIEvaluateReport.ResolvedParameter.init),
             diagnostics: model.diagnostics.map(OSDIEvaluateReport.Diagnostic.init))
@@ -128,7 +128,7 @@ enum OSDIEvaluateEntry {
             throw OSDIEvaluateFailure.invalidUnknowns("Expected \(model.topology.activeUnknownCount) active unknowns and \(model.topology.stateCount) previous-state values; received \(localUnknowns.count) and \(previousState.count). Every value must be finite and follow prepared order.")
         }
         let evaluated: Result<OSDIEvaluateReport.Evaluation, OSDIError> = try OSDINativeModelEvaluator().evaluate(
-            model: &model, unknowns: localUnknowns.span,
+            model: &model, context: try request.evaluationContext(), unknowns: localUnknowns.span,
             previousState: previousState.span) { view in
                 do throws(OSDIError) {
                     var diagnostics: [OSDIEvaluateReport.Diagnostic] = []
@@ -138,6 +138,8 @@ enum OSDIEvaluateEntry {
                     }
                     return .success(.init(f: materialize(view.f), q: materialize(view.q), g: materialize(view.g),
                         c: materialize(view.c), nextState: materialize(view.nextState),
+                        noiseDensities: request.schemaVersion == 2 ? materialize(view.noiseDensities) : nil,
+                        maximumTimestep: request.schemaVersion == 2 ? view.maximumTimestep : nil,
                         modelFlags: view.modelFlags, diagnostics: diagnostics))
                 } catch { return .failure(error) }
             }

@@ -3,6 +3,7 @@ import OSDIContracts
 
 internal struct OSDIMetadataSnapshot {
     let topology: OSDIPreparedTopology
+    let noiseSources: [OSDINoiseSourceInfo]
     let parameters: [OSDIParameterInfo]
     let resolved: [OSDIResolvedParameter]
     let diagnostics: [OSDIDiagnostic]
@@ -37,6 +38,26 @@ internal struct OSDIMetadataSnapshot {
         }
         do { topology = try OSDIPreparedTopology(nodes: nodes, activeUnknownCount: Int(info.active_unknown_count), stateCount: Int(info.state_count)) }
         catch { throw .contract(error) }
+        let (noiseBytes, noiseOverflow) = UInt64(descriptor.noiseSourceCount).multipliedReportingOverflow(by: UInt64(MemoryLayout<OSDINoiseSourceInfo>.stride))
+        guard !noiseOverflow, noiseBytes <= limits.maximumWorkspaceBytes else { throw .resourceLimit }
+        var sources: [OSDINoiseSourceInfo] = []; sources.reserveCapacity(descriptor.noiseSourceCount)
+        for index in 0..<descriptor.noiseSourceCount {
+            var source = cs_osdi_noise_source_info_record()
+            guard cs_osdi_noise_source_info(library, UInt32(descriptor.index), UInt32(index), &source, &error) == 0 else {
+                throw .native(NativeIssueBridge.issue(error))
+            }
+            guard let kind = OSDINoiseSourceKind(rawValue: source.kind), source.positive_node < info.node_count,
+                  source.negative_node == UInt32.max || source.negative_node < info.node_count else { throw .invalidRange }
+            do {
+                sources.append(try OSDINoiseSourceInfo(index: index,
+                    name: OSDINativeText.copy(source.name, maximumBytes: limits.maximumStringBytes), kind: kind,
+                    positiveNodeIndex: Int(source.positive_node),
+                    negativeNodeIndex: source.negative_node == UInt32.max ? nil : Int(source.negative_node)))
+            } catch let failure as OSDIError { throw failure }
+            catch let failure as OSDIContractError { throw .contract(failure) }
+            catch { throw .host(operation: "copy noise metadata", underlying: error) }
+        }
+        noiseSources = sources
         let (parameterCount, overflow) = descriptor.parameterCount.addingReportingOverflow(descriptor.operatingPointCount)
         guard !overflow else { throw .resourceLimit }
         var metadata: [OSDIParameterInfo] = []; metadata.reserveCapacity(parameterCount)

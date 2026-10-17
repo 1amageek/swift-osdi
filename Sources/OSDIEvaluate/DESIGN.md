@@ -70,3 +70,12 @@ single exact BSIM artifact. Compare saved/reloaded CLI F/Q/G/C, maps, parameter
 facts and failure reports with public API and direct ABI evidence. Existing
 `osdi-inspect` remains unchanged. Schema changes require this design, README and
 CLI integration evidence to be updated together.
+
+## S4 Dynamic Schema
+
+Schema 1 and dc-static-point input/output defaults remain unchanged. Schema 2
+uses profile dynamic-point and an explicit context (mode, timeSeconds and optional
+noiseFrequencyHz), retains prepared noise metadata and returns density values and
+optional maximumTimestep. JSON materialization remains the external output boundary.
+Requests and reports bind exact bytes and generated artifacts as before; normal
+JSON decoding verifies saved reports. Dynamic input never silently falls back to DC.

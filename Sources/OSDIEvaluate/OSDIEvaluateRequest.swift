@@ -78,6 +78,13 @@ struct OSDIEvaluateRequest: Codable {
         }
     }
 
+    struct Context: Codable {
+        let mode: String
+        let timeSeconds: Double
+        let noiseFrequencyHz: Double?
+    }
+    let context: Context?
+
     let schemaVersion: Int
     let operation: String
     let libraryPath: String
@@ -95,12 +102,37 @@ struct OSDIEvaluateRequest: Codable {
     let localUnknowns: [Double]?
     let previousState: [Double]?
 
+    func evaluationContext() throws -> OSDIEvaluationContext {
+        guard schemaVersion == 2 else { return .dc }
+        guard let context else { throw OSDIEvaluateFailure.invalidRequest("Explicit dynamic context is required") }
+        let mode: OSDIEvaluationMode
+        switch context.mode {
+        case "dc": mode = .dc
+        case "ac": mode = .ac
+        case "transient": mode = .transient
+        case "transientInitialization": mode = .transientInitialization
+        case "noise": mode = .noise
+        default: throw OSDIEvaluateFailure.unsupportedCapability("Unknown evaluation mode")
+        }
+        return try OSDIEvaluationContext(mode: mode, timeSeconds: context.timeSeconds,
+            noiseFrequencyHz: context.noiseFrequencyHz)
+    }
+
     func preparationOptions() throws -> OSDIPreparationOptions {
-        guard schemaVersion == 1 else { throw OSDIEvaluateFailure.invalidRequest("Unsupported schema version") }
+        guard schemaVersion == 1 || schemaVersion == 2 else { throw OSDIEvaluateFailure.invalidRequest("Unsupported schema version") }
         guard operation == "prepare" || operation == "evaluate" else {
             throw OSDIEvaluateFailure.invalidRequest("Expected prepare or evaluate operation")
         }
-        guard profile == "dc-static-point" else { throw OSDIEvaluateFailure.unsupportedCapability("Unsupported evaluation profile") }
+        if schemaVersion == 1 {
+            guard profile == "dc-static-point", context == nil else {
+                throw OSDIEvaluateFailure.unsupportedCapability("Schema 1 requires the unchanged dc-static-point profile")
+            }
+        } else {
+            guard profile == "dynamic-point", context != nil else {
+                throw OSDIEvaluateFailure.unsupportedCapability("Schema 2 requires dynamic-point and an explicit context")
+            }
+            _ = try evaluationContext()
+        }
         guard temperatureKelvin.isFinite, temperatureKelvin > 0 else { throw OSDIEvaluateFailure.invalidTemperature }
         guard descriptorIndex >= 0, connectedTerminalCount >= 0 else {
             throw OSDIEvaluateFailure.invalidRequest("Negative descriptor index or terminal count")

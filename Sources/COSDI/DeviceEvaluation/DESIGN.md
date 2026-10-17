@@ -47,7 +47,7 @@ Kelvin and an explicit connected-terminal count. Numeric/string simulation value
 are explicit; no gmin or other simulation parameter is inferred. Prepared reads
 report resolved values and both model/instance given flags.
 
-The fixed evaluation profile is resistive/reactive residuals and Jacobians plus
+The legacy evaluation entry point requests resistive/reactive residuals and Jacobians plus
 operating-point, DC and static analysis; absolute time is zero and limiting is
 not enabled. Absdelay descriptors are unsupported in this point profile. Previous
 state input has exactly the descriptor state count. Each call copies it into both
@@ -113,3 +113,20 @@ Pinned source authority is OpenVAFReloaded commit
 `setup.rs` (model/instance order and errors), `stdlib.c` (errors/logging/state),
 `eval.rs` (flags and state indices), `load.rs` (additive pointer loaders), and
 `hir_lower/src/expr.rs` (limiting gate).
+
+## S4 Dynamic Native Boundary
+
+A typed context selects the analysis bits and absolute seconds. The original C
+entry point forwards to the unchanged DC profile. Noise alone requests CALC_NOISE
+and calls load_noise at the positive finite context frequency after that eval.
+Preparation allocates one stable density buffer through the checked workspace
+allocator. PSD must be finite and nonnegative; no fabs/clamping is performed.
+The result publishes zero noise count outside noise mode. Before every eval the
+optional bound-step slot is reset to positive infinity to prevent stale limits.
+After success its positive finite value or no-limit is returned. Invalid limits,
+PSD, flags, diagnostics, dimensions and context clear the output view and fail.
+
+The upstream ABI remains unchanged. The noise-info C accessor returns admitted
+name/type/raw endpoints; source units are derived from residual node metadata.
+General Verilog-A hidden-state or delay support is not inferred. Caller-owned
+accept/reject history and external foreign-code allocations remain outside scope.

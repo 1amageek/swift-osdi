@@ -20,6 +20,7 @@ struct cs_osdi_evaluator {
     double *solve;
     double *previous_state;
     double *next_state;
+    double *noise_densities;
     double *f;
     double *q;
     double *g;
@@ -304,6 +305,7 @@ int32_t cs_osdi_prepare(cs_osdi_library *library, uint32_t descriptor,
     ALLOC(map, d->num_nodes, uint32_t);
     ALLOC(solve, (uint64_t)d->num_nodes + 1, double);
     ALLOC(previous_state, d->num_states, double); ALLOC(next_state, d->num_states, double);
+    ALLOC(noise_densities, d->num_noise_src, double);
     ALLOC(f, d->num_nodes, double); ALLOC(q, d->num_nodes, double);
     uint64_t matrix_count = (uint64_t)d->num_nodes * d->num_nodes;
     ALLOC(g, matrix_count, double); ALLOC(c, matrix_count, double);
@@ -354,11 +356,23 @@ int32_t cs_osdi_evaluator_parameter(cs_osdi_evaluator *e, uint32_t parameter, ui
 }
 int32_t cs_osdi_evaluate(cs_osdi_evaluator *e, const double *active, uint64_t active_count,
                          const double *previous, uint64_t state_count, cs_osdi_result_view *out, cs_osdi_error *error) {
+    const cs_osdi_evaluation_context context = {0, 0, 0};
+    return cs_osdi_evaluate_context(e, &context, active, active_count, previous, state_count, out, error);
+}
+int32_t cs_osdi_evaluate_context(cs_osdi_evaluator *e, const cs_osdi_evaluation_context *context,
+                                 const double *active, uint64_t active_count,
+                                 const double *previous, uint64_t state_count,
+                                 cs_osdi_result_view *out, cs_osdi_error *error) {
     if (out) memset(out, 0, sizeof(*out));
     if (error) memset(error, 0, sizeof(*error));
     if (!e || !out || active_count != e->active_count || state_count != e->descriptor->num_states
         || (active_count && !active) || (state_count && !previous))
         return issue(e, error, CS_OSDI_INVALID_ARGUMENT, "inputs", "Active unknown and previous-state counts must match the prepared layout");
+    if (!context || context->mode > 4 || !isfinite(context->time_seconds) || context->time_seconds < 0
+        || (context->mode != 2 && context->time_seconds != 0)
+        || (context->mode == 4 ? (!isfinite(context->noise_frequency_hz) || context->noise_frequency_hz <= 0)
+                               : context->noise_frequency_hz != 0))
+        return issue(e, error, CS_OSDI_INVALID_ARGUMENT, "context", "Invalid analysis mode, absolute time or noise frequency");
     for (uint64_t i = 0; i < active_count; ++i) if (!isfinite(active[i]))
         return issue(e, error, CS_OSDI_NONFINITE_INPUT, "active_values", "Active unknown values must be finite");
     for (uint64_t i = 0; i < state_count; ++i) if (!isfinite(previous[i]))
@@ -371,8 +385,17 @@ int32_t cs_osdi_evaluate(cs_osdi_evaluator *e, const double *active, uint64_t ac
         memcpy(e->next_state, e->previous_state, (size_t)state_count * sizeof(double));
     }
     const OsdiDescriptor *d = e->descriptor;
-    OsdiSimInfo info = {e->simulation, 0, e->solve, e->previous_state, e->next_state,
-        CALC_RESIST_RESIDUAL | CALC_REACT_RESIDUAL | CALC_RESIST_JACOBIAN | CALC_REACT_JACOBIAN | CALC_OP | ANALYSIS_DC | ANALYSIS_STATIC};
+    uint32_t flags = CALC_RESIST_RESIDUAL | CALC_REACT_RESIDUAL | CALC_RESIST_JACOBIAN | CALC_REACT_JACOBIAN | CALC_OP;
+    switch (context->mode) {
+    case 0: flags |= ANALYSIS_DC | ANALYSIS_STATIC; break;
+    case 1: flags |= ANALYSIS_AC; break;
+    case 2: flags |= ANALYSIS_TRAN; break;
+    case 3: flags |= ANALYSIS_TRAN | ANALYSIS_IC | ANALYSIS_STATIC; break;
+    case 4: flags |= ANALYSIS_AC | ANALYSIS_NOISE | CALC_NOISE; break;
+    }
+    double *bound = d->bound_step_offset == UINT32_MAX ? NULL : (double *)((unsigned char *)e->instance + d->bound_step_offset);
+    if (bound) *bound = INFINITY;
+    OsdiSimInfo info = {e->simulation, context->time_seconds, e->solve, e->previous_state, e->next_state, flags};
     e->model_flags = d->eval(e, e->instance, e->model, &info);
     int32_t status = check_callback(e, error, 0); if (status) return status;
     uint64_t matrix_count = (uint64_t)d->num_nodes * d->num_nodes;
@@ -389,8 +412,21 @@ int32_t cs_osdi_evaluate(cs_osdi_evaluator *e, const double *active, uint64_t ac
         return issue(e, error, CS_OSDI_NONFINITE_OUTPUT, "jacobian", "Native raw Jacobian is nonfinite");
     for (uint64_t i = 0; i < state_count; ++i) if (!isfinite(e->next_state[i]))
         return issue(e, error, CS_OSDI_NONFINITE_OUTPUT, "next_state", "Native next state is nonfinite");
-    *out = (cs_osdi_result_view){d->num_nodes, e->active_count, d->num_states, e->f, e->q,
-        e->g, e->c, e->next_state, e->model_flags, e->diagnostic_count, e->diagnostics};
+    if (bound && (isnan(*bound) || *bound <= 0))
+        return issue(e, error, CS_OSDI_NONFINITE_OUTPUT, "bound_step", "Native timestep bound must be positive or positive infinity");
+    uint32_t noise_count = context->mode == 4 ? d->num_noise_src : 0;
+    if (noise_count) {
+        memset(e->noise_densities, 0, (size_t)noise_count * sizeof(double));
+        d->load_noise(e->instance, e->model, context->noise_frequency_hz, e->noise_densities);
+        status = check_callback(e, error, 0); if (status) return status;
+        for (uint32_t i = 0; i < noise_count; ++i) if (!isfinite(e->noise_densities[i]) || e->noise_densities[i] < 0)
+            return issue(e, error, CS_OSDI_NONFINITE_OUTPUT, "noise_density", "Native noise density must be finite and nonnegative");
+    }
+    *out = (cs_osdi_result_view){.node_count=d->num_nodes, .active_unknown_count=e->active_count,
+        .state_count=d->num_states, .f=e->f, .q=e->q, .g=e->g, .c=e->c, .next_state=e->next_state,
+        .noise_count=noise_count, .noise_densities=noise_count ? e->noise_densities : NULL,
+        .has_maximum_timestep=bound && isfinite(*bound), .maximum_timestep=bound && isfinite(*bound) ? *bound : 0,
+        .model_flags=e->model_flags, .diagnostic_count=e->diagnostic_count, .diagnostics=e->diagnostics};
     return 0;
 }
 int32_t cs_osdi_node_info(const cs_osdi_library *library, uint32_t descriptor, uint32_t node,
@@ -424,5 +460,16 @@ int32_t cs_osdi_parameter_alias(const cs_osdi_library *library, uint32_t descrip
         return issue(NULL, error, CS_OSDI_INVALID_ARGUMENT, "parameter.alias", "Parameter alias index or output is invalid");
     if (error) memset(error, 0, sizeof(*error));
     *out = view(d->param_opvar[parameter].name[(uint64_t)alias + 1]);
+    return 0;
+}
+
+int32_t cs_osdi_noise_source_info(const cs_osdi_library *library, uint32_t descriptor,
+                                 uint32_t source, cs_osdi_noise_source_info_record *out, cs_osdi_error *error) {
+    const OsdiDescriptor *d;
+    int32_t status = cs_osdi_borrow_descriptor(library, descriptor, &d, error); if (status) return status;
+    if (!out || source >= d->num_noise_src) return issue(NULL, error, CS_OSDI_INVALID_ARGUMENT, "noise_source", "Noise source index or output is invalid");
+    if (error) memset(error, 0, sizeof(*error));
+    const OsdiNoiseSource *n = d->noise_sources + source;
+    *out = (cs_osdi_noise_source_info_record){view(n->name), d->noise_source_type[source], n->nodes.node_1, n->nodes.node_2};
     return 0;
 }

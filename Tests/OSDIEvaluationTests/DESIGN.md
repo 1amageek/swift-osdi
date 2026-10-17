@@ -76,3 +76,11 @@ difference checks supplement exact-artifact independent comparisons; they do not
 establish interval inclusion or arbitrary-model accuracy. Changes to flags, node
 mapping, parameter scope, string ownership or native lifetime invalidate associated
 captures and regressions.
+
+## S4 Dynamic Evidence
+
+Dynamic tests distinguish mode/time/IC, white/flicker PSD, raw ground endpoints,
+fresh bound values, invalid context/PSD/bounds and explicit state retry. A generated
+analytic source and negative C protocol images test actual callbacks. Four exact
+model artifacts receive fresh AC/TRAN/noise API comparisons and CLI round trips.
+Existing S1/S2 counts and defaults remain regression requirements.

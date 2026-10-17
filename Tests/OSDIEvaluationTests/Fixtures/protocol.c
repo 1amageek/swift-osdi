@@ -2,6 +2,7 @@
 #include "osdi_0_4.h"
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #ifndef PROTOCOL_MODE
 #error PROTOCOL_MODE must select a protocol transport test
@@ -71,7 +72,10 @@ static void load_rhs_tran(void *instance,void *model,double *destination,double 
     (void)instance;(void)model;(void)destination;(void)previous;(void)alpha;abort();
 }
 static void load_noise(void *instance,void *model,double frequency,double *destination) {
-    (void)instance;(void)model;(void)frequency;(void)destination;abort();
+    (void)instance;(void)model;(void)frequency;
+    if (PROTOCOL_MODE==10) { destination[0]=-1; return; }
+    if (PROTOCOL_MODE==11) { destination[0]=NAN; return; }
+    abort();
 }
 static uint32_t given(void *storage,uint32_t id) { (void)storage;(void)id;return 0; }
 static void jacobian_array(void *instance,void *model,double *destination) {
@@ -86,8 +90,16 @@ static void jacobian_offset(void *instance,void *model,size_t offset) {
 static void noise_parameters(void *instance,void *model,double *power,double *exponent) {
     (void)instance;(void)model;(void)power;(void)exponent;abort();
 }
+#if PROTOCOL_MODE >= 10
+static OsdiNoiseSource noise_sources[]={{"invalid-spectrum",{0,UINT32_MAX}}};
+static uint32_t noise_types[]={NOISE_TYPE_WHITE};
+#endif
 OsdiDescriptor OSDI_DESCRIPTORS[]={
-    {.name="protocol_transport",.num_nodes=1,.num_terminals=1,.nodes=nodes,
+    {
+#if PROTOCOL_MODE >= 10
+     .num_noise_src=1,.noise_sources=noise_sources,.noise_source_type=noise_types,
+#endif
+     .name="protocol_transport",.num_nodes=1,.num_terminals=1,.nodes=nodes,
      .num_jacobian_entries=1,.jacobian_entries=jacobian,.collapsed_offset=0,
      .node_mapping_offset=0,.jacobian_ptr_resist_offset=32,.num_states=2,.state_idx_off=8,
      .bound_step_offset=UINT32_MAX,.instance_size=64,.model_size=8,

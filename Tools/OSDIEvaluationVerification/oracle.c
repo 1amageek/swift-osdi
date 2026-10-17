@@ -106,11 +106,15 @@ int main(int argc,char **argv) {
     bool *given=allocate((size_t)d->num_params*2,sizeof(bool));
     bool *probed=allocate(d->num_params,sizeof(bool));
     char **owned=allocate((size_t)argc,sizeof(char *));uint32_t owned_count=0;
+    uint32_t mode=0;double abstime=0,frequency=0;
     for(int argument=5;argument<argc;++argument) {
         char *assignment=strdup(argv[argument]);if(!assignment)fail("allocation failed");
         owned[owned_count++]=assignment;
         if(!strncmp(assignment,"r:",2)) { probed[parameter(d,assignment+2)]=true;continue; }
         char *equal=strchr(assignment,'=');if(!equal)fail("missing assignment value");*equal=0;
+        if(!strcmp(assignment,"e:mode")) { double v=number(equal+1);if(v<0||v>4||v!=floor(v))fail("invalid mode");mode=(uint32_t)v;continue; }
+        if(!strcmp(assignment,"e:time")) { abstime=number(equal+1);continue; }
+        if(!strcmp(assignment,"e:frequency")) { frequency=number(equal+1);continue; }
         if(!strncmp(assignment,"v:",2)) {
             bool found=false;
             for(uint32_t index=0;index<n;++index)if(!strcmp(d->nodes[index].name,assignment+2)) {
@@ -182,8 +186,14 @@ int main(int argc,char **argv) {
         if(entry->react_ptr_off!=UINT32_MAX)*(double **)checked(instance,d->instance_size,entry->react_ptr_off,sizeof(double *))=&c[position];
     }
     double *previous_state=allocate(d->num_states,sizeof(double)),*next_state=allocate(d->num_states,sizeof(double));
-    const uint32_t flags=CALC_RESIST_RESIDUAL|CALC_REACT_RESIDUAL|CALC_RESIST_JACOBIAN|CALC_REACT_JACOBIAN|CALC_OP|ANALYSIS_DC|ANALYSIS_STATIC;
-    OsdiSimInfo info={.paras=paras,.abstime=0,.prev_solve=solve,.prev_state=previous_state,.next_state=next_state,.flags=flags};
+    uint32_t flags=CALC_RESIST_RESIDUAL|CALC_REACT_RESIDUAL|CALC_RESIST_JACOBIAN|CALC_REACT_JACOBIAN|CALC_OP;
+    if(mode==0)flags|=ANALYSIS_DC|ANALYSIS_STATIC;
+    else if(mode==1)flags|=ANALYSIS_AC;
+    else if(mode==2)flags|=ANALYSIS_TRAN;
+    else if(mode==3)flags|=ANALYSIS_TRAN|ANALYSIS_IC|ANALYSIS_STATIC;
+    else flags|=ANALYSIS_AC|ANALYSIS_NOISE|CALC_NOISE;
+    if(abstime<0 || (mode!=2 && abstime!=0) || (mode==4 ? frequency<=0 : frequency!=0))fail("invalid dynamic context");
+    OsdiSimInfo info={.paras=paras,.abstime=abstime,.prev_solve=solve,.prev_state=previous_state,.next_state=next_state,.flags=flags};
     uint32_t returned=d->eval(NULL,instance,model,&info);
     if(returned) { printf("{\"failure\":{\"stage\":\"eval\",\"flags\":%u}}\n",returned);return 2; }
     d->load_residual_resist(instance,model,assembled_f);d->load_residual_react(instance,model,assembled_q);
@@ -208,6 +218,12 @@ int main(int argc,char **argv) {
     printf(",\"f\":");vector(f,n);printf(",\"q\":");vector(q,n);
     printf(",\"g\":");vector(g,n*n);printf(",\"c\":");vector(c,n*n);
     printf(",\"nextState\":");vector(next_state,d->num_states);
+    double *noise=allocate(d->num_noise_src,sizeof(double));
+    if(mode==4 && d->num_noise_src)d->load_noise(instance,model,frequency,noise);
+    printf(",\"noiseDensities\":");vector(noise,mode==4?d->num_noise_src:0);
+    printf(",\"maximumTimestep\":");
+    double bound=d->bound_step_offset==UINT32_MAX?INFINITY:*(double *)checked(instance,d->instance_size,d->bound_step_offset,sizeof(double));
+    if(isinf(bound)&&bound>0)printf("null");else real(bound);
     printf(",\"parameters\":[");bool first=true;
     for(uint32_t index=0;index<d->num_params;++index)if(probed[index]) {
         OsdiParamOpvar *entry=&d->param_opvar[index];uint32_t kind=entry->flags>>30,type=entry->flags&PARA_TY_MASK;
@@ -225,7 +241,7 @@ int main(int argc,char **argv) {
     puts("]}");
     free(model);free(instance);free(bias);free(bias_given);free(given);free(probed);
     free(parent);free(dense);free(root_to_dense);free(solve);free(active_values);free(solve_given);
-    free(f);free(q);free(assembled_f);free(assembled_q);free(g);free(c);free(previous_state);free(next_state);
+    free(noise);free(f);free(q);free(assembled_f);free(assembled_q);free(g);free(c);free(previous_state);free(next_state);
     for(uint32_t index=0;index<owned_count;++index)free(owned[index]);free(owned);
     if(dlclose(library))fail("oracle unload failed");return 0;
 }

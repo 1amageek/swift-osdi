@@ -1,0 +1,17 @@
+`include "constants.vams"
+`include "disciplines.vams"
+module dynamic_profile(p, n);
+    inout p, n;
+    electrical p, n;
+    real phase;
+    analog begin
+        phase = analysis("dc") + 2.0*analysis("ac") + 4.0*analysis("tran")
+              + 8.0*analysis("ic") + 16.0*analysis("noise") + 32.0*analysis("static");
+        I(p,n) <+ 0.001*V(p,n) + phase + $abstime;
+        I(p,n) <+ ddt(2.0e-12*V(p,n));
+        I(p,n) <+ white_noise(4.0e-18*V(p,n)*V(p,n), "white");
+        I(p,n) <+ flicker_noise(9.0e-18, 1.0, "flicker");
+        if (V(p,n) > 0.0) $bound_step(0.25 + $abstime);
+        if (V(p,n) < 0.0) $bound_step(0.0);
+    end
+endmodule
