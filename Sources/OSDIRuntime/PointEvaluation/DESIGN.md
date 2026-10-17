@@ -139,3 +139,12 @@ Cold metadata snapshots validate the node-info presence bit and copy it into
 owns its meaning. No per-evaluation path, buffer, owner or lease changes. Existing
 exact-revision performance evidence remains historical; its unchanged hot-path
 premises can be reused separately from consumer changes using the new fact.
+
+## Precision Composition
+
+The optional precision lane is owned by [Precision Execution](../PrecisionExecution/DESIGN.md).
+
+The prepared model retains immutable original preparation and image identity only
+for precision snapshot admission. This cold metadata prevents combining a program
+with a different configuration/image/descriptor. Ordinary evaluate, state buffers,
+foreign storage addresses and close ordering are unchanged.

@@ -135,3 +135,11 @@ The node-info accessor exports `has_reactive_residual` as 0/1 directly from the
 admitted raw node offset sentinel. Loading already validates every present offset.
 Its meaning is owned by [Model Evaluation](../../OSDIContracts/ModelEvaluation/DESIGN.md#reactive-residual-presence).
 This cold inspection does not change raw evaluation or allocate native storage.
+
+## Precision Composition
+
+The ordinary evaluator and its metadata path remain unchanged by S4D execution.
+[PrecisionProcess](../PrecisionProcess/DESIGN.md) owns the separate helper transport
+and cleanup boundary; [CompilerPrecision](../CompilerPrecision/DESIGN.md) owns the
+optional program format. No child process is hidden inside ordinary evaluator
+destruction.

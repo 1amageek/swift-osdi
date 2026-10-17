@@ -88,3 +88,15 @@ Existing S1/S2 counts and defaults remain regression requirements.
 Reactive-row metadata tests own ABI sentinel/present discrimination and conservative
 manual defaults. Protocol Q depends on absolute time and accepted state while C is
 zero, so sampled derivative inference cannot satisfy the metadata contract.
+
+## Precision Execution
+
+`OSDIPrecisionTests` owns scoped shared-slab views, exact worker acquisition,
+helper failure/cancellation and close behavior. `OSDI_PRECISION_TRANSPORT_WORKER`
+points to the C transport oracle; it does not qualify arithmetic.
+`OSDI_PRECISION_MODEL`, `OSDI_PRECISION_WORKER` and
+`OSDI_PRECISION_SEMANTIC_SHA256` and `OSDI_PRECISION_NUMERIC_PROFILE_SHA256` bind the actual compiler compound-default fixture
+and statically linked numeric helper. Tests discriminate binary64-folded defaults,
+sub-ULP coordinates, scoped explicit primitive facts and original ordinary-model
+usability after precision failure. Independent interval arithmetic and all-family
+qualification remain owned by the numeric/compiler and composition tests.

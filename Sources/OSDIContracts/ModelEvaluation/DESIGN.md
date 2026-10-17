@@ -96,3 +96,7 @@ Sentinel/present protocol fixtures include time/state-only Q with identically ze
 C and distinguish the structural fact from sampled zero Q. Metadata changes affect
 consumer topology decisions; evaluation, storage, ownership and serialized CLI
 schemas are unchanged.
+
+## Precision Composition
+
+The optional precision lane is owned by [Precision Evaluation](../PrecisionEvaluation/DESIGN.md).

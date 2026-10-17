@@ -29,7 +29,7 @@ public struct OSDINativeModelPreparer: OSDIModelPreparing {
             }
             return OSDIPreparedModel(handle: evaluator, lease: consume lease, topology: snapshot.topology, noiseSources: snapshot.noiseSources,
                 parameterMetadata: snapshot.parameters, resolvedParameters: snapshot.resolved,
-                diagnostics: snapshot.diagnostics, limits: options.limits)
+                diagnostics: snapshot.diagnostics, limits: options.limits, preparation: copy options, modelReference: library.reference)
         } catch {
             cs_osdi_evaluator_destroy(evaluator)
             throw error

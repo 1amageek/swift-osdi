@@ -9,8 +9,13 @@ import OSDIRuntime
 enum OSDIEvaluateEntry {
     static func main() async {
         if CommandLine.arguments == [CommandLine.arguments[0], "--help"] {
-            print("Usage: osdi-evaluate --request REQUEST.json --output REPORT.json")
+            print("Usage: osdi-evaluate --request REQUEST.json --output REPORT.json\n       osdi-evaluate --precision-request REQUEST.json --output REPORT.json")
             return
+        }
+        let arguments = CommandLine.arguments
+        if arguments.count == 5, arguments[1] == "--precision-request", arguments[3] == "--output" {
+            let succeeded = await OSDIEvaluatePrecisionCommand.run(requestPath: arguments[2], outputPath: arguments[4])
+            if !succeeded { exit(1) }; return
         }
         var output: URL?
         var request: OSDIEvaluateRequest?

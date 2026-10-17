@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "COSDI", targets: ["COSDI"]),
         .library(name: "OSDIContracts", targets: ["OSDIContracts"]),
         .library(name: "OSDIRuntime", targets: ["OSDIRuntime"]),
+        .executable(name: "osdi-precision-worker", targets: ["OSDIPrecisionWorker"]),
         .executable(name: "osdi-inspect", targets: ["OSDIInspect"]),
         .executable(name: "osdi-evaluate", targets: ["OSDIEvaluate"])
     ],
@@ -16,17 +17,27 @@ let package = Package(
                  revision: "c952ac5ebe3c21bf0cbd6d6ac239130efd732b3a")
     ],
     targets: [
-        .target(name: "COSDI", exclude: ["DESIGN.md", "Loading/DESIGN.md", "DeviceEvaluation/DESIGN.md"],
+        .systemLibrary(name: "CGMP", pkgConfig: "gmp", providers: [.brew(["gmp"])]),
+        .systemLibrary(name: "CMPFR", pkgConfig: "mpfr", providers: [.brew(["mpfr"])]),
+        .target(name: "COSDI", exclude: ["DESIGN.md", "Loading/DESIGN.md", "DeviceEvaluation/DESIGN.md",
+                "CompilerPrecision/DESIGN.md", "PrecisionProcess/DESIGN.md"],
                 publicHeadersPath: "include"),
+        .target(name: "COSDIPrecision", dependencies: ["COSDI", "CMPFR", "CGMP"],
+                exclude: ["DESIGN.md", "Arena/DESIGN.md", "Arithmetic/DESIGN.md",
+                    "ProgramEvaluation/DESIGN.md", "WorkerProtocol/DESIGN.md"], publicHeadersPath: "include"),
+        .executableTarget(name: "OSDIPrecisionWorker", dependencies: ["COSDIPrecision"],
+                exclude: ["DESIGN.md"]),
         .target(name: "OSDIContracts", dependencies: [
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation")
-        ], exclude: ["DESIGN.md", "LibraryMetadata/DESIGN.md", "ModelEvaluation/DESIGN.md"]),
+        ], exclude: ["DESIGN.md", "LibraryMetadata/DESIGN.md", "ModelEvaluation/DESIGN.md",
+                    "PrecisionEvaluation/DESIGN.md"]),
         .target(name: "OSDIRuntime", dependencies: ["COSDI", "OSDIContracts",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFileSystem", package: "CircuiteFoundation")
-        ], exclude: ["DESIGN.md", "LibraryLoading/DESIGN.md", "StableStorage/DESIGN.md", "PointEvaluation/DESIGN.md"],
+        ], exclude: ["DESIGN.md", "LibraryLoading/DESIGN.md", "StableStorage/DESIGN.md", "PointEvaluation/DESIGN.md",
+                    "PrecisionExecution/DESIGN.md"],
                 swiftSettings: [.enableExperimentalFeature("Lifetimes"), .enableExperimentalFeature("LifetimeDependence")]),
         .executableTarget(name: "OSDIInspect", dependencies: ["OSDIRuntime", "OSDIContracts",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),

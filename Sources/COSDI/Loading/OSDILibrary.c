@@ -1,4 +1,5 @@
 #include "COSDI.h"
+#include "OSDICompilerPrecision.h"
 #include "../ABI/osdi_0_4.h"
 #include <errno.h>
 #include <limits.h>
@@ -382,5 +383,43 @@ int32_t cs_osdi_bind_logger(cs_osdi_library *library,
 #else
     (void)library; (void)logger;
     return failure(error, CS_OSDI_UNSUPPORTED_HOST, UINT32_MAX, "host", "Only macOS arm64 is qualified");
+#endif
+}
+
+int32_t cs_osdi_precision_program_view(cs_osdi_library *library, uint32_t index,
+    uint64_t maximum_bytes, const unsigned char **program, uint64_t *bytes, cs_osdi_error *error) {
+    if (program) *program = NULL;
+    if (bytes) *bytes = 0;
+    if (!library || !library->validated || !program || !bytes || index >= library->count)
+        return failure(error, CS_OSDI_INVALID_ARGUMENT, index, "precision", "Invalid program request");
+#if defined(__APPLE__) && defined(__aarch64__)
+    const uint32_t *count = dlsym(library->handle, "OSDI_PRECISION_V1_COUNT");
+    const CSOsdiPrecisionExportV1 *records = dlsym(library->handle, "OSDI_PRECISION_V1");
+    if (!count || !records)
+        return failure(error, CS_OSDI_UNSUPPORTED_FEATURE, index, "precision", "Optional precision export is absent");
+    if ((uintptr_t)count % _Alignof(uint32_t) || (uintptr_t)records % _Alignof(CSOsdiPrecisionExportV1)
+        || *count > library->count)
+        return failure(error, CS_OSDI_MALFORMED_DESCRIPTOR, index, "precision", "Invalid precision export table");
+    const CSOsdiPrecisionExportV1 *selected = NULL;
+    for (uint32_t i = 0; i < *count; ++i) {
+        const CSOsdiPrecisionExportV1 *record = &records[i];
+        if (record->version != 1 || record->record_bytes != sizeof(*record) || record->reserved
+            || record->descriptor_index >= library->count)
+            return failure(error, CS_OSDI_MALFORMED_DESCRIPTOR, index, "precision", "Invalid precision export record");
+        if (record->descriptor_index == index) {
+            if (selected) return failure(error, CS_OSDI_MALFORMED_DESCRIPTOR, index, "precision", "Duplicate precision descriptor");
+            selected = record;
+        }
+    }
+    if (!selected) return failure(error, CS_OSDI_UNSUPPORTED_FEATURE, index, "precision", "Descriptor has no precision program");
+    if (!selected->program || selected->program_bytes < sizeof(CSOsdiPrecisionProgramHeader)
+        || selected->program_bytes > maximum_bytes || selected->program_bytes > SIZE_MAX
+        || selected->program_bytes > UINTPTR_MAX - (uintptr_t)selected->program)
+        return failure(error, CS_OSDI_RESOURCE_LIMIT, index, "precision", "Invalid or oversized precision program");
+    *program = selected->program; *bytes = selected->program_bytes;
+    return 0;
+#else
+    (void)maximum_bytes;
+    return failure(error, CS_OSDI_UNSUPPORTED_HOST, index, "precision", "Precision requires native Apple arm64");
 #endif
 }

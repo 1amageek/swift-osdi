@@ -1,4 +1,5 @@
 import COSDI
+import CircuiteFoundation
 import OSDIContracts
 import Synchronization
 
@@ -8,7 +9,9 @@ public struct OSDIPreparedModel: ~Copyable, Sendable {
     private let state: Mutex<State>
     private var lease: OSDIStorageLease?
     private let limits: OSDIEvaluationLimits
-    private let descriptorIndex: UInt32
+    internal let descriptorIndex: UInt32
+    internal let precisionPreparation: OSDIPreparationOptions
+    internal let precisionModelReference: ArtifactReference
     public let topology: OSDIPreparedTopology
     public let noiseSources: [OSDINoiseSourceInfo]
     public let parameterMetadata: [OSDIParameterInfo]
@@ -18,7 +21,8 @@ public struct OSDIPreparedModel: ~Copyable, Sendable {
     internal init(handle: sending OpaquePointer, lease: consuming OSDIStorageLease,
                   topology: OSDIPreparedTopology, noiseSources: [OSDINoiseSourceInfo], parameterMetadata: [OSDIParameterInfo],
                   resolvedParameters: [OSDIResolvedParameter], diagnostics: [OSDIDiagnostic],
-                  limits: OSDIEvaluationLimits) {
+                  limits: OSDIEvaluationLimits, preparation: OSDIPreparationOptions, modelReference: ArtifactReference) {
+        precisionPreparation = preparation; precisionModelReference = modelReference
         state = Mutex(State(handle: handle))
         descriptorIndex = UInt32(lease.descriptor.index)
         self.lease = consume lease

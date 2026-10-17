@@ -16,6 +16,8 @@ public enum OSDIError: Error, Sendable {
     case artifact(ArtifactAccessError)
     case artifactClose(ArtifactAccessTerminationError)
     case native(OSDINativeIssue)
+    case precision(OSDIPrecisionIssue)
+    indirect case precisionCleanup(cause: Self, owner: OSDIPendingPrecisionCleanup)
     case io(operation: String, code: Int32)
     case host(operation: String, underlying: any Error)
     indirect case cleanupRequired(cause: Self, owner: OSDIPendingLibraryCleanup)

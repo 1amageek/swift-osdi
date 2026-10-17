@@ -5,6 +5,10 @@
 COSDI is the native C module of swift-osdi. Parent: [swift-osdi](../../DESIGN.md).
 Its children [Loading](Loading/DESIGN.md) and [DeviceEvaluation](DeviceEvaluation/DESIGN.md)
 implement the public native owner and prepared point-evaluation boundaries.
+[CompilerPrecision](CompilerPrecision/DESIGN.md) owns the independent optional
+source-faithful precision program format.
+[PrecisionProcess](PrecisionProcess/DESIGN.md) owns isolated helper/slab/pipe
+lifetime and the local precision IPC contract.
 The ABI directory holds an unchanged third-party declaration, not another runtime.
 
 ## Responsibilities and Boundaries
@@ -21,6 +25,7 @@ Model physics, compiler implementation and simulator policy are external.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [swift-osdi](../../DESIGN.md) | parent | Native module composition | Swift-to-C boundary | Native-host qualification is explicit |
+| [CompilerPrecision](CompilerPrecision/DESIGN.md) | child | Versioned program and setup tables | Compiler-owned arithmetic | Separate optional extension |
 | [Loading](Loading/DESIGN.md) | child | Open/inspect/close, zeroed storage | Native owner implementation | Borrowed metadata follows owner lifetime |
 | [DeviceEvaluation](DeviceEvaluation/DESIGN.md) | child | Prepared native model and raw F/Q/G/C | Point evaluation | Exclusive library lease outlives context |
 

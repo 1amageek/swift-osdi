@@ -1,0 +1,353 @@
+#include "../include/OSDIPrecisionProcess.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <float.h>
+#include <limits.h>
+#include <math.h>
+#include <poll.h>
+#include <signal.h>
+#include <spawn.h>
+#include <stdio.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+/* One exclusive Swift session owns this context. No process-global handlers or
+ * allocator hooks are installed in the parent. Every mapping/fd/child is released
+ * exactly once by close; an incomplete reap retains the entire context. */
+struct cs_osdi_precision_session {
+    void *mapping;
+    size_t mapping_bytes;
+    cs_osdi_precision_control_v1 *control;
+    cs_osdi_precision_process_options options;
+    cs_osdi_precision_control_v1 geometry;
+    pid_t pid;
+    int request_fd;
+    int response_fd;
+    int invalid;
+    int reaped;
+    int wait_status;
+    uint64_t sequence;
+};
+
+static void clear_issue(cs_osdi_precision_process_issue *out) {
+    if (out) { memset(out, 0, sizeof(*out)); out->instruction = UINT32_MAX; out->exit_code = -1; }
+}
+static int32_t fail(cs_osdi_precision_session *s, cs_osdi_precision_process_issue *out,
+                    int32_t code, int error) {
+    if (s) s->invalid = 1;
+    int32_t effective = code;
+    if (code == CS_OSDI_PRECISION_PROCESS_WORKER && s && s->reaped
+        && WIFEXITED(s->wait_status) && WEXITSTATUS(s->wait_status) == CS_OSDI_PRECISION_EXIT_ARENA)
+        effective = CS_OSDI_PRECISION_PROCESS_RESOURCE;
+    if (out) {
+        out->code = effective; out->system_errno = error;
+        if (s) {
+            out->request_sequence = s->sequence;
+            if (s->reaped) {
+                if (WIFEXITED(s->wait_status)) out->exit_code = WEXITSTATUS(s->wait_status);
+                if (WIFSIGNALED(s->wait_status)) out->signal_number = WTERMSIG(s->wait_status);
+            }
+        }
+    }
+    return effective;
+}
+
+static uint64_t now_ns(void) {
+    struct timespec value;
+    if (clock_gettime(CLOCK_MONOTONIC, &value)) return UINT64_MAX;
+    return (uint64_t)value.tv_sec * UINT64_C(1000000000) + (uint64_t)value.tv_nsec;
+}
+static uint64_t deadline(uint64_t duration) {
+    uint64_t now = now_ns(); return duration > UINT64_MAX - now ? UINT64_MAX : now + duration;
+}
+static int child_status(cs_osdi_precision_session *s) {
+    if (s->reaped || s->pid <= 0) return s->reaped;
+    pid_t result;
+    do { result = waitpid(s->pid, &s->wait_status, WNOHANG); } while (result < 0 && errno == EINTR);
+    if (result == s->pid) { s->reaped = 1; return 1; }
+    return result < 0 ? -1 : 0;
+}
+/* Pipe EOF can become visible before waitpid publishes the child's exit status. */
+static void collect_exit(cs_osdi_precision_session *s, uint64_t until) {
+    while (child_status(s) == 0) {
+        uint64_t now = now_ns();
+        if (now >= until) return;
+        uint64_t slice = until - now;
+        if (slice > s->options.poll_nanoseconds) slice = s->options.poll_nanoseconds;
+        struct timespec pause = {(time_t)(slice / UINT64_C(1000000000)), (long)(slice % UINT64_C(1000000000))};
+        nanosleep(&pause, NULL);
+    }
+}
+static int wait_response(cs_osdi_precision_session *s, uint64_t expected, uint64_t timeout,
+                         cs_osdi_precision_cancel_probe cancelled, void *context,
+                         cs_osdi_precision_process_issue *issue) {
+    uint64_t until = deadline(timeout);
+    for (;;) {
+        if (cancelled && cancelled(context)) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CANCELLED, 0);
+        if (child_status(s) < 0) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_WORKER, errno);
+        uint64_t now = now_ns();
+        if (now >= until) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_TIMEOUT, 0);
+        uint64_t slice = until - now;
+        if (slice > s->options.poll_nanoseconds) slice = s->options.poll_nanoseconds;
+        uint64_t milliseconds = (slice + UINT64_C(999999)) / UINT64_C(1000000);
+        int poll_ms = milliseconds > INT_MAX ? INT_MAX : (int)milliseconds;
+        struct pollfd fd = {s->response_fd, POLLIN, 0};
+        int ready = poll(&fd, 1, poll_ms);
+        if (ready < 0) { if (errno == EINTR) continue; return fail(s, issue, CS_OSDI_PRECISION_PROCESS_IO, errno); }
+        if (!ready) continue;
+        if (fd.revents & POLLIN) {
+            unsigned char wake;
+            ssize_t count;
+            do { count = read(s->response_fd, &wake, 1); } while (count < 0 && errno == EINTR);
+            if (count != 1) { int error = count < 0 ? errno : 0; collect_exit(s, until); return fail(s, issue, CS_OSDI_PRECISION_PROCESS_WORKER, error); }
+            uint64_t actual = __atomic_load_n(&s->control->response_sequence, __ATOMIC_ACQUIRE);
+            if (actual != expected) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+            if (s->control->response_status > CS_OSDI_PRECISION_NUMERIC_INVARIANT)
+                return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+            if (s->control->response_status != CS_OSDI_PRECISION_SUCCESS) {
+                if (issue) { issue->worker_status = s->control->response_status; issue->instruction = s->control->response_detail; }
+                return fail(s, issue, CS_OSDI_PRECISION_PROCESS_NUMERIC, 0);
+            }
+            return CS_OSDI_PRECISION_PROCESS_SUCCESS;
+        }
+        if (fd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            collect_exit(s, until); return fail(s, issue, CS_OSDI_PRECISION_PROCESS_WORKER, 0);
+        }
+    }
+}
+static int add_region(cs_osdi_precision_control_v1 *header, unsigned region,
+                       uint64_t count, uint64_t stride, uint64_t *bytes) {
+    if (*bytes > UINT64_MAX - 7) return 0;
+    uint64_t offset = (*bytes + 7) & ~UINT64_C(7);
+    if (stride && count > (UINT64_MAX - offset) / stride) return 0;
+    header->regions[region] = (cs_osdi_precision_region_v1){offset, count};
+    *bytes = offset + count * stride; return 1;
+}
+static void *region(cs_osdi_precision_session *s, unsigned index) {
+    return (unsigned char *)s->mapping + s->geometry.regions[index].byte_offset;
+}
+static int safe_fd(int fd) { return fcntl(fd, F_DUPFD_CLOEXEC, 6); }
+static int make_pipe(int fds[2]) {
+    if (pipe(fds)) return -1;
+    if (fcntl(fds[0], F_SETFD, FD_CLOEXEC) || fcntl(fds[1], F_SETFD, FD_CLOEXEC)) {
+        int error = errno; close(fds[0]); close(fds[1]); fds[0] = -1; fds[1] = -1; errno = error; return -1;
+    }
+    return 0;
+}
+static int create_mapping_fd(void) {
+    for (unsigned attempt = 0; attempt < 16; ++attempt) {
+        char name[96];
+        uint64_t random; arc4random_buf(&random, sizeof(random));
+        snprintf(name, sizeof(name), "/op.%x.%llx", (unsigned)getpid(), (unsigned long long)random);
+        int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+        if (fd >= 0) {
+            if (fcntl(fd, F_SETFD, FD_CLOEXEC)) { int error = errno; shm_unlink(name); close(fd); errno = error; return -1; }
+            if (shm_unlink(name)) { int error = errno; close(fd); errno = error; return -1; }
+            return fd;
+        }
+        if (errno != EEXIST) return -1;
+    }
+    errno = EEXIST; return -1;
+}
+
+int32_t cs_osdi_precision_process_close(cs_osdi_precision_session **owner,
+                                        cs_osdi_precision_process_issue *issue) {
+    clear_issue(issue);
+    if (!owner || !*owner) return CS_OSDI_PRECISION_PROCESS_SUCCESS;
+    cs_osdi_precision_session *s = *owner; s->invalid = 1;
+    if (s->pid > 0 && !s->reaped) {
+        int status = child_status(s);
+        if (status < 0) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CLEANUP, errno);
+        int kill_error = 0;
+        if (!s->reaped && kill(-s->pid, SIGKILL) && errno != ESRCH) kill_error = errno;
+        uint64_t until = deadline(s->options.cleanup_timeout_nanoseconds);
+        while (!s->reaped) {
+            status = child_status(s);
+            if (status < 0) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CLEANUP, errno);
+            if (s->reaped) break;
+            uint64_t now = now_ns();
+            if (now >= until) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CLEANUP, kill_error ? kill_error : ETIMEDOUT);
+            uint64_t slice = until - now;
+            if (slice > s->options.poll_nanoseconds) slice = s->options.poll_nanoseconds;
+            struct timespec pause = {(time_t)(slice / UINT64_C(1000000000)), (long)(slice % UINT64_C(1000000000))};
+            nanosleep(&pause, NULL);
+        }
+    }
+    if (s->request_fd >= 0) close(s->request_fd);
+    if (s->response_fd >= 0) close(s->response_fd);
+    if (s->mapping && s->mapping != MAP_FAILED) munmap(s->mapping, s->mapping_bytes);
+    free(s); *owner = NULL;
+    return CS_OSDI_PRECISION_PROCESS_SUCCESS;
+}
+
+int32_t cs_osdi_precision_process_create(const char *worker_path,
+    const unsigned char *program, uint64_t program_bytes,
+    const unsigned char *setup, uint64_t setup_bytes,
+    uint32_t descriptor_index, uint32_t active_count, uint32_t raw_node_count,
+    const cs_osdi_precision_process_options *options,
+    cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue) {
+    clear_issue(issue); if (out) *out = NULL;
+    if (!out || !options || !worker_path || !*worker_path || !program || !program_bytes || !setup || !setup_bytes
+        || !raw_node_count || active_count > raw_node_count || !options->maximum_mapping_bytes
+        || !options->arena_bytes || !options->maximum_work_units || options->minimum_precision_bits < 53
+        || options->minimum_precision_bits > options->maximum_precision_bits
+        || !options->startup_timeout_nanoseconds || !options->evaluation_timeout_nanoseconds
+        || !options->cleanup_timeout_nanoseconds || !options->poll_nanoseconds)
+        return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
+#if !defined(__APPLE__) || !defined(__aarch64__)
+    return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_UNSUPPORTED, 0);
+#else
+    cs_osdi_precision_control_v1 header = {0};
+    header.magic = CS_OSDI_PRECISION_MAGIC; header.protocol_version = CS_OSDI_PRECISION_PROTOCOL_VERSION;
+    header.header_bytes = sizeof(header); header.byte_order = CS_OSDI_PRECISION_BYTE_ORDER;
+    header.descriptor_index = descriptor_index; header.active_count = active_count; header.raw_node_count = raw_node_count;
+    header.arena_bytes = options->arena_bytes; header.minimum_precision_bits = options->minimum_precision_bits;
+    header.maximum_precision_bits = options->maximum_precision_bits; header.maximum_work_units = options->maximum_work_units;
+    header.requested_precision_bits = options->maximum_precision_bits;
+    header.response_sequence = CS_OSDI_PRECISION_INITIAL_RESPONSE; header.response_detail = UINT32_MAX;
+    memcpy(header.program_sha256, options->program_sha256, 32); memcpy(header.worker_profile_sha256, options->worker_profile_sha256, 32);
+    uint64_t bytes = sizeof(header), matrix = (uint64_t)raw_node_count * raw_node_count;
+    if (!add_region(&header, 0, program_bytes, 1, &bytes) || !add_region(&header, 1, setup_bytes, 1, &bytes))
+        return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
+    for (unsigned i = 2; i < 14; ++i) {
+        uint64_t count = i < 6 ? active_count : i < 12 ? raw_node_count : matrix;
+        if (!add_region(&header, i, count, sizeof(double), &bytes)) return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
+    }
+    /* Darwin POSIX shared memory rounds its object size to the host page size. */
+    long page = sysconf(_SC_PAGESIZE);
+    if (page <= 0 || bytes > UINT64_MAX - ((uint64_t)page - 1))
+        return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
+    bytes = ((bytes + (uint64_t)page - 1) / (uint64_t)page) * (uint64_t)page;
+    if (bytes > options->maximum_mapping_bytes || bytes > SIZE_MAX || bytes > INT64_MAX)
+        return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
+    header.mapping_bytes = bytes;
+    cs_osdi_precision_session *s = calloc(1, sizeof(*s));
+    if (!s) return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, errno);
+    s->pid = -1; s->request_fd = -1; s->response_fd = -1; s->options = *options; s->geometry = header; s->mapping_bytes = (size_t)bytes;
+    int shared = -1, request[2] = {-1,-1}, response[2] = {-1,-1}, spawnfds[3] = {-1,-1,-1};
+    int error = 0, result = CS_OSDI_PRECISION_PROCESS_IO;
+    posix_spawn_file_actions_t actions; posix_spawnattr_t attributes;
+    int have_actions = 0, have_attributes = 0;
+    shared = create_mapping_fd();
+    if (shared < 0 || ftruncate(shared, (off_t)bytes)) goto failed;
+    s->mapping = mmap(NULL, (size_t)bytes, PROT_READ | PROT_WRITE, MAP_SHARED, shared, 0);
+    if (s->mapping == MAP_FAILED) goto failed;
+    s->control = s->mapping;
+    if (!__atomic_is_lock_free(sizeof(uint64_t), &s->control->response_sequence)) { result = CS_OSDI_PRECISION_PROCESS_UNSUPPORTED; goto failed; }
+    memset(s->mapping, 0, (size_t)bytes); memcpy(s->control, &header, sizeof(header));
+    memcpy(region(s, 0), program, (size_t)program_bytes); memcpy(region(s, 1), setup, (size_t)setup_bytes);
+    if (make_pipe(request) || make_pipe(response)) goto failed;
+    if (fcntl(request[1], F_SETNOSIGPIPE, 1)) goto failed;
+    spawnfds[0] = safe_fd(shared); spawnfds[1] = safe_fd(request[0]); spawnfds[2] = safe_fd(response[1]);
+    if (spawnfds[0] < 0 || spawnfds[1] < 0 || spawnfds[2] < 0) goto failed;
+    error = posix_spawn_file_actions_init(&actions); if (error) goto failed; have_actions = 1;
+    error = posix_spawnattr_init(&attributes); if (error) goto failed; have_attributes = 1;
+    for (unsigned i = 0; i < 3; ++i) { error = posix_spawn_file_actions_adddup2(&actions, spawnfds[i], (int)i + 3); if (error) goto failed; }
+    error = posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0); if (error) goto failed;
+    error = posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0); if (error) goto failed;
+    error = posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0); if (error) goto failed;
+    error = posix_spawnattr_setpgroup(&attributes, 0); if (error) goto failed;
+    error = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT); if (error) goto failed;
+    char *argv[] = {(char *)worker_path, NULL}; char *environment[] = {"LANG=C", "LC_ALL=C", "TZ=UTC", NULL};
+    error = posix_spawn(&s->pid, worker_path, &actions, &attributes, argv, environment); if (error) goto failed;
+    for (unsigned i = 0; i < 3; ++i) { close(spawnfds[i]); spawnfds[i] = -1; }
+    close(shared); shared = -1; close(request[0]); request[0] = -1; close(response[1]); response[1] = -1;
+    s->request_fd = request[1]; request[1] = -1; s->response_fd = response[0]; response[0] = -1;
+    posix_spawn_file_actions_destroy(&actions); have_actions = 0;
+    posix_spawnattr_destroy(&attributes); have_attributes = 0;
+    result = wait_response(s, 0, options->startup_timeout_nanoseconds, cancelled, cancel_context, issue);
+    if (result) goto failed;
+    if (memcmp(s->control, &s->geometry, offsetof(cs_osdi_precision_control_v1, request_sequence))
+        || __atomic_load_n(&s->control->request_sequence, __ATOMIC_ACQUIRE) != 0) {
+        result = fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0); goto failed;
+    }
+    *out = s; return 0;
+failed:
+    if (!error) error = errno;
+    if (have_actions) posix_spawn_file_actions_destroy(&actions);
+    if (have_attributes) posix_spawnattr_destroy(&attributes);
+    if (shared >= 0) close(shared);
+    for (unsigned i = 0; i < 2; ++i) { if (request[i] >= 0) close(request[i]); if (response[i] >= 0) close(response[i]); }
+    for (unsigned i = 0; i < 3; ++i) if (spawnfds[i] >= 0) close(spawnfds[i]);
+    if (!issue || !issue->code) fail(s, issue, result, error);
+    cs_osdi_precision_process_issue cleanup;
+    int32_t closed = cs_osdi_precision_process_close(&s, &cleanup);
+    if (closed) *out = s;
+    return issue ? issue->code : result;
+#endif
+}
+
+static int normalized(double high, double low) { return isfinite(high) && isfinite(low) && high + low == high; }
+static int valid_context(const cs_osdi_precision_context_v1 *context) {
+    if (!context || context->reserved || !normalized(context->time_high, context->time_low)) return 0;
+    if (context->mode == CS_OSDI_PRECISION_TRANSIENT_INITIALIZATION) return context->time_high == 0 && context->time_low == 0;
+    return context->mode == CS_OSDI_PRECISION_TRANSIENT && context->time_high >= 0 && !(context->time_high == 0 && context->time_low < 0);
+}
+int32_t cs_osdi_precision_process_evaluate(cs_osdi_precision_session *s,
+    const double *candidate_high, const double *candidate_low,
+    const double *reference_high, const double *reference_low, uint64_t active_count,
+    const cs_osdi_precision_context_v1 *candidate, const cs_osdi_precision_context_v1 *reference,
+    uint32_t precision_bits, cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_precision_result_view *out, cs_osdi_precision_process_issue *issue) {
+    clear_issue(issue); if (out) memset(out, 0, sizeof(*out));
+    if (!s || s->invalid) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CLOSED, 0);
+    if (!out || active_count != s->geometry.active_count || (active_count && (!candidate_high || !candidate_low || !reference_high || !reference_low))
+        || !valid_context(candidate) || !valid_context(reference) || precision_bits < s->options.minimum_precision_bits
+        || precision_bits > s->options.maximum_precision_bits || s->sequence >= CS_OSDI_PRECISION_MAX_SEQUENCE)
+        return fail(s, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
+    for (uint64_t i = 0; i < active_count; ++i)
+        if (!normalized(candidate_high[i], candidate_low[i]) || !normalized(reference_high[i], reference_low[i]))
+            return fail(s, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
+    const double *inputs[] = {candidate_high,candidate_low,reference_high,reference_low};
+    for (unsigned i = 0; i < 4; ++i) if (active_count) memcpy(region(s, i + 2), inputs[i], (size_t)active_count * sizeof(double));
+    s->control->candidate = *candidate; s->control->reference = *reference;
+    s->control->requested_precision_bits = precision_bits; s->sequence += 1;
+    __atomic_store_n(&s->control->request_sequence, s->sequence, __ATOMIC_RELEASE);
+    unsigned char wake = 1; ssize_t count;
+    do { count = write(s->request_fd, &wake, 1); } while (count < 0 && errno == EINTR);
+    if (count != 1) { child_status(s); return fail(s, issue, CS_OSDI_PRECISION_PROCESS_WORKER, errno); }
+    int32_t result = wait_response(s, s->sequence, s->options.evaluation_timeout_nanoseconds, cancelled, cancel_context, issue);
+    if (result) return result;
+    cs_osdi_precision_control_v1 *h = s->control;
+    const cs_osdi_precision_control_v1 *fixed = &s->geometry;
+    if (h->magic != fixed->magic || h->protocol_version != fixed->protocol_version || h->header_bytes != fixed->header_bytes
+        || h->mapping_bytes != fixed->mapping_bytes || h->byte_order != fixed->byte_order || h->descriptor_index != fixed->descriptor_index
+        || h->active_count != fixed->active_count || h->raw_node_count != fixed->raw_node_count || h->arena_bytes != fixed->arena_bytes
+        || h->minimum_precision_bits != fixed->minimum_precision_bits || h->maximum_precision_bits != fixed->maximum_precision_bits
+        || h->maximum_work_units != fixed->maximum_work_units || memcmp(h->regions, fixed->regions, sizeof(h->regions))
+        || memcmp(h->program_sha256, fixed->program_sha256, 32) || memcmp(h->worker_profile_sha256, fixed->worker_profile_sha256, 32)
+        || __atomic_load_n(&h->request_sequence, __ATOMIC_ACQUIRE) != s->sequence
+        || memcmp(&h->candidate, candidate, sizeof(*candidate)) || memcmp(&h->reference, reference, sizeof(*reference)))
+        return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+    if (h->model_flags || h->used_precision_bits < precision_bits || h->used_precision_bits > s->options.maximum_precision_bits
+        || h->completed_work_units > s->options.maximum_work_units || h->has_maximum_timestep > 1
+        || (h->has_maximum_timestep && (!isfinite(h->maximum_timestep) || h->maximum_timestep <= 0)))
+        return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+    uint64_t nodes = h->raw_node_count;
+    for (unsigned i = 6; i < 14; ++i) {
+        const double *values = region(s, i);
+        uint64_t n = i < 12 ? nodes : nodes * nodes;
+        for (uint64_t j = 0; j < n; ++j)
+            if (!isfinite(values[j]) || ((i == 8 || i == 11) && values[j] < 0))
+                return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+    }
+    for (uint64_t j = 0; j < nodes; ++j)
+        if (!normalized(((double *)region(s, 6))[j], ((double *)region(s, 7))[j])
+            || !normalized(((double *)region(s, 9))[j], ((double *)region(s, 10))[j]))
+            return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+    if (cancelled && cancelled(cancel_context)) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CANCELLED, 0);
+    *out = (cs_osdi_precision_result_view){nodes, region(s,6), region(s,7), region(s,8), region(s,9), region(s,10), region(s,11),
+        region(s,12), region(s,13), h->used_precision_bits, h->has_maximum_timestep, h->maximum_timestep, h->completed_work_units, s->sequence};
+    return 0;
+}
+
+int32_t cs_osdi_precision_process_identifier(const cs_osdi_precision_session *session) {
+    return session ? (int32_t)session->pid : -1;
+}

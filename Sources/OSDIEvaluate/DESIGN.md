@@ -79,3 +79,48 @@ noiseFrequencyHz), retains prepared noise metadata and returns density values an
 optional maximumTimestep. JSON materialization remains the external output boundary.
 Requests and reports bind exact bytes and generated artifacts as before; normal
 JSON decoding verifies saved reports. Dynamic input never silently falls back to DC.
+
+## Explicit Precision Request
+
+`--precision-request <json> --output <json>` selects schema1/profile
+`stateless-precision-v1`. Existing `--request` schemas/defaults remain unchanged.
+An explicit `operation` selects `snapshot` or `evaluate`, without a default.
+Snapshot admits the exact worker/program and reports `osdi-precision-snapshot`
+with no evaluation arrays; evaluate requires all four endpoint vectors/contexts
+and reports `osdi-precision-evaluation`. A snapshot cannot decode as an evaluated
+result. The precision request embeds an ordinary preparation request and requires the
+exact worker ArtifactReference/path/read budget, semantic and numeric profile
+SHA-256, staging directory, every precision resource option, selected bits, four
+endpoint high/low vectors and original endpoint contexts. Numeric vectors and
+context scalars carry their binary64 bit patterns; reload verifies those patterns
+rather than collapsing high+low. Precision preparation accepts no ignored ordinary
+localUnknowns/previousState fields. Requests are read with a fixed 16 MiB bound.
+
+```text
+explicit request -> exact image load -> ordinary prepare -> immutable snapshot
+ -> exact worker acquisition -> precision session -> scoped view -> owned report
+ -> fallible precision close -> ordinary close -> library/root close
+ -> bounded atomic JSON save and strict same-bit reload
+```
+
+The result retains full program/setup bytes and digests, setup parameter/topology
+facts, actual worker/model references and supplied profile identities, original
+endpoint pairs/context bits, F and delta-Q high/low/radius arrays, G/C midpoints,
+used precision/work/sequence and fresh timestep. The `prepared` section records
+the ordinary cold setup metadata used for extraction; its binary64 compound
+parameter projections do not replace source-stage precision expressions. The
+program/setup bytes remain authoritative for precision replay. Program/setup/profile identities
+are recomputed or checked on reload. G/C remain inexact Newton aids. No ordinary
+fallback, hidden worker reuse, solver decision or accepted state is introduced.
+Output capacity includes copied byte arrays, numeric values/bit patterns and
+metadata before result materialization; the explicit report ceiling is enforced
+again at encoding. Malformed identity/pairs, missing capability, foreign failure,
+limits and cleanup failures publish failure only. Primary and cleanup causes are
+preserved recursively. The command retries a returned cleanup-only owner once;
+cleanup still cannot become successful evaluation evidence.
+
+The precision CLI verification tool invokes the actual built executable under
+bounded subprocess timeouts, saves/reloads exact bits, checks the compound-default
+sub-ULP result against independent decimal arithmetic, repeats fresh sessions and
+checks malformed requests, capability/identity/worker/resource failures. No
+transport-only worker is used as numerical qualification.

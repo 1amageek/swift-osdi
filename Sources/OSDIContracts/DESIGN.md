@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Parent: [package](../../DESIGN.md). Children: [LibraryMetadata](LibraryMetadata/DESIGN.md),
-[ModelEvaluation](ModelEvaluation/DESIGN.md).
+[ModelEvaluation](ModelEvaluation/DESIGN.md), [Precision Evaluation](PrecisionEvaluation/DESIGN.md).
 Own portable immutable values used during native model admission and point evaluation.
 
 ## Responsibilities and Boundaries

@@ -9,6 +9,11 @@ model/instance setup and point residual/charge/Jacobian evaluation. It does not
 implement device physics, a Verilog-A compiler or a circuit solver.
 Children: [COSDI](Sources/COSDI/DESIGN.md), [OSDIContracts](Sources/OSDIContracts/DESIGN.md),
 [OSDIRuntime](Sources/OSDIRuntime/DESIGN.md), [OSDIInspect](Sources/OSDIInspect/DESIGN.md), [OSDIEvaluate](Sources/OSDIEvaluate/DESIGN.md).
+The S4D optional native precision path adds
+[COSDIPrecision](Sources/COSDIPrecision/DESIGN.md), the
+[worker entrypoint](Sources/OSDIPrecisionWorker/DESIGN.md), and the host system
+bindings [CMPFR](Sources/CMPFR/DESIGN.md) / [CGMP](Sources/CGMP/DESIGN.md).
+Their selected contracts do not establish a qualified implementation.
 
 ## Responsibilities and Boundaries
 
@@ -159,3 +164,30 @@ S4 additionally publishes immutable [reactive-row presence](Sources/OSDIContract
 from admitted ABI metadata. Consumers may use that public structural fact without
 sampling model derivatives or accessing private descriptor offsets. This cold
 metadata extension does not change evaluation, ownership or CLI schemas.
+
+## S4D Model-Owned Precision Composition
+
+The user requires model-derived charge differences and compensated coordinates
+without relaxing the original circuit-equation tolerances. Numerical semantics
+belong to [Model Evaluation](Sources/OSDIContracts/ModelEvaluation/DESIGN.md#s4d-precision-boundary--d1-proposal),
+compiler program transport to [DeviceEvaluation](Sources/COSDI/DeviceEvaluation/DESIGN.md#s4d-optional-precision-extension--d1-contract),
+process/resource ownership to [PointEvaluation](Sources/OSDIRuntime/PointEvaluation/DESIGN.md#s4d-precision-session--d1-contract),
+and enclosed arithmetic to [COSDIPrecision](Sources/COSDIPrecision/DESIGN.md).
+These child contracts are the authority; this section does not establish a
+qualified implementation.
+
+```text
+OpenVAF source/setup/DAE program -> optional immutable model export
+  -> explicit native precision session -> isolated persistent arithmetic worker
+    -> scoped original F / model-owned DeltaQ enclosures
+      -> CoreSpice compensated state and unchanged strict physical acceptance
+```
+
+The standard OSDI 0.4 image and binary64 operations retain their contracts. The
+additional native-only lane must be requested and admitted explicitly. It adds
+neither model equations nor a circuit solver to swift-osdi. CoreSpice retains
+Newton, integration, accepted histories and trajectory storage. Unsupported
+precision capability, exhausted resources and interrupted helper operations
+publish no result and cannot select the ordinary lane implicitly. Its exact
+compiler/program/worker/numeric-library provenance and measurements are separate
+from the historical binary64 qualification.

@@ -221,4 +221,6 @@ void cs_osdi_evaluator_destroy(cs_osdi_evaluator *evaluator);
 #ifdef __cplusplus
 }
 #endif
+#include "OSDICompilerPrecision.h"
+#include "OSDIPrecisionProcess.h"
 #endif
