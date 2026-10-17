@@ -16,16 +16,17 @@ internal struct OSDIPreparationBridge {
 
     init(options: borrowing OSDIPreparationOptions) throws(OSDIError) {
         guard let connected = UInt32(exactly: options.connectedTerminalCount) else { throw .invalidRange }
+        let limits = options.limits
         let (parameterBytes, overflow1) = UInt64(options.parameters.count).multipliedReportingOverflow(by: UInt64(MemoryLayout<cs_osdi_parameter_assignment>.stride))
         let (simulationBytes, overflow2) = UInt64(options.simulationParameters.count).multipliedReportingOverflow(by: UInt64(MemoryLayout<cs_osdi_simulation_parameter>.stride))
         let (tableBytes, overflow3) = parameterBytes.addingReportingOverflow(simulationBytes)
-        guard !overflow1, !overflow2, !overflow3, tableBytes <= options.limits.maximumWorkspaceBytes else { throw .resourceLimit }
+        guard !overflow1, !overflow2, !overflow3, tableBytes <= limits.maximumWorkspaceBytes else { throw .resourceLimit }
         var size: UInt64 = 0
         func count(_ text: String) throws(OSDIError) {
             let (width, overflow) = UInt64(text.utf8.count).addingReportingOverflow(1)
             let (next, totalOverflow) = size.addingReportingOverflow(width)
-            guard !overflow, !totalOverflow, next <= options.limits.maximumStringBytes,
-                  next <= UInt64(Int.max), next <= options.limits.maximumWorkspaceBytes - tableBytes else { throw .resourceLimit }
+            guard !overflow, !totalOverflow, next <= limits.maximumStringBytes,
+                  next <= UInt64(Int.max), next <= limits.maximumWorkspaceBytes - tableBytes else { throw .resourceLimit }
             size = next
         }
         for assignment in options.parameters {

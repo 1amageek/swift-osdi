@@ -83,7 +83,12 @@ models reject evaluation. A failed evaluation never invokes the result consumer.
 COSDI owns checked workspace arithmetic, setup/eval status and bounded diagnostics.
 Swift preflights lexical parameter table/string allocations against caller limits;
 metadata copies are cold, bounded by admitted native metadata and explicit string
-limits. Parameter flags and post-setup effective values are copied without inventing
+limits. Cold preparation snapshots the immutable evaluation limits before the
+local string-budget accumulator captures them. This keeps the accumulator's mutable
+byte count separate from the borrowed options wrapper and permits Swift 6.4 Release
+stack promotion without invalid ownership instructions. All budget predicates and
+failure cases use the same limits; point evaluation and its allocation path are
+unchanged. Parameter flags and post-setup effective values are copied without inventing
 defaults. Native failures preserve model flags, setup error count/code and parameter
 ID. Nonzero model flags and malformed/null result ranges never become success.
 All foreign callbacks, deallocation and client callbacks occur outside Mutex.
@@ -101,3 +106,8 @@ stores `OSDIPreparedModel` under Mutex, then exercises preparation, point evalua
 and close. The failing compiler metadata linkage and corrected consumer build/link
 are required alongside the existing native S1/S2 behavior tests; a same-module build
 alone does not verify this boundary.
+
+The Swift 6.4 Release regression additionally compiles the actual OSDIRuntime and
+CoreSpiceOSDI consumer with normal optimized settings. A reduced local accumulator
+reproduces the borrowed-field capture compiler assertion; preparation budget
+success/failure tests verify that the immutable limits snapshot preserves behavior.
