@@ -62,6 +62,13 @@ metadata contains only copied values. Evaluation leases additionally admit at mo
 one prepared session per shared image under this same Mutex; ordinary S1 storage
 leases remain independent and may coexist. Internal synchronous handle borrowing
 requires a live lease and runs its foreign-operation body after releasing Mutex.
+`OSDIStorageLease` remains internal and noncopyable; `@usableFromInline` exports
+its nominal type metadata because public noncopyable storage contains the lease in
+its private layout. Optimized importing consumers may emit a symbolic reference
+to that nominal descriptor. Metadata availability is an ABI obligation, not public
+lease construction, state access or a second image authority. Stored ownership,
+lease admission/release and Mutex isolation are unchanged.
+
 Session destruction precedes evaluation-lease release. This is an ownership boundary, not unchecked
 Sendable conformance or a target-specific synchronization exception.
 
@@ -78,3 +85,7 @@ Test tampered bytes/size, source/read/close failure, native descriptor refusal,
 same-content independent images, active-lease close refusal and source/owner release.
 Concurrency tests exercise metadata/lease/close access on the same owner. Future
 foreign evaluation must retain a lease and avoid executing callbacks under Mutex.
+
+Release compatibility verifies an actual external consumer link and model execution,
+including its reference to `OSDIStorageLease` metadata; target compilation alone
+cannot establish that the descriptor is exported.

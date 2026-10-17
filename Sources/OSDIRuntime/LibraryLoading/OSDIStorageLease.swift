@@ -2,6 +2,7 @@ import COSDI
 import OSDIContracts
 
 /// Keeps image authority alive until all dependent native storage is destroyed.
+@usableFromInline
 internal struct OSDIStorageLease: ~Copyable, Sendable {
     let descriptor: OSDIDescriptorInfo
     private let owner: OSDILibraryOwner
