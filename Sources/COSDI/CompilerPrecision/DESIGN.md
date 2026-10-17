@@ -161,3 +161,13 @@ zero-potential collapse-only branch into a mixed-nature source equation merely
 because arithmetic folding is disabled. Compound zero expressions are never
 recognized by this rule and keep their full source operations. The ordinary
 flag-off lowerer is unchanged.
+
+## Analysis Fact Type Bridge
+
+The program `ANALYSIS` input is a Boolean fact. The original OpenVAF
+`CallBackKind::Analysis` returns an I32 (ordinary OSDI evaluation declares
+`cx.ty_int()`), which source conditions and arithmetic subsequently convert.
+The serializer binds the fact into a separate Boolean register and emits BICAST
+into the original I32 result register. Original IBCAST/IFCAST consumers retain
+their source types. This is an encoding correction within the existing semantic
+profile and opcode set, not a worker ABI or model equation change.
