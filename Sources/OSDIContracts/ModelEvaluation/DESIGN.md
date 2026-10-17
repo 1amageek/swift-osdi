@@ -59,6 +59,9 @@ budgets continue to apply independently.
 
 ## Verification and Change Impact
 
+[OSDIEvaluationTests](../../../Tests/OSDIEvaluationTests/DESIGN.md) owns the
+behavioral verification of these values and refusals.
+
 Actual generated parameter fixtures check defaults, model/instance scope, aliases,
 types and given flags. Analytic RC and an independent direct-ABI BSIM harness check
 all raw values and topology. Finite differences use alias-consistent active

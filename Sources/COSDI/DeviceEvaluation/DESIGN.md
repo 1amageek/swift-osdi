@@ -96,6 +96,10 @@ The caller serializes every evaluator operation and retains the exclusive lease.
 
 ## Verification and Change Impact
 
+[OSDIEvaluationTests](../../../Tests/OSDIEvaluationTests/DESIGN.md) owns the
+consumer regressions; the [independent oracle](../../../Tools/OSDIEvaluationVerification/DESIGN.md)
+owns direct-ABI and finite-difference evidence.
+
 Real generated RC and BSIM-BULK 107.2.1 fixtures own setup/eval compatibility,
 typed assignments, collapse mapping, scalar outputs and raw matrix behavior.
 Independent raw-C, analytic RC and finite-difference evidence own numerical

@@ -84,7 +84,8 @@ All foreign callbacks, deallocation and client callbacks occur outside Mutex.
 
 ## Verification and Change Impact
 
-Root-owned behavioral tests execute generated setup/eval, explicit/given parameters,
+[OSDIEvaluationTests](../../../Tests/OSDIEvaluationTests/DESIGN.md) executes
+generated setup/eval, explicit/given parameters,
 collapse/internal variables, state input, typed failures and close/lease lifetime.
 Pinned-toolchain typecheck, SIL region checks and negative view-escape probes cover
 the ownership seam; runtime/allocation evidence is required for performance claims.
