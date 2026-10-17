@@ -103,6 +103,36 @@ binding, nonlinear solving and analyses require later contracts.
 
 ## Verification and Change Impact
 
+### S3 dependency compatibility
+
+S3 aligns the exact CircuiteFoundation dependency with CoreSpice's existing
+revision `c952ac5ebe3c21bf0cbd6d6ac239130efd732b3a`. The prior
+`ae88104c556f5802819713ed741f5b2fffffc2d9` to this revision changes host POSIX
+portability and internal directory inventory, while the Core artifact identity,
+bounded read, termination and host conversion APIs used here remain unchanged.
+The model-loading path still materializes through `ArtifactAccessing`, checks the
+terminal receipt and source termination, and revalidates the staged artifact
+before native admission. No source adapter or dependency override is required.
+
+| Boundary | Required compatibility evidence |
+|---|---|
+| Exact dependency graph | Manifest, resolved pin and actual checkout agree; no edited dependency |
+| Native artifact loading | Existing S1 success, digest rejection and read/close failure tests |
+| Native point evaluation | Existing S2 actual compiled-model tests, independent ABI comparisons and all-coordinate finite differences |
+
+The S3 development integration resolves the declared HTTPS identity and exact
+revision through a project-local SwiftPM mirror to the local CircuiteFoundation
+Git repository under the user-authorized immutable local Git exception. The
+resolved checkout must be clean at the exact declared commit; mutable working-tree
+state is not dependency input. The commit is not available from the canonical
+remote at verification time. This mirror supplies availability, preserves the
+semantic revision and is not an edited/path dependency or a publication, release
+or portable release configuration. Verification is native
+macOS arm64 with the fixed Swift 6.4.0 toolchain and qualified full-residual compiler,
+artifact and original compiler receipt; it does not qualify WASM or Embedded.
+The S3 task ledger is [CoreSpice Progress](../CoreSpice/PROGRESS.md); the ledger
+below records the completed S1/S2 package work.
+
 S1 tests own actual valid/invalid dynamic images, larger descriptor strides, zeroed
 and stable storage, exact artifact mismatch, cleanup/unload, closed access and lease
 refusal. An actual pinned OpenVAF model is loaded through API and CLI without compiler

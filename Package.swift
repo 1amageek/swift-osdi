@@ -13,7 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/1amageek/CircuiteFoundation.git",
-                 revision: "ae88104c556f5802819713ed741f5b2fffffc2d9")
+                 revision: "c952ac5ebe3c21bf0cbd6d6ac239130efd732b3a")
     ],
     targets: [
         .target(name: "COSDI", exclude: ["DESIGN.md", "Loading/DESIGN.md", "DeviceEvaluation/DESIGN.md"],
