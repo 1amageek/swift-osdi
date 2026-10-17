@@ -50,3 +50,7 @@ physical-voltage and auxiliary-variable chain terms.
 The bounded builder records each source, compiler and generated binary hash. Cold
 compilation proves actual syntax support. C observations and finite differences
 establish the exact native behavior; source equations alone do not establish success.
+
+Two protocol variants expose a missing reactive offset and a present offset whose
+Q is absolute time plus explicit previous state with zero voltage derivative. They
+qualify structural metadata transport, not a physical model or solver.

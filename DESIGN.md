@@ -154,3 +154,8 @@ The user extends the immutable exact local Git availability exception to S4.
 owns solver, acceptance, integration and finalization. This package owns explicit
 mode/time/IC context, independent noise-source facts, fresh scoped PSD and a
 per-evaluation optional timestep limit. Existing DC calls and schema 1 stay fixed.
+
+S4 additionally publishes immutable [reactive-row presence](Sources/OSDIContracts/ModelEvaluation/DESIGN.md#reactive-residual-presence)
+from admitted ABI metadata. Consumers may use that public structural fact without
+sampling model derivatives or accessing private descriptor offsets. This cold
+metadata extension does not change evaluation, ownership or CLI schemas.

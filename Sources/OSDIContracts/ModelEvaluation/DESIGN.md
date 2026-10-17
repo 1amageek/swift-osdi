@@ -77,3 +77,22 @@ and is independent of how the caller selected OP or UIC initial values.
 `OSDINoiseSourceInfo` retains stable source index/name/kind and raw positive/negative
 node indices; nil negative index is ground. Equation units/natures come from the
 prepared node metadata. Sources are independent PSD channels, not correlated pairs.
+
+## Reactive Residual Presence
+
+`OSDINodeInfo.hasReactiveResidual` is an immutable structural fact for one raw
+descriptor row. Runtime metadata is false exactly when the admitted OSDI 0.4
+`react_residual_off` is `UINT32_MAX`; the native evaluator then publishes literal
+zero Q for that row on every evaluation. A true value means an offset is present,
+not that Q or C is nonzero at a sampled point. Time/state-dependent Q can have zero
+voltage derivative C. Consumers must not infer absence from sampled Q/C.
+
+The public initializer defaults this field to true so manually constructed metadata
+without an explicit fact cannot authorize removing a reactive row. Explicit false
+is a caller assertion of the same structural guarantee. Collapse/reduction and
+solver decisions remain consumer responsibilities; this fact describes raw rows.
+
+Sentinel/present protocol fixtures include time/state-only Q with identically zero
+C and distinguish the structural fact from sampled zero Q. Metadata changes affect
+consumer topology decisions; evaluation, storage, ownership and serialized CLI
+schemas are unchanged.

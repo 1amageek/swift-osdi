@@ -130,3 +130,8 @@ The upstream ABI remains unchanged. The noise-info C accessor returns admitted
 name/type/raw endpoints; source units are derived from residual node metadata.
 General Verilog-A hidden-state or delay support is not inferred. Caller-owned
 accept/reject history and external foreign-code allocations remain outside scope.
+
+The node-info accessor exports `has_reactive_residual` as 0/1 directly from the
+admitted raw node offset sentinel. Loading already validates every present offset.
+Its meaning is owned by [Model Evaluation](../../OSDIContracts/ModelEvaluation/DESIGN.md#reactive-residual-presence).
+This cold inspection does not change raw evaluation or allocate native storage.

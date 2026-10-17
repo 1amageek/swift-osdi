@@ -10,7 +10,12 @@
 uint32_t OSDI_VERSION_MAJOR=0,OSDI_VERSION_MINOR=4;
 uint32_t OSDI_NUM_DESCRIPTORS=1,OSDI_DESCRIPTOR_SIZE=sizeof(OsdiDescriptor);
 void (*osdi_log)(void *,const char *,uint32_t)=NULL;
-static OsdiNode nodes[]={{"p","V","A",16,24,UINT32_MAX,UINT32_MAX,false}};
+#if PROTOCOL_MODE == 13
+#define REACTIVE_RESIDUAL_OFFSET UINT32_MAX
+#else
+#define REACTIVE_RESIDUAL_OFFSET 24
+#endif
+static OsdiNode nodes[]={{"p","V","A",16,REACTIVE_RESIDUAL_OFFSET,UINT32_MAX,UINT32_MAX,false}};
 static OsdiNatureRef natures[]={{NATREF_NONE,0}};
 static OsdiJacobianEntry jacobian[]={{{0,0},UINT32_MAX,JACOBIAN_ENTRY_RESIST}};
 static void *access_parameter(void *instance,void *model,uint32_t id,uint32_t flags) {
@@ -32,6 +37,7 @@ static uint32_t evaluate(void *handle,void *instance,void *model,OsdiSimInfo *in
     /* The second candidate slot is intentionally untouched: caller retains previous state. */
     *(double *)((char *)instance+16)=input+info->prev_state[indices[0]];
     *(double *)((char *)instance+24)=0;
+    if(PROTOCOL_MODE==12) *(double *)((char *)instance+24)=info->abstime+info->prev_state[indices[0]];
     if(PROTOCOL_MODE==1)return EVAL_RET_FLAG_FATAL;
     if(PROTOCOL_MODE==2)return EVAL_RET_FLAG_FINISH;
     if(PROTOCOL_MODE==3)return EVAL_RET_FLAG_STOP;
@@ -90,13 +96,13 @@ static void jacobian_offset(void *instance,void *model,size_t offset) {
 static void noise_parameters(void *instance,void *model,double *power,double *exponent) {
     (void)instance;(void)model;(void)power;(void)exponent;abort();
 }
-#if PROTOCOL_MODE >= 10
+#if PROTOCOL_MODE == 10 || PROTOCOL_MODE == 11
 static OsdiNoiseSource noise_sources[]={{"invalid-spectrum",{0,UINT32_MAX}}};
 static uint32_t noise_types[]={NOISE_TYPE_WHITE};
 #endif
 OsdiDescriptor OSDI_DESCRIPTORS[]={
     {
-#if PROTOCOL_MODE >= 10
+#if PROTOCOL_MODE == 10 || PROTOCOL_MODE == 11
      .num_noise_src=1,.noise_sources=noise_sources,.noise_source_type=noise_types,
 #endif
      .name="protocol_transport",.num_nodes=1,.num_terminals=1,.nodes=nodes,

@@ -169,7 +169,8 @@ def build(args):
         libraries[source.stem] = destination
     protocol_libraries = {}
     protocol_names = ['state', 'fatal', 'finish', 'stop', 'diagnostics', 'diagnostic_overflow',
-                      'logged_error', 'limiting', 'unknown_flags', 'nonfinite_output', 'negative_noise', 'nonfinite_noise']
+                      'logged_error', 'limiting', 'unknown_flags', 'nonfinite_output', 'negative_noise', 'nonfinite_noise',
+                      'time_state_charge', 'no_charge']
     for mode, name in enumerate(protocol_names):
         destination = output/('protocol-'+name+'.dylib')
         run([clang, '-std=c11', '-Wall', '-Wextra', '-Werror', '-dynamiclib', '-I', here,

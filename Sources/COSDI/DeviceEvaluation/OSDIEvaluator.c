@@ -437,7 +437,8 @@ int32_t cs_osdi_node_info(const cs_osdi_library *library, uint32_t descriptor, u
     const OsdiNode *n = d->nodes + node;
     if (error) memset(error, 0, sizeof(*error));
     *out = (cs_osdi_node_info_record){view(n->name), view(n->units), view(n->residual_units), n->is_flow,
-        d->unknown_nature[node].ref_type, d->unknown_nature[node].index, d->residual_nature[node].ref_type, d->residual_nature[node].index};
+        d->unknown_nature[node].ref_type, d->unknown_nature[node].index, d->residual_nature[node].ref_type, d->residual_nature[node].index,
+        n->react_residual_off != UINT32_MAX};
     return 0;
 }
 int32_t cs_osdi_parameter_info(const cs_osdi_library *library, uint32_t descriptor, uint32_t parameter,

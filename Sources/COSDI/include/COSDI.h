@@ -130,6 +130,7 @@ typedef struct cs_osdi_node_info_record {
     uint32_t unknown_nature_index;
     uint32_t residual_nature_kind;
     uint32_t residual_nature_index;
+    uint32_t has_reactive_residual;
 } cs_osdi_node_info_record;
 typedef struct cs_osdi_parameter_info_record {
     cs_osdi_string_view name;

@@ -68,3 +68,7 @@ and floating roundoff; these are ordinary point checks, not interval certificate
 S4 direct-ABI capture accepts explicit mode/time/frequency and emits raw independent
 noise topology/densities and the model timestep bound. It does not call COSDI and
 keeps state/integration ownership outside the oracle point operation.
+
+The existing bounded protocol builder also emits reactive-offset absence and
+time/state-charge variants for the [metadata tests](../../Tests/OSDIEvaluationTests/DESIGN.md).
+These do not alter the nineteen numeric model points or finite-difference matrix.

@@ -84,3 +84,7 @@ fresh bound values, invalid context/PSD/bounds and explicit state retry. A gener
 analytic source and negative C protocol images test actual callbacks. Four exact
 model artifacts receive fresh AC/TRAN/noise API comparisons and CLI round trips.
 Existing S1/S2 counts and defaults remain regression requirements.
+
+Reactive-row metadata tests own ABI sentinel/present discrimination and conservative
+manual defaults. Protocol Q depends on absolute time and accepted state while C is
+zero, so sampled derivative inference cannot satisfy the metadata contract.

@@ -22,6 +22,7 @@ internal struct OSDIMetadataSnapshot {
             guard cs_osdi_node_info(library, UInt32(descriptor.index), UInt32(index), &node, &error) == 0 else {
                 throw .native(NativeIssueBridge.issue(error))
             }
+            guard node.has_reactive_residual <= 1 else { throw .invalidRange }
             let active = info.collapse_map![index]
             do {
                 nodes.append(try OSDINodeInfo(index: index,
@@ -31,7 +32,8 @@ internal struct OSDIMetadataSnapshot {
                     isFlow: node.is_flow != 0,
                     unknownNature: OSDINatureReference(kind: node.unknown_nature_kind, index: node.unknown_nature_index),
                     residualNature: OSDINatureReference(kind: node.residual_nature_kind, index: node.residual_nature_index),
-                    activeUnknownIndex: active == UInt32.max ? nil : Int(active)))
+                    activeUnknownIndex: active == UInt32.max ? nil : Int(active),
+                    hasReactiveResidual: node.has_reactive_residual != 0))
             } catch let failure as OSDIError { throw failure }
             catch let failure as OSDIContractError { throw .contract(failure) }
             catch { throw .host(operation: "copy node metadata", underlying: error) }

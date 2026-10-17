@@ -133,3 +133,9 @@ heap owner or per-call allocation is introduced. Workspace includes a stable PSD
 buffer sized by admitted descriptor source count. Analytic mode/time/IC/noise and
 state controls, all four exact model families, Debug/Release consumers and scoped
 allocation measurements own the new evidence.
+
+Cold metadata snapshots validate the node-info presence bit and copy it into
+`OSDINodeInfo.hasReactiveResidual`; the [portable structural contract](../../OSDIContracts/ModelEvaluation/DESIGN.md#reactive-residual-presence)
+owns its meaning. No per-evaluation path, buffer, owner or lease changes. Existing
+exact-revision performance evidence remains historical; its unchanged hot-path
+premises can be reused separately from consumer changes using the new fact.
