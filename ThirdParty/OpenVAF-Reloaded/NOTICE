@@ -1,0 +1,6 @@
+The unmodified ABI header at Sources/COSDI/ABI/osdi_0_4.h is reused from
+OpenVAF/OpenVAF-Reloaded commit fdf2522b70f42793f64b1c72f0195c96dea0cc19.
+Source URL, compiler release and SHA-256 bindings are recorded in Source.json.
+The upstream repository license is retained verbatim in LICENSE.
+No model physics or compiler implementation is copied into this package.
+The pinned native compiler is a verification input, not a runtime dependency.
