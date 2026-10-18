@@ -315,7 +315,32 @@ the original four-family receipt regression and implies model qualification.
 Retain those exact inputs and successful receipts; generated or failed checks are not qualification evidence. Historical
 receipts only apply while their bound source/profile assumptions remain valid.
 
-See [RELEASING.md](RELEASING.md) for the source-only release gate,
-[CHANGELOG.md](CHANGELOG.md) for candidate changes, and [DESIGN.md](DESIGN.md) for
-contract ownership. Third-party license text and exact header provenance are
-retained under [ThirdParty/OpenVAF-Reloaded](ThirdParty/OpenVAF-Reloaded).
+## License and source distribution
+
+The SDK is licensed under **GPL-3.0-only**; see the root [LICENSE](LICENSE)
+and [NOTICE](NOTICE).
+CircuiteFoundation is a separate **MIT-licensed** dependency at the exact public
+revision pinned in [Package.swift](Package.swift),
+[`5f132c58209123433e0e479e1ea61096e46061ba`](https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE).
+Preserve its copyright and license notice when redistributing its source. Upstream OSDI header license text,
+notices and exact provenance remain under
+[ThirdParty/OpenVAF-Reloaded](ThirdParty/OpenVAF-Reloaded).
+
+The retained support materials and documentation in
+[Tools/OpenVAFCompilerFixture](Tools/OpenVAFCompilerFixture/DESIGN.md) are an
+exception to the root SDK license: they retain **OpenVAFSupport Attribution
+License 1.0** under their [NOTICE](Tools/OpenVAFCompilerFixture/NOTICE).
+OpenVAFSupport — Copyright (c) 2026, 1amageek — originates from
+[swift-openvaf](https://github.com/1amageek/swift-openvaf). Preserve the complete
+notice and its visible attribution requirements. Upstream-derived compiler patch
+material remains subject to its upstream GPL terms as that notice specifies.
+
+Version 1.0.0 is a **source-only** distribution. No compiled CLI, precision worker,
+model library or GMP/MPFR archive is included as a release asset. Local builds
+remain supported; binary redistribution requires reviewing the actual linked
+licenses and satisfying their corresponding-source/relinking obligations.
+
+See [RELEASING.md](RELEASING.md) for the release gate,
+[CHANGELOG.md](CHANGELOG.md) for version changes, and [DESIGN.md](DESIGN.md) for
+contract ownership. Release metadata does not by itself establish publication or
+numerical qualification.

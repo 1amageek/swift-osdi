@@ -162,12 +162,15 @@ or all-corner obligations below.
 ### Independent release dependency
 
 The release candidate pins the publicly retrievable CircuiteFoundation revision
-`ae88104c556f5802819713ed741f5b2fffffc2d9`. A separate SwiftPM consumer has compiled,
-linked and exercised the public artifact, preparation, evaluation and cleanup
-contracts against that revision without client experimental flags or dependency
-mirrors. This replaces the historical unpublished S3 availability input below;
-the used public contracts are unchanged. Distribution permission remains a
-separate release gate and is not inferred from public Git availability.
+`5f132c58209123433e0e479e1ea61096e46061ba`. It adds only an MIT license to
+`ae88104c556f5802819713ed741f5b2fffffc2d9`; all implementation, manifest and test
+bytes are unchanged. The prior separate SwiftPM consumer compiled, linked and
+exercised the public artifact, preparation, evaluation and cleanup contracts at
+`ae88104c556f5802819713ed741f5b2fffffc2d9` without client experimental flags or
+dependency mirrors. Publication additionally verifies the new exact graph. This replaces the historical unpublished S3 availability input below;
+the used public contracts are unchanged. The publisher approved GPL-3.0-only for this source distribution and MIT for
+CircuiteFoundation. Root LICENSE/NOTICE and separately identified upstream notices
+are authoritative; public Git availability alone does not imply permission.
 
 ### Historical S3 dependency compatibility — development only
 

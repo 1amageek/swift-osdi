@@ -1,0 +1,28 @@
+swift-osdi
+Copyright (c) 2026 1amageek
+
+Except for the separately identified materials below, swift-osdi is licensed
+under the GNU General Public License, version 3 only (GPL-3.0-only). See LICENSE.
+
+The unmodified OSDI 0.4 headers and upstream-derived compiler patch retain the
+OpenVAF-Reloaded copyright and GPL terms. Exact upstream source and header
+identities are recorded in ThirdParty/OpenVAF-Reloaded/Source.json; the original
+license and attribution are retained in that directory and in
+Tools/OpenVAFCompilerFixture/NOTICE.
+
+The verification-only producer capture in Tools/OpenVAFCompilerFixture retains
+its separately stated OpenVAFSupport Attribution License 1.0 for the support
+materials identified by its NOTICE. That notice does not replace the GPL terms
+for upstream-derived patch material. Retain its attribution and provenance when
+redistributing those materials.
+
+CircuiteFoundation is a separately fetched MIT-licensed dependency. Its license
+is included at the exact revision declared in Package.swift. Other transitive
+and system dependencies retain their respective licenses. The optional precision
+worker links GMP and MPFR under their own licenses; neither numeric library is
+vendored by this source distribution.
+
+This release distributes source only. It contains no third-party BSIM source,
+compiled model image, compiled compiler, numeric archive or executable release
+asset. Locally linked binary redistribution requires satisfying the obligations
+of the actual linked dependencies; it is not part of this source release.

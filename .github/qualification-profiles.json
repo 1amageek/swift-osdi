@@ -1,7 +1,8 @@
 {
   "schema": "osdi.release-qualification-index.v1",
-  "candidateVersion": "1.0.0",
-  "status": "candidate-not-a-success-receipt",
+  "releaseVersion": "1.0.0",
+  "intendedSourceReleaseDate": "2026-10-18",
+  "status": "scope-index-not-a-publication-or-success-receipt",
   "host": {"platform": "macOS", "minimumMajorVersion": 26, "architecture": "arm64", "swift": "6.4.0-release", "osdiABI": "0.4"},
   "lanes": [
     {"id": "ordinary", "entrypoint": "Tools/OSDIStandaloneVerification/run.py", "externalModels": false, "proofScope": "tracked native admission, lifecycle, API/CLI point and transport fixtures"},
@@ -15,5 +16,10 @@
   ],
   "retainedModelVersions": {"BSIM-BULK": "107.2.1", "BSIM-CMG": "112.1.0", "BSIM-IMG": "103.1.0", "BSIM-SOI": "101.0.0"},
   "consumerOwnedObligations": ["circuit assembly and solution", "integration and accepted history", "complete operating cover", "all-history and all-corner guarantees", "physical and foundry qualification"],
-  "distribution": "source-only; no binary release assets"
+  "distribution": "source-only; no binary release assets",
+  "licenses": {
+    "sdk": {"identifier": "GPL-3.0-only", "text": "LICENSE"},
+    "CircuiteFoundation": {"identifier": "MIT", "repository": "https://github.com/1amageek/CircuiteFoundation.git", "exactRevisionAuthority": "Package.swift", "notice": "Preserve the license and copyright at the exact dependency revision", "revision": "5f132c58209123433e0e479e1ea61096e46061ba", "text": "https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE"},
+    "compilerFixtureSupport": {"identifier": "OpenVAFSupport Attribution License 1.0", "text": "Tools/OpenVAFCompilerFixture/NOTICE", "attribution": "OpenVAFSupport — Copyright (c) 2026, 1amageek — https://github.com/1amageek/swift-openvaf", "upstreamDerivedPatch": "Retains upstream GPL terms as specified in NOTICE"}
+  }
 }

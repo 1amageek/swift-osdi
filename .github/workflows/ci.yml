@@ -2,6 +2,8 @@ name: Standalone native verification
 
 on:
   push:
+    branches: [main]
+    paths-ignore: [PROGRESS.md]
   pull_request:
   workflow_dispatch:
 

@@ -1,7 +1,8 @@
 # Source release procedure
 
-The first release candidate is **1.0.0**. This document describes admission and
-manual publication; it does not mean a tag or release has been published.
+The first source release is prepared as **1.0.0**, dated **2026-10-18**. This
+document describes admission and manual publication; prepared version metadata
+does not mean a tag or release has been published.
 
 ```text
 exact source + public dependency revision + license approval
@@ -22,6 +23,9 @@ exact source + public dependency revision + license approval
 | Precision | Explicit `stateless-precision-v1` and `stateless-smooth-box-v2`; exact qualified program, worker, semantic and numeric identities |
 | Excluded claims | Circuit solution, accepted history, complete operating cover, all-history/all-corner guarantees, physical/foundry qualification and new performance claims |
 | Distribution | Source tag/archive only; no compiled CLI, worker, model library or numeric archive assets |
+| SDK license | GPL-3.0-only under the root LICENSE |
+| Dependency license | MIT-licensed CircuiteFoundation at exact manifest revision `5f132c58209123433e0e479e1ea61096e46061ba` |
+| Retained exceptions | OpenVAFCompilerFixture support materials retain OpenVAFSupport Attribution License 1.0; upstream-derived patch material retains upstream GPL terms |
 
 The [README](README.md) owns user-facing setup and API/CLI use. The
 [system design](DESIGN.md) owns implementation contracts; this procedure owns the
@@ -32,10 +36,14 @@ release admission sequence.
 1. Confirm repository owner, branch, exact source commit and proposed `1.0.0` tag.
    Inspect existing tags/remotes and pending changes. Never overwrite a tag or
    rewrite history as part of this procedure.
-2. Confirm an explicit root distribution license, the dependency's compatible
-   permission, the unmodified upstream OSDI header/license/notice and exact
-   third-party provenance. A missing or unresolved permission blocks publication.
-   Preserve upstream notices and corresponding source in the source archive.
+2. Confirm the root GPL-3.0-only LICENSE and the MIT permission at the exact
+   CircuiteFoundation revision. Preserve its copyright/license notice, the
+   unmodified upstream OSDI header/license/notice and exact third-party provenance.
+   Retain the complete OpenVAFCompilerFixture NOTICE, including OpenVAFSupport
+   Attribution License 1.0 for support materials and visible attribution. Its
+   upstream-derived patch material keeps its upstream GPL terms. A missing or
+   unresolved permission blocks publication. Preserve applicable notices and
+   corresponding source in the source archive.
 3. Confirm every manifest dependency uses a public URL and an exact published
    revision. Resolve from a fresh clone with isolated SwiftPM state, no workspace
    sibling, local mirror or `.package(path:)` dependency. Record the resolved graph.
@@ -43,7 +51,11 @@ release admission sequence.
    directories, including deterministic precision qualification. Run its supported
    Address Sanitizer lane once for affected native consumer paths and worker
    Address/Undefined Behavior Sanitizers where supported. Preserve the scope limit
-   for noninstrumented numeric libraries or external model code.
+   for noninstrumented numeric libraries or external model code. Existing behavioral
+   evidence may be reused for a license-only dependency revision after confirming
+   exact non-license source equality and unchanged verification assumptions.
+   Preserve the original tested revision and the equality evidence; do not report
+   reused results as newly executed tests of the new revision.
 5. Run the external consumer with the public source URL/revision and canonical
    public CircuiteFoundation URL/revision. It must resolve and build independently,
    exercise API and CLI success/failure, preserve exact report values after reload,
@@ -82,7 +94,7 @@ summary should link immutable evidence and report the following separate outcome
 | Native sanitizers | Exact instrumented paths, pass/failure and noninstrumented scope |
 | External consumer | Public URL/revisions, client source, API/CLI result and persistence comparison |
 | Optional models | Exact family/version/case manifests and independent reference receipts |
-| License/distribution | Approved licenses/notices and source-only asset inventory |
+| License/distribution | Root GPL-3.0-only, exact dependency MIT notice, retained compiler-fixture attribution/upstream terms and source-only asset inventory |
 
 The compact profile manifest in
 [.github/qualification-profiles.json](.github/qualification-profiles.json)
@@ -93,7 +105,9 @@ success receipt or a substitute for exact per-run evidence.
 
 [CI](.github/workflows/ci.yml) runs bounded standalone verification and external
 consumer checks on `macos-26` arm64, with `contents: read`, no deployment token and
-no publishing job. It installs the exact signed Swift release in the runner's
+no publishing job. Main-branch source changes, pull requests and manual dispatch
+run qualification; progress-ledger-only pushes and tag pushes do not repeat an
+already qualified source build. It installs the exact signed Swift release in the runner's
 user directory and verifies compiler identity before use. Generated receipts and
 logs are CI evidence; compiled binaries are not release assets.
 
