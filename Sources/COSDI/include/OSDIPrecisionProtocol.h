@@ -7,6 +7,7 @@
 /* Local host IPC, independent of the unchanged upstream OSDI model ABI. */
 #define CS_OSDI_PRECISION_MAGIC UINT64_C(0x313056504944534f)
 #define CS_OSDI_PRECISION_PROTOCOL_VERSION UINT32_C(1)
+#define CS_OSDI_RANGE_PROTOCOL_VERSION UINT32_C(2)
 #define CS_OSDI_PRECISION_BYTE_ORDER UINT32_C(0x01020304)
 #define CS_OSDI_PRECISION_REGION_COUNT UINT32_C(14)
 #define CS_OSDI_PRECISION_NO_INSTRUCTION UINT32_MAX
@@ -34,6 +35,22 @@ enum cs_osdi_precision_region_id {
     CS_OSDI_PRECISION_C = 13
 };
 
+/* Explicit version-2 interpretation of the same fourteen physical regions. */
+enum cs_osdi_range_region_id {
+    CS_OSDI_RANGE_LOWER_HIGH = 2,
+    CS_OSDI_RANGE_LOWER_LOW = 3,
+    CS_OSDI_RANGE_UPPER_HIGH = 4,
+    CS_OSDI_RANGE_UPPER_LOW = 5,
+    CS_OSDI_RANGE_F_LOWER = 6,
+    CS_OSDI_RANGE_F_UPPER = 7,
+    CS_OSDI_RANGE_Q_LOWER = 8,
+    CS_OSDI_RANGE_Q_UPPER = 9,
+    CS_OSDI_RANGE_G_LOWER = 10,
+    CS_OSDI_RANGE_G_UPPER = 11,
+    CS_OSDI_RANGE_C_LOWER = 12,
+    CS_OSDI_RANGE_C_UPPER = 13
+};
+
 enum cs_osdi_precision_status {
     CS_OSDI_PRECISION_SUCCESS = 0,
     CS_OSDI_PRECISION_INVALID_INPUT = 1,
@@ -44,7 +61,8 @@ enum cs_osdi_precision_status {
     CS_OSDI_PRECISION_EXHAUSTED = 6,
     CS_OSDI_PRECISION_WORK_EXHAUSTED = 7,
     CS_OSDI_PRECISION_NONFINITE_PROJECTION = 8,
-    CS_OSDI_PRECISION_NUMERIC_INVARIANT = 9
+    CS_OSDI_PRECISION_NUMERIC_INVARIANT = 9,
+    CS_OSDI_PRECISION_NONSMOOTH = 10
 };
 
 enum cs_osdi_precision_worker_exit {
@@ -85,6 +103,12 @@ typedef struct cs_osdi_precision_context_v1 {
  * sizes, alignment and disjointness are validated before any region access.
  * Work limit is fixed at admission; fresh setup/evaluation counters cover all
  * executed operations, including both endpoint lanes, derivatives/projection.
+ *
+ * Version 2 retains this exact structure and region count. Inputs 2..5 are
+ * lower-high/lower-low/upper-high/upper-low. Outputs 6..9 are N-element absolute
+ * F-lower/F-upper/Q-lower/Q-upper; outputs 10..13 are N*N-element row-major
+ * G-lower/G-upper/C-lower/C-upper. candidate/reference store lower/upper time
+ * endpoints with one equal mode. No version-1 field changes its interpretation.
  */
 typedef struct cs_osdi_precision_control_v1 {
     uint64_t magic;

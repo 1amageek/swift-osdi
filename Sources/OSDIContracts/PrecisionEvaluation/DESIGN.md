@@ -129,3 +129,46 @@ API/CLI behavior and unchanged-tolerance physical acceptance.
 ## Verification and Change Impact
 
 Focused real worker transport, failure, scoped view and cleanup tests own this boundary. Numeric and compiler correctness remain separately verified by their owners.
+
+## Causal Range Contract
+
+The [system range boundary](../../../DESIGN.md#causal-range-boundary) fixes the
+smooth-neighborhood requirement and the limits of this constitutive certificate.
+The point and compensated-point operations above remain version 1 operations.
+Range is a separate version 2 operation over one immutable program/setup/topology,
+using the existing precision options and exact source/worker/profile provenance.
+
+Lower and upper coordinate endpoints each use finite normalized high/low pairs
+in active-unknown order. Their real sums define a complete closed coordinate box;
+the lower endpoint must not exceed the upper endpoint. Lower and upper
+`OSDIPrecisionContext` values use the same mode and define a closed absolute-time
+box without collapsing their components to binary64. Stateful programs remain
+unsupported. The process/interpreter owns exact endpoint ordering, regularity and
+outward projection; portable contracts do not reproduce interval arithmetic.
+
+| Public declaration | Owned meaning |
+|---|---|
+| `OSDIPrecisionRangeSessionPreparing.prepareRange` | Admit the same program/worker/source/profile/options into the existing exclusive session with immutable range operation |
+| `OSDIPrecisionRangeEvaluating.evaluateRange` | Synchronously borrow lower/upper coordinate spans and contexts; publish one complete range view or typed failure |
+| `OSDIPrecisionRangeEvaluationView` | Scoped absolute `fLower/fUpper/qLower/qUpper` and row-major spatial `gLower/gUpper/cLower/cUpper` outward bounds, precision/work/sequence/fresh-bound facts and `programHasTimeInput` |
+
+The F/Q endpoints enclose their absolute same-source functions over every point in
+the box. G/C endpoints enclose the corresponding same-source spatial derivatives;
+they are neither midpoints nor explicit-time partial derivatives. No delta-Q,
+solver step, accepted state, flow, or entire-history result is implied. Conservative
+`programHasTimeInput` reports whether the retained program contains any explicit
+time input, allowing upper consumers to refuse time-dependent programs when their
+own authority requires it. It is not a proof of time independence for other inputs.
+
+Wrong-operation use fails before transport or callback and preserves the session
+for its admitted operation. Demanded nonsmooth dependencies produce a typed
+regularity failure before any view; invalid geometry, unsupported state, exhausted
+budgets, cancellation, protocol failures and bounded cleanup retain the existing
+failure/ownership policy. A range failure does not silently retry a point operation.
+`OSDIPrecisionIssue.Code.nonsmooth` is raw value 12, translated by the range
+process from worker regularity status 10. Existing process issue values, including
+`io` at 10, and all point error mappings remain unchanged.
+
+Verification owns closed boxes touching/crossing switch/domain faces, nonlinear
+closed-form F/Q/G/C bounds, exact twofold ordering, time boxes, operation mismatch,
+regularity failure mapping, atomic refusal, cleanup and unchanged point behavior.

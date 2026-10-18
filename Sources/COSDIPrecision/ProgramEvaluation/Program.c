@@ -125,6 +125,7 @@ int cs_precision_program_open(cs_precision_program *p, const void *bytes,
   p->detail = NONE;
   p->header = bytes;
   p->setup = setup;
+  p->range_mode = control->protocol_version == CS_OSDI_RANGE_PROTOCOL_VERSION;
   REQUIRE(length >= sizeof(*p->header) && setup_length >= sizeof(*p->setup));
   const CSOsdiPrecisionProgramHeader *h = p->header;
   const CSOsdiPrecisionSetupHeader *s = p->setup;
@@ -502,8 +503,38 @@ int cs_precision_program_open(cs_precision_program *p, const void *bytes,
                          control->maximum_work_units);
   cs_precision_identity_open(&p->identity, h->registers.count,
                              p->maximum_precision);
+  if (p->range_mode) {
+    p->range_values_active = array(h->registers.count, 1);
+    p->range_roots_active = array(h->roots.count, 1);
+    p->range_stage_active = array(p->stage_capacity, 1);
+    p->range_coordinates = array((size_t)p->active_count + 1,
+                                  sizeof(*p->range_coordinates));
+    unsigned char *range_limbs = array((size_t)p->active_count + 1, 2 * limb);
+    for (uint64_t j = 0; j <= p->active_count; j++)
+      cs_precision_interval_init(&p->range_coordinates[j], p->maximum_precision,
+                                 range_limbs + 2 * limb * j);
+  }
   p->detail = NONE;
   return 0;
+}
+/* The fixed arena owns every region for the worker lifetime. Integer address
+   ranges avoid subtracting pointers from independent allocations. No lookup
+   accepts an interior/non-value address or lets metadata escape its owner. */
+static unsigned char *activity(cs_precision_program *p,
+                               const cs_precision_value *v) {
+  uintptr_t address = (uintptr_t)v;
+  const cs_precision_value *bases[] = {p->values, p->root_values, p->stage};
+  unsigned char *metadata[] = {p->range_values_active, p->range_roots_active,
+                              p->range_stage_active};
+  size_t counts[] = {p->header->registers.count, p->header->roots.count,
+                     p->stage_capacity};
+  for (unsigned j = 0; j < 3; j++) {
+    uintptr_t base = (uintptr_t)bases[j];
+    if (address >= base && (address - base) % sizeof(*v) == 0 &&
+        (address - base) / sizeof(*v) < counts[j])
+      return metadata[j] + (address - base) / sizeof(*v);
+  }
+  _Exit(CS_OSDI_PRECISION_EXIT_INVARIANT);
 }
 static int copy_value(cs_precision_program *p, cs_precision_value *d,
                       const cs_precision_value *a) {
@@ -511,6 +542,11 @@ static int copy_value(cs_precision_program *p, cs_precision_value *d,
     return BAD;
   if (!cs_precision_charge(&p->math, a->type == 1 ? 3 : 1))
     return p->math.status;
+  if (p->range_mode) {
+    if (!cs_precision_charge(&p->math, 8))
+      return p->math.status;
+    *activity(p, d) = *activity(p, a);
+  }
   d->type = a->type;
   d->initialized = 1;
   d->identity = a->identity;
@@ -531,6 +567,8 @@ static int bits_value(cs_precision_program *p, cs_precision_value *v,
                       uint64_t bits, const unsigned char *strings) {
   if (!cs_precision_charge(&p->math, v->type == 1 ? 3 : 1))
     return p->math.status;
+  if (p->range_mode)
+    *activity(p, v) = 0;
   int status = 0;
   if (v->type == 1)
     status = cs_precision_real_bits(&v->real, bits);
@@ -605,10 +643,17 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
     }
   } else if (q->kind == 3)
     return bits_value(p, v, p->setup->temperature_binary64, p->setup_strings);
-  else if (q->kind == 4)
-    return v->initialized = 1,
-           pair(p, &v->real, context->time_high, context->time_low);
-  else if (q->kind == 5)
+  else if (q->kind == 4) {
+    v->initialized = 1;
+    if (!p->range_mode)
+      return pair(p, &v->real, context->time_high, context->time_low);
+    if (!cs_precision_charge(&p->math, 2))
+      return p->math.status;
+    cs_precision_interval_copy(&v->real, &p->range_coordinates[p->active_count]);
+    *activity(p, v) = 1;
+    v->identity = 0;
+    return 0;
+  } else if (q->kind == 5)
     v->integer = !init;
   else if (q->kind == 6)
     v->integer = 0;
@@ -631,6 +676,37 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
     cs_precision_interval *a = &p->math.scratch[4], *b = &p->math.scratch[5];
     uint32_t ai = q->index == NONE ? NONE : p->map[q->index],
              bi = q->aux == NONE ? NONE : p->map[q->aux];
+    if (p->range_mode) {
+      if (ai == bi) {
+        int status = bits_value(p, v, 0, p->setup_strings);
+        if (!status && q->index != q->aux) {
+          /* Raw partials require source regularity even at prepared aliases. */
+          *activity(p, v) = 1;
+          v->identity = 0;
+        }
+        return status;
+      }
+      if (!cs_precision_charge(&p->math, 6))
+        return p->math.status;
+      if (ai == NONE) {
+        mpfr_set_zero(a->low, 0);
+        mpfr_set_zero(a->high, 0);
+      } else {
+        cs_precision_interval_copy(a, &p->range_coordinates[ai]);
+      }
+      if (bi == NONE) {
+        mpfr_set_zero(b->low, 0);
+        mpfr_set_zero(b->high, 0);
+      } else {
+        cs_precision_interval_copy(b, &p->range_coordinates[bi]);
+      }
+      mpfr_sub(v->real.low, a->low, b->high, MPFR_RNDD);
+      mpfr_sub(v->real.high, a->high, b->low, MPFR_RNDU);
+      v->initialized = 1;
+      v->identity = 0;
+      *activity(p, v) = 1;
+      return 0;
+    }
     int status =
         pair(p, a, ai == NONE ? 0 : high[ai], ai == NONE ? 0 : low[ai]);
     if (status)
@@ -644,6 +720,8 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
     mpfr_sub(v->real.high, a->high, b->low, MPFR_RNDU);
   }
   v->initialized = 1;
+  if (p->range_mode)
+    *activity(p, v) = 0;
   return 0;
 }
 static uint32_t representative(cs_precision_program *p, uint32_t node) {
@@ -694,6 +772,8 @@ static int poison(cs_precision_program *p, cs_precision_value *value,
   value->identity = 0;
   value->failure = failure;
   value->failure_detail = detail;
+  if (p->range_mode)
+    *activity(p, value) = 1;
   return 0;
 }
 /* Return one only after proving every path reaches join. Scratch is bounded by
@@ -829,11 +909,14 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
   p->detail = NONE;
   for (uint32_t j = 0; j < p->header->inputs.count; j++)
     if (p->inputs[j].function_index == index) {
+      if (p->range_mode && !cs_precision_charge(&p->math, 8))
+        return p->math.status;
       int status = bind_input(p, j, high, low, context);
       if (status)
         return status;
       cs_precision_value *v = &p->values[p->inputs[j].destination];
-      if (!v->identity && !v->failure) {
+      if (!v->identity && !v->failure &&
+          !(p->range_mode && *activity(p, v))) {
         status = cs_precision_identify(&p->identity, &p->math, v, 0, 0, 0);
         if (status)
           return status;
@@ -883,6 +966,8 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       }
     }
     for (uint32_t j = 0; j < b->instruction_count; j++) {
+      if (p->range_mode && !cs_precision_charge(&p->math, 8))
+        return p->math.status;
       p->detail = b->first_instruction + j;
       const CSOsdiPrecisionInstruction *i = &p->instructions[p->detail];
       if (i->opcode == 73) {
@@ -924,6 +1009,14 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       uint32_t first = a->identity,
                second = operand_b ? operand_b->identity : 0;
       int same = operand_b && first && first == second;
+      int active_a = 0, active_b = 0;
+      if (p->range_mode) {
+        active_a = *activity(p, a);
+        active_b = operand_b && *activity(p, operand_b);
+        if (active_a || active_b)
+          same = operand_b && i->a == i->b;
+        *activity(p, destination) = active_a || active_b;
+      }
       /* The identity authority is endpoint-local and independent of enclosure
          equality. Comparisons still execute their ordinary domain checks. */
       const cs_precision_value *comparison_b = operand_b;
@@ -934,14 +1027,21 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       destination->failure = 0;
       destination->failure_detail = NONE;
       destination->initialized = 0;
-      int status =
-          cs_precision_apply(&p->math, i->opcode, destination, a, comparison_b);
+      int status = p->range_mode
+                       ? cs_precision_regularity(&p->math, i->opcode, a,
+                                                  comparison_b, active_a,
+                                                  active_b, same)
+                       : 0;
+      if (!status)
+        status = cs_precision_apply(&p->math, i->opcode, destination, a,
+                                     comparison_b);
       if (!status && destination->type == 1 && i->opcode != 12 &&
           (!mpfr_number_p(destination->real.low) ||
            !mpfr_number_p(destination->real.high)))
         status = CS_OSDI_PRECISION_NONFINITE_PROJECTION;
       if (status == CS_OSDI_PRECISION_DOMAIN ||
           status == CS_OSDI_PRECISION_UNRESOLVED_BRANCH ||
+          status == CS_OSDI_PRECISION_NONSMOOTH ||
           status == CS_OSDI_PRECISION_NONFINITE_PROJECTION) {
         int failure = poison(p, destination, status, p->detail);
         if (failure)
@@ -956,10 +1056,17 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
           return p->math.status;
         mpfr_set_zero(destination->real.low, 0);
         mpfr_set_zero(destination->real.high, 0);
+        if (p->range_mode)
+          *activity(p, destination) = 0;
       }
+      if (p->range_mode &&
+          ((i->opcode >= 49 && i->opcode <= 64) || i->opcode == 5 ||
+           i->opcode == 6 || i->opcode == 10 || i->opcode == 20 ||
+           i->opcode == 21))
+        *activity(p, destination) = 0;
       if (i->opcode == 12) {
         destination->identity = first;
-      } else {
+      } else if (!(p->range_mode && *activity(p, destination))) {
         status = cs_precision_identify(&p->identity, &p->math, destination,
                                        i->opcode, first, second);
         if (status)
@@ -1005,6 +1112,15 @@ static int pipeline(cs_precision_program *p, const double *high,
   int reset_status = cs_precision_identity_reset(&p->identity, &p->math);
   if (reset_status)
     return reset_status;
+  if (p->range_mode) {
+    uint64_t count = (uint64_t)p->header->registers.count +
+                     p->header->roots.count + p->stage_capacity;
+    if (!cs_precision_charge(&p->math, count))
+      return p->math.status;
+    memset(p->range_values_active, 0, p->header->registers.count);
+    memset(p->range_roots_active, 0, p->header->roots.count);
+    memset(p->range_stage_active, 0, p->stage_capacity);
+  }
   for (uint32_t j = 0; j < p->header->registers.count; j++) {
     p->values[j].initialized = 0;
     p->values[j].identity = 0;
@@ -1032,11 +1148,141 @@ static int pipeline(cs_precision_program *p, const double *high,
    */
   return check_topology(p);
 }
+static int normalized_pair(double high, double low) {
+  return isfinite(high) && isfinite(low) && high + low == high;
+}
+static int ordered_pair(double lh, double ll, double uh, double ul) {
+  /* Normalized twofolds have disjoint adjacent high-component cells. Comparing
+     highs, then lows, orders their exact dyadic sums without an MPFR precision
+     assumption or a rounded binary64 addition. */
+  return lh < uh || (lh == uh && ll <= ul);
+}
+static int range_input(cs_precision_program *p, cs_precision_interval *out,
+                       double lh, double ll, double uh, double ul) {
+  reprecision(out, p->precision);
+  int status = pair(p, out, lh, ll);
+  if (status)
+    return status;
+  cs_precision_interval *upper = &p->math.scratch[7];
+  status = pair(p, upper, uh, ul);
+  if (status)
+    return status;
+  if (!cs_precision_charge(&p->math, 1))
+    return p->math.status;
+  mpfr_set(out->high, upper->high, MPFR_RNDU);
+  return 0;
+}
+static int evaluate_range(cs_precision_program *p,
+                          cs_osdi_precision_control_v1 *control,
+                          const double *lh, const double *ll,
+                          const double *uh, const double *ul,
+                          double *outputs[8]) {
+  p->math.work = 0;
+  p->math.status = 0;
+  p->precision = 0;
+  p->detail = NONE;
+  p->flags = 0;
+  p->has_bound = 0;
+  uint32_t bits = control->requested_precision_bits;
+  if (control->protocol_version != CS_OSDI_RANGE_PROTOCOL_VERSION ||
+      bits < control->minimum_precision_bits || bits > p->maximum_precision)
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  const cs_osdi_precision_context_v1 *lower = &control->candidate,
+                                    *upper = &control->reference;
+  if (lower->mode != upper->mode || (lower->mode != 2 && lower->mode != 3))
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  const cs_osdi_precision_context_v1 *contexts[2] = {lower, upper};
+  for (unsigned j = 0; j < 2; j++) {
+    const cs_osdi_precision_context_v1 *context = contexts[j];
+    if (context->reserved || !normalized_pair(context->time_high, context->time_low) ||
+        context->time_high < 0 || (context->time_high == 0 && context->time_low < 0) ||
+        (context->mode == 3 && (context->time_high != 0 || context->time_low != 0)))
+      return CS_OSDI_PRECISION_INVALID_INPUT;
+  }
+  if (!ordered_pair(lower->time_high, lower->time_low, upper->time_high,
+                    upper->time_low))
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  for (uint64_t j = 0; j < p->active_count; j++)
+    if (!normalized_pair(lh[j], ll[j]) || !normalized_pair(uh[j], ul[j]) ||
+        !ordered_pair(lh[j], ll[j], uh[j], ul[j]))
+      return CS_OSDI_PRECISION_INVALID_INPUT;
+  p->precision = bits;
+  p->math.precision = bits;
+  for (unsigned j = 0; j < 8; j++)
+    reprecision(&p->math.scratch[j], bits);
+  for (unsigned j = 0; j < 12; j++) {
+    void *storage = mpfr_custom_get_significand(p->math.temporary[j]);
+    mpfr_custom_init_set(p->math.temporary[j], MPFR_NAN_KIND, 0, bits, storage);
+  }
+  for (uint32_t j = 0; j < p->header->registers.count; j++)
+    if (p->values[j].type == 1)
+      reprecision(&p->values[j].real, bits);
+  for (uint32_t j = 0; j < p->header->roots.count; j++)
+    if (p->root_values[j].type == 1)
+      reprecision(&p->root_values[j].real, bits);
+  for (uint32_t j = 0; j < p->stage_capacity; j++)
+    reprecision(&p->stage[j].real, bits);
+  for (uint64_t j = 0; j < p->active_count; j++) {
+    int status = range_input(p, &p->range_coordinates[j], lh[j], ll[j],
+                              uh[j], ul[j]);
+    if (status)
+      return status;
+  }
+  int status = range_input(p, &p->range_coordinates[p->active_count],
+                            lower->time_high, lower->time_low,
+                            upper->time_high, upper->time_low);
+  if (status)
+    return status;
+  uint32_t n = p->header->raw_node_count;
+  uint64_t matrix = (uint64_t)n * n;
+  if (!cs_precision_charge(&p->math, 4 * (uint64_t)n + 4 * matrix))
+    return p->math.status;
+  for (unsigned j = 0; j < 8; j++)
+    memset(outputs[j], 0, (size_t)(j < 4 ? n : matrix) * sizeof(double));
+  status = pipeline(p, NULL, NULL, lower);
+  if (status)
+    return status;
+  for (uint32_t j = 0; j < p->header->roots.count; j++) {
+    const CSOsdiPrecisionRoot *root = &p->roots[j];
+    const cs_precision_interval *value = &p->root_values[j].real;
+    if (root->kind == 1 || root->kind == 2) {
+      unsigned region = 2 * (root->kind - 1);
+      status = cs_precision_bounds(&p->math, value, &outputs[region][root->index],
+                                    &outputs[region + 1][root->index]);
+    } else if (root->kind == 3 || root->kind == 4) {
+      unsigned region = 4 + 2 * (root->kind - 3);
+      uint64_t index = (uint64_t)root->index * n + root->aux;
+      status = cs_precision_bounds(&p->math, value, &outputs[region][index],
+                                    &outputs[region + 1][index]);
+    } else if (root->kind == 7) {
+      if (!cs_precision_charge(&p->math, 8))
+        return p->math.status;
+      if (mpfr_inf_p(value->low) && mpfr_sgn(value->low) > 0 &&
+          mpfr_inf_p(value->high))
+        continue;
+      if (!mpfr_number_p(value->low) || !mpfr_number_p(value->high) ||
+          mpfr_cmp_ui(value->low, 0) <= 0)
+        return CS_OSDI_PRECISION_DOMAIN;
+      double bound = mpfr_get_d(value->low, MPFR_RNDD);
+      if (!isfinite(bound) || bound <= 0)
+        return CS_OSDI_PRECISION_NONFINITE_PROJECTION;
+      if (!p->has_bound || bound < p->bound) {
+        p->has_bound = 1;
+        p->bound = bound;
+      }
+    }
+    if (status)
+      return status;
+  }
+  return 0;
+}
 int cs_precision_program_evaluate(cs_precision_program *p,
                                   cs_osdi_precision_control_v1 *control,
                                   const double *ch, const double *cl,
                                   const double *rh, const double *rl,
                                   double *outputs[8]) {
+  if (p->range_mode)
+    return evaluate_range(p, control, ch, cl, rh, rl, outputs);
   p->math.work = 0;
   p->math.status = 0;
   p->precision = 0;

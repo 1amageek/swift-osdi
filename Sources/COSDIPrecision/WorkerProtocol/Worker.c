@@ -22,7 +22,9 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
   uint16_t endian = 1;
   if (*(unsigned char *)&endian != 1 || DBL_MANT_DIG != 53 ||
       DBL_MAX_EXP != 1024 || !__atomic_always_lock_free(8, 0) ||
-      c->magic != CS_OSDI_PRECISION_MAGIC || c->protocol_version != 1 ||
+      c->magic != CS_OSDI_PRECISION_MAGIC ||
+      (c->protocol_version != CS_OSDI_PRECISION_PROTOCOL_VERSION &&
+       c->protocol_version != CS_OSDI_RANGE_PROTOCOL_VERSION) ||
       c->header_bytes != sizeof(*c) || c->mapping_bytes != size ||
       c->byte_order != CS_OSDI_PRECISION_BYTE_ORDER || !c->raw_node_count ||
       c->raw_node_count > UINT32_MAX - 1 ||
@@ -35,10 +37,12 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
   for (unsigned i = 0; i < 14; i++) {
     const cs_osdi_precision_region_v1 *r = &c->regions[i];
     uint64_t stride = i < 2 ? 1 : 8;
-    uint64_t count = i < 2    ? r->element_count
-                     : i < 6  ? c->active_count
-                     : i < 12 ? c->raw_node_count
-                              : c->raw_node_count * c->raw_node_count;
+    unsigned matrix_start =
+        c->protocol_version == CS_OSDI_RANGE_PROTOCOL_VERSION ? 10u : 12u;
+    uint64_t count = i < 2              ? r->element_count
+                     : i < 6            ? c->active_count
+                     : i < matrix_start ? c->raw_node_count
+                                        : c->raw_node_count * c->raw_node_count;
     if (r->element_count != count || r->byte_offset < sizeof(*c) ||
         r->byte_offset % 8 || r->byte_offset > size ||
         r->element_count > (size - r->byte_offset) / stride)

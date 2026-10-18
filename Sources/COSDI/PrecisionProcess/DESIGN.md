@@ -4,7 +4,8 @@
 
 Parent: [COSDI](../DESIGN.md). No children. Own bounded native child/slab/pipe
 resources and local IPC for the separate precision session. This component does
-not evaluate model arithmetic or own solver/history state.
+not evaluate model arithmetic or own solver/history state. One immutable operation
+selects compensated-point protocol 1 or smooth-box protocol 2 at cold creation.
 
 ## Responsibilities and Boundaries
 
@@ -21,6 +22,7 @@ The numeric worker alone owns MPFR/GMP arithmetic and its fixed arena.
 | [CompilerPrecision](../CompilerPrecision/DESIGN.md) | depends on | Immutable program/setup format | Original model function | No rounded native-cache constants |
 | [Numeric worker](../../COSDIPrecision/DESIGN.md) | coordinates with | Fixed-arena interval interpreter | Model arithmetic only | Worker failure publishes no candidate |
 | [PointEvaluation](../../OSDIRuntime/PrecisionExecution/DESIGN.md) | used by | Noncopyable precision owner and scoped views | Swift lifetime | All I/O outside Mutex |
+| [Causal Range Boundary](../../../DESIGN.md#causal-range-boundary) | parent requirement | Separate smooth-box constitutive operation | Preserves the complete spatial/time box | Spatial G/C does not certify explicit time partials |
 
 ## Architecture
 
@@ -228,3 +230,78 @@ lease lifetime, nonlinear sub-ULP reference comparison and unchanged-tolerance
 four-family integration.
 
 Darwin shared-memory allocation rounds the complete slab to its host page size before budget admission. `shm_open` uses supported flags and FD_CLOEXEC is applied afterward. Parent request writes use fd-local F_SETNOSIGPIPE; EOF exit classification waits only within the existing deadline, then exact child cleanup remains mandatory.
+
+## Smooth-Box Process Operation
+
+`cs_osdi_range_process_create` has the same arguments and admitted resources as
+`cs_osdi_precision_process_create`, but fixes local IPC protocol version 2 before
+mapping geometry is computed. Both return the same opaque exclusive owner and
+use the same close/retained-cleanup path. No second spawn, mapping, wait or reap
+implementation is introduced. Protocol 1 retains its existing header bytes,
+regions, numeric semantics and publication behavior.
+
+`cs_osdi_range_process_evaluate` receives lower-high/lower-low and
+upper-high/upper-low active-coordinate planes, a count, lower/upper absolute-time
+contexts, requested precision and cancellation probe. One internal request path
+uses an explicit operation to select admission and result validation. Calling
+either operation on an owner created for the other fails before copying inputs,
+publishing a sequence, writing a wake byte or invoking a cancellation probe. As
+with other invalid requests, the session is invalidated and remains closeable.
+
+| Protocol-2 slab ID | Elements | Meaning |
+|---|---|---|
+| 0 / 1 | Program/setup bytes | Existing immutable inputs |
+| 2 / 3 | M doubles each | Lower high/low coordinates |
+| 4 / 5 | M doubles each | Upper high/low coordinates |
+| 6 / 7 | N doubles each | F lower/upper |
+| 8 / 9 | N doubles each | Absolute Q lower/upper |
+| 10 / 11 | N*N doubles each | Spatial G lower/upper, row major |
+| 12 / 13 | N*N doubles each | Spatial C lower/upper, row major |
+
+The control layout remains 464 bytes with 14 regions. Protocol version is the
+immutable discriminator; candidate/reference context storage carries lower/upper
+contexts only for version 2. All coordinate/time components must be finite and
+normalized, lower must not exceed upper as an exact twofold value, both contexts
+must have the same admitted mode, and requested precision/counts must match the
+existing session limits. Normalized twofold ordering compares high components,
+then low components when highs agree; monotone binary64 rounding guarantees that
+different normalized highs preserve the order of their exact sums. Aliased input
+planes are permitted and do not change the mathematical box. Prepared raw-node
+aliases and topology remain the validated program/setup/worker authority.
+
+```text
+immutable operation + geometry
+ -> validate operation, box, mode/time, count and precision
+ -> copy four planes -> release request -> wake -> acquire matching response
+ -> validate immutable header, finite ordered F/Q/G/C and resource facts
+ -> publish one complete scoped range view
+ failure -> empty view + invalid owner -> exact-child retained cleanup
+```
+
+Every published lower/upper plane must be finite and ordered for all N or N*N
+entries. Existing flags, maximum-timestep, precision and work checks remain in
+force. Worker status 10 maps to the appended process issue code 12 (nonsmooth)
+for version 2 only and never authorizes a partial view; protocol 1 continues to
+reject unknown statuses. Existing process IO=10 and unsupported=11 remain fixed.
+The same startup/evaluation deadlines, cancellation observations, fixed storage,
+sequence validation, invalidation and retained cleanup apply to both operations.
+No client callback, foreign operation, I/O or destruction is performed under a
+lock by this component.
+
+The range result exposes named `f_lower/f_upper`, `q_lower/q_upper`,
+`g_lower/g_upper`, `c_lower/c_upper` borrowed pointers, raw-node count, used
+precision, completed work, request sequence and the existing maximum-timestep
+facts. After the worker's full program validation and ready handshake succeed,
+the parent safely bounds-checks and scans the immutable compiler input section
+for the TIME input kind. It retains the conservative `program_has_time_input`
+fact in the owner and every successful range view, including inactive TIME
+inputs. No additional wire field or claimed explicit time partial is created.
+The causal consumer must refuse a true fact until explicit-time derivative
+authority exists.
+
+Verification adds distinct version/geometry checks, operation-mixing refusal
+before cancellation, finite and reversed coordinate/time boxes, mode mismatch,
+ordered matrix validation, explicit-time program facts, nonsmooth atomic refusal,
+timeouts/cancellation/resource failures and retained owner cleanup. Existing
+version-1 API/worker fixtures remain regression evidence; successful range
+fixtures certify only the stated local constitutive boxes.

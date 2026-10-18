@@ -80,3 +80,33 @@ valid and has its own snapshot. Bulk close releases the arena backing allocation
 remaining live claims are invalidated rather than reported as individually freed.
 Failure or deadline expiration prevents a successful receipt. Existing output
 receipts are never overwritten; each new invocation reserves its own output path.
+
+## Smooth-Box Worker and Process Evidence
+
+`verify_range.py` drives the real generic worker with IPC version 2, retaining the
+464-byte control and fourteen-region layout. Four input planes contain lower/upper
+normalized twofold coordinates; four N-vector and four N*N-matrix output planes
+contain outward F/Q/G/C endpoints. A small nonlinear source-faithful program has
+independent Decimal closed-form whole-box bounds, including time dependence.
+Closed face, floor crossing, abs/min/max tie, domain and independent singleton
+identity counterexamples require explicit whole-request refusal. A successful
+source-time box retains `programHasTimeInput`; it does not supply time partials.
+
+`RangeTransportTests.c` links the production process owner, runs the same actual
+worker/program and checks typed status mapping, wrong-operation admission before
+IPC, input/time/topology bounds, preadmitted capacity/work, cancellation and
+fallible exact-child cleanup. No fixed-output fake worker establishes numeric
+range correctness. Every child and verification command has a deadline. The
+range suite supplements unchanged point tests and makes no physical-model or
+all-history claim.
+
+The numeric build profile retains `wireVersion: 1` for compensated point requests
+and separately declares `rangeWireVersion: 2` and
+`rangeSemantics: source-program-smooth-box-v2`. Range CLI verification binds that
+exact profile and worker image. Optional `verify_range.py --executable --model
+--worker --semantic-profile --numeric-profile --cli-output` exercises the actual
+schema-2 `enclose` command and saved/reloaded endpoint bit patterns against the
+compiler's compound-default model. Positive, zero-straddling and sub-ULP boxes
+check absolute F/Q and spatial G/C; malformed/mixed inputs, time/coordinate order,
+bit tampering and explicit resource exhaustion must produce no partial result.
+The point CLI helper and schema remain unchanged.

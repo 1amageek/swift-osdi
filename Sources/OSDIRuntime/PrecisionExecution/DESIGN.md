@@ -137,3 +137,62 @@ and the worker arena separately. It does not claim a bound on process RSS, image
 stack, OS runtime or numeric-library TLS. Qualified-worker receipts report measured
 startup overhead and after-ready allocation behavior for their exact platform;
 a measured overhead is not a universal maximum.
+
+## Causal Range Execution
+
+The [precision range contract](../../OSDIContracts/PrecisionEvaluation/DESIGN.md#causal-range-contract)
+owns box and result semantics. The [system boundary](../../../DESIGN.md#causal-range-boundary)
+owns the constitutive certificate's scope. Runtime adds no arithmetic, solver,
+accepted history, or separate process owner.
+
+```text
+same exact program/setup + exact worker/source/profile/options
+ -> prepareRange -> existing noncopyable OSDIPrecisionSession(operation: range)
+ -> lower high/low + upper high/low + same-mode lower/upper contexts
+ -> cs_osdi_range_process_evaluate (protocol v2, outside Mutex)
+ -> checked complete outward F/Q/G/C endpoint view -> synchronous callback
+ -> same fallible close / retained cleanup authority
+```
+
+`OSDIPrecisionRangeSessionPreparing` and `OSDIPrecisionRangeEvaluating` are separate
+protocols implemented by the existing native preparer/evaluator. The version 1
+protocol requirements, signatures and point result view remain unchanged.
+`prepareRange(program:worker:source:numericProfile:options:)` reuses exact artifact
+staging and policy admission, selecting `cs_osdi_range_process_create` rather than
+the point constructor. Creation is atomic; every unpublished failure transfers
+the native handle and staging directory to the existing cleanup owner.
+
+The session stores an immutable point/range discriminator alongside immutable
+program/provenance/options. The only mutable handle remains in its existing
+`Mutex<State>`. Either operation checks that discriminator before a request or
+callback; a mismatch throws `OSDIError.invalidRange` without invalidating a valid
+session. No I/O, child wait, client callback or destruction occurs under Mutex.
+
+`evaluateRange(session:lowerHigh:lowerLow:upperHigh:upperLow:lowerContext:upperContext:precisionBits:_:)`
+checks dimensions and same-mode contexts before the bounded native call. Native
+admission owns exact finite normalized endpoint ordering and numerical validity.
+The scoped nonescapable `OSDIPrecisionRangeEvaluationView` borrows eight planes:
+`fLower/fUpper/qLower/qUpper` in raw-node order and
+`gLower/gUpper/cLower/cUpper` in row-major raw-node order. It also publishes used
+precision, completed work, matching sequence, optional fresh maximum timestep and
+the conservative immutable `programHasTimeInput` fact. Runtime checks dimensions
+and the Boolean fact before publication. The native boundary validates output
+alignment, initialized regions, finite ordered endpoints and transport geometry.
+
+Process failures close the same session before throwing; failed bounded cleanup
+retains the same cleanup-only owner. Callback reentry, cancellation, close and
+Sendable contracts are unchanged. Native/WASM/Embedded storage type, isolation,
+read/mutation entrypoints and release remain exactly the existing matrix above;
+unsupported platforms do not acquire an alternate raw handle path.
+
+| Platform | Handle storage / isolation | Read / mutation | Shutdown / owner release |
+|---|---|---|---|
+| Native | Existing `Mutex<State>` | Same `withLock` admission and operation discriminator; native work outside lock | Same fallible close and retained cleanup owner |
+| WASM | Same `Mutex<State>` and Sendable declarations | Same source entrypoints; process admission is unsupported | Same cleanup contract; no alternate raw owner |
+| Embedded | Same `Mutex<State>` and Sendable declarations | Same source entrypoints; process admission is unsupported | Same cleanup contract; no alternate raw owner |
+
+Focused range tests own actual worker range success, nonsmooth refusal, time fact,
+context/dimension/operation mismatch, failure-before-callback and cleanup. Existing
+point tests own version 1 regression. The process/interpreter tests own numeric
+enclosure and regularity correctness; upper consumers must separately prove any
+causal/history/flow claim.

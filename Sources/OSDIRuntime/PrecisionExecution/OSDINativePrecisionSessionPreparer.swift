@@ -4,7 +4,7 @@ import Foundation
 import OSDIContracts
 
 /// Cold exact artifact acquisition and setup serialization; solver state remains caller-owned.
-public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing {
+public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing, OSDIPrecisionRangeSessionPreparing {
     public let stagingParentDirectory: URL
     public init(stagingParentDirectory: URL = FileManager.default.temporaryDirectory) {
         self.stagingParentDirectory = stagingParentDirectory
@@ -19,6 +19,17 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing 
             semanticProfile: semanticProfile, options: options)
     }
     public func prepare(program: OSDIPrecisionProgram, worker: ArtifactAccessIntent, source: any ArtifactAccessing,
+        numericProfile: ContentDigest, options: OSDIPrecisionOptions) async throws(OSDIError) -> OSDIPrecisionSession {
+        try await prepare(operation: .point, program: program, worker: worker, source: source,
+            numericProfile: numericProfile, options: options)
+    }
+    public func prepareRange(program: OSDIPrecisionProgram, worker: ArtifactAccessIntent, source: any ArtifactAccessing,
+        numericProfile: ContentDigest, options: OSDIPrecisionOptions) async throws(OSDIError) -> OSDIPrecisionSession {
+        try await prepare(operation: .range, program: program, worker: worker, source: source,
+            numericProfile: numericProfile, options: options)
+    }
+    private func prepare(operation: OSDIPrecisionSession.Operation, program: OSDIPrecisionProgram,
+        worker: ArtifactAccessIntent, source: any ArtifactAccessing,
         numericProfile: ContentDigest, options: OSDIPrecisionOptions) async throws(OSDIError) -> OSDIPrecisionSession {
         guard UInt64(program.programBytes.count) <= options.maximumProgramBytes,
               UInt64(program.setupBytes.count) <= options.maximumMappingBytes else { throw .resourceLimit }
@@ -38,7 +49,8 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing 
         var handle: OpaquePointer?, issue = cs_osdi_precision_process_issue()
         let status = directory.appendingPathComponent("model.osdi").path.withCString { path in
             program.programBytes.withUnsafeBufferPointer { bytes in program.setupBytes.withUnsafeBufferPointer { setup in
-                cs_osdi_precision_process_create(path, bytes.baseAddress, UInt64(bytes.count), setup.baseAddress,
+                let create = operation == .point ? cs_osdi_precision_process_create : cs_osdi_range_process_create
+                return create(path, bytes.baseAddress, UInt64(bytes.count), setup.baseAddress,
                     UInt64(setup.count), program.descriptorIndex, UInt32(program.topology.activeUnknownCount),
                     UInt32(program.topology.nodes.count), &native, cs_osdi_precision_swift_task_cancelled, nil, &handle, &issue)
             }}
@@ -50,6 +62,6 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing 
             throw primary
         }
         return OSDIPrecisionSession(handle: handle, stagingDirectory: directory, program: program,
-            workerReference: worker.expectedReference, numericProfile: numericProfile, options: options)
+            workerReference: worker.expectedReference, numericProfile: numericProfile, options: options, operation: operation)
     }
 }

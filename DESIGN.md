@@ -250,6 +250,14 @@ spatial G/C over the complete closed box. Native state remains explicitly
 unsupported. A smooth-box certificate is a local constitutive fact, never an
 entire-history, all-corner or circuit-flow certificate.
 
+G/C retain the raw-node derivative convention, not a silently projected active
+Jacobian. Regularity tracking therefore includes distinct raw potential arguments
+even when preparation aliases them or maps them to ground. Equal aliased values
+can prove a zero value difference but cannot establish independent raw partials
+at a nonsmooth face. Such faces remain refusal until separate source/quotient or
+generalized authority is checked; same-SSA structural annihilation is distinct
+from coincident numerical values.
+
 ```text
 official source + exact compiler program/setup/topology
   -> bounded smooth-box interpreter and regularity checks

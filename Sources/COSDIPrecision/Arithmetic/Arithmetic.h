@@ -38,5 +38,12 @@ int cs_precision_project(cs_precision_math *math,
                          double *low, double *radius);
 int cs_precision_midpoint(cs_precision_math *math,
                           const cs_precision_interval *value, double *output);
+int cs_precision_bounds(cs_precision_math *math,
+                        const cs_precision_interval *value,
+                        double *lower, double *upper);
+int cs_precision_regularity(cs_precision_math *math, uint32_t opcode,
+                            const cs_precision_value *a,
+                            const cs_precision_value *b,
+                            int active_a, int active_b, int same_source);
 int cs_precision_supported(uint32_t opcode);
 #endif

@@ -26,6 +26,9 @@ typedef struct {
   uint32_t *owners, *phi_blocks, *fact_index, *model_peers, *input_simulation,
       *topology, *dense;
   cs_precision_interval *candidate_q;
+  /* Version-2-only arena storage; no range allocation changes point admission. */
+  unsigned char *range_values_active, *range_roots_active, *range_stage_active;
+  cs_precision_interval *range_coordinates;
   uint32_t *predecessors, *control_colors, *control_nodes;
   cs_precision_control_frame *control_stack;
   cs_precision_math math;
@@ -33,6 +36,7 @@ typedef struct {
   uint32_t detail, flags, precision, maximum_precision, stage_capacity;
   uint64_t active_count;
   int has_bound;
+  int range_mode;
   double bound;
 } cs_precision_program;
 int cs_precision_program_open(cs_precision_program *program, const void *bytes,

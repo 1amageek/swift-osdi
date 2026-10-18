@@ -43,6 +43,31 @@ struct OSDIEvaluatePrecisionReport: Codable {
             usedPrecisionBits = view.usedPrecisionBits; completedWorkUnits = view.completedWorkUnits; requestSequence = view.requestSequence
         }
     }
+    struct RangeEvaluation: Codable {
+        let fLower: Values
+        let fUpper: Values
+        let qLower: Values
+        let qUpper: Values
+        let gLower: Values
+        let gUpper: Values
+        let cLower: Values
+        let cUpper: Values
+        let programHasTimeInput: Bool
+        let maximumTimestep: Values?
+        let usedPrecisionBits: UInt32
+        let completedWorkUnits: UInt64
+        let requestSequence: UInt64
+        init(_ view: borrowing OSDIPrecisionRangeEvaluationView) {
+            fLower = .init(view.fLower); fUpper = .init(view.fUpper)
+            qLower = .init(view.qLower); qUpper = .init(view.qUpper)
+            gLower = .init(view.gLower); gUpper = .init(view.gUpper)
+            cLower = .init(view.cLower); cUpper = .init(view.cUpper)
+            programHasTimeInput = view.programHasTimeInput
+            maximumTimestep = view.maximumTimestep.map { Values([$0]) }
+            usedPrecisionBits = view.usedPrecisionBits; completedWorkUnits = view.completedWorkUnits
+            requestSequence = view.requestSequence
+        }
+    }
     struct Failure: Codable {
         struct Precision: Codable {
             let code: Int32
@@ -92,19 +117,26 @@ struct OSDIEvaluatePrecisionReport: Codable {
     let program: Program?
     let prepared: OSDIEvaluateReport.Prepared?
     let evaluation: Evaluation?
+    let rangeEvaluation: RangeEvaluation?
     let failure: Failure?
 
     init(binding: OSDIEvaluateReport.Binding?, input: OSDIEvaluatePrecisionRequest?, program: Program? = nil,
-         prepared: OSDIEvaluateReport.Prepared? = nil, evaluation: Evaluation? = nil, failure: Failure? = nil) {
-        schemaVersion = 1; stage = input?.operation == "snapshot" ? "osdi-precision-snapshot" : "osdi-precision-evaluation"; succeeded = failure == nil
+         prepared: OSDIEvaluateReport.Prepared? = nil, evaluation: Evaluation? = nil,
+         rangeEvaluation: RangeEvaluation? = nil, failure: Failure? = nil, rangeFailure: Bool = false) {
+        let isRange = input?.isRange == true || rangeFailure
+        schemaVersion = isRange ? 2 : 1
+        stage = isRange ? "osdi-smooth-range-enclosure" : input?.operation == "snapshot" ? "osdi-precision-snapshot" : "osdi-precision-evaluation"
+        succeeded = failure == nil
         requestBinding = binding; self.input = input; workerReference = program == nil ? nil : input?.worker.reference
         numericProfileSHA256 = program == nil ? nil : input?.numericProfileSHA256
-        self.program = program; self.prepared = prepared; self.evaluation = evaluation; self.failure = failure
+        self.program = program; self.prepared = prepared; self.evaluation = evaluation
+        self.rangeEvaluation = rangeEvaluation; self.failure = failure
     }
     func validate() throws {
-        guard schemaVersion == 1, ["osdi-precision-evaluation", "osdi-precision-snapshot"].contains(stage) else { throw OSDIEvaluateFailure.reportRoundTrip }
+        guard (schemaVersion == 1 && ["osdi-precision-evaluation", "osdi-precision-snapshot"].contains(stage)) ||
+              (schemaVersion == 2 && stage == "osdi-smooth-range-enclosure") else { throw OSDIEvaluateFailure.reportRoundTrip }
         if !succeeded {
-            guard failure != nil, program == nil, prepared == nil, evaluation == nil else { throw OSDIEvaluateFailure.reportRoundTrip }; return
+            guard failure != nil, program == nil, prepared == nil, evaluation == nil, rangeEvaluation == nil else { throw OSDIEvaluateFailure.reportRoundTrip }; return
         }
         guard failure == nil, let input, requestBinding != nil, let program, let prepared,
               workerReference == input.worker.reference, numericProfileSHA256 == input.numericProfileSHA256,
@@ -123,6 +155,30 @@ struct OSDIEvaluatePrecisionReport: Codable {
         let (matrix, overflow) = count.multipliedReportingOverflow(by: count)
         guard !overflow, count > 0, prepared.topology.activeUnknownCount == program.topology.activeUnknownCount,
               prepared.topology.nodes.count == count else { throw OSDIEvaluateFailure.reportRoundTrip }
+        if input.isRange {
+            guard schemaVersion == 2, stage == "osdi-smooth-range-enclosure", evaluation == nil,
+                  let rangeEvaluation, let lowerHigh = input.lowerHigh,
+                  program.topology.activeUnknownCount == lowerHigh.values.count,
+                  rangeEvaluation.usedPrecisionBits == input.precisionBits,
+                  rangeEvaluation.completedWorkUnits <= input.options.maximumWorkUnits,
+                  rangeEvaluation.requestSequence == 1 else { throw OSDIEvaluateFailure.reportRoundTrip }
+            let pairs: [(Values, Values, Int)] = [
+                (rangeEvaluation.fLower, rangeEvaluation.fUpper, count),
+                (rangeEvaluation.qLower, rangeEvaluation.qUpper, count),
+                (rangeEvaluation.gLower, rangeEvaluation.gUpper, matrix),
+                (rangeEvaluation.cLower, rangeEvaluation.cUpper, matrix)]
+            for (lower, upper, expectedCount) in pairs {
+                try lower.validate(); try upper.validate()
+                guard lower.values.count == expectedCount, upper.values.count == expectedCount,
+                      zip(lower.values, upper.values).allSatisfy({ $0 <= $1 }) else { throw OSDIEvaluateFailure.reportRoundTrip }
+            }
+            if let bound = rangeEvaluation.maximumTimestep {
+                try bound.validate()
+                guard bound.values.count == 1, bound.values[0] > 0 else { throw OSDIEvaluateFailure.reportRoundTrip }
+            }
+            return
+        }
+        guard schemaVersion == 1, rangeEvaluation == nil else { throw OSDIEvaluateFailure.reportRoundTrip }
         if input.operation == "snapshot" {
             guard stage == "osdi-precision-snapshot", evaluation == nil else { throw OSDIEvaluateFailure.reportRoundTrip }; return
         }

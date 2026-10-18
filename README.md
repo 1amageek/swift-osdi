@@ -440,3 +440,26 @@ programs, explicit limits and continuous request streams. `measure_program.py
 manifest entry and record explicit subset exclusions. Heap counters do not imply
 zero private-arena allocation or zero total copying; worker latency does not
 establish full-circuit acceleration.
+
+## Smooth-box range evaluation
+
+The range API adds `OSDIPrecisionRangeSessionPreparing.prepareRange` and
+`OSDIPrecisionRangeEvaluating.evaluateRange` on the existing exclusive precision
+session. It accepts explicit lower/upper normalized high/low vectors and time
+contexts with one analysis mode. A scoped view borrows absolute F/Q and spatial
+G/C lower/upper endpoints. A source-dependent nonsmooth face is a typed refusal;
+point AD output is never silently promoted to a range derivative guarantee.
+
+`osdi-evaluate --precision-request REQUEST.json --output REPORT.json` also accepts
+schema `2`, profile `stateless-smooth-box-v2`, operation `enclose`. It requires
+`lowerHigh`, `lowerLow`, `upperHigh`, `upperLow`, `lowerContext`, `upperContext`,
+and no candidate/reference point fields. Other exact model/worker/profile,
+preparation and explicit budget fields match the precision request. Each vector
+contains `values` and matching binary64 `bitPatterns`; time contexts retain their
+component bits. The schema-2 result stage `osdi-smooth-range-enclosure` contains
+only `rangeEvaluation` with endpoint planes and `programHasTimeInput`.
+
+Output is atomically saved and strictly reloaded. Successful local box checking
+does not establish continuity across unsupported seams, a complete operating
+cover, time partials, circuit flow or all-history/all-corner correctness. The
+original goal remains open until those separate consumer obligations pass.

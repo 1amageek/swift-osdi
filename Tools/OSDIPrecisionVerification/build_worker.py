@@ -54,7 +54,7 @@ def main():
     gmp_header = (gmp / 'include/gmp.h').read_text()
     mpfr_version = re.search(r'#define MPFR_VERSION_STRING\s+"([^"]+)"', mpfr_header).group(1)
     gmp_version = '.'.join(re.search(r'#define __GNU_MP_VERSION' + suffix + r'\s+(\d+)', gmp_header).group(1) for suffix in ['', '_MINOR', '_PATCHLEVEL'])
-    profile = {'schema': 1, 'numericVersion': 'directed-mpfr-stateless-v1', 'wireVersion': 1, 'programVersion': 1,
+    profile = {'schema': 1, 'numericVersion': 'directed-mpfr-stateless-v1', 'wireVersion': 1, 'rangeWireVersion': 2, 'rangeSemantics': 'source-program-smooth-box-v2', 'programVersion': 1,
         'targetABI': subprocess.check_output([str(compiler), '-dumpmachine'], text=True).strip(),
         'compiler': {'sha256': digest(compiler), 'version': '\n'.join(line for line in receipt['compiler']['version'].splitlines() if not line.startswith('InstalledDir:'))},
         'semanticFlags': ['-std=c11', '-O2', '-fno-fast-math', '-ffp-contract=off'],

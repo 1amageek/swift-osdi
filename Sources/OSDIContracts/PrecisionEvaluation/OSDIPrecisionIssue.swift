@@ -3,6 +3,7 @@ public struct OSDIPrecisionIssue: Error, Sendable, Equatable {
     public enum Code: Int32, Sendable {
         case invalidInput = 1, resourceLimit, timeout, cancelled, workerFailure, protocolViolation
         case numericFailure, cleanupFailure, closed, io, unsupported
+        case nonsmooth = 12
     }
     public let code: Code
     public let workerStatus: UInt32

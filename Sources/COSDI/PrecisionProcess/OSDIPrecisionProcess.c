@@ -33,6 +33,7 @@ struct cs_osdi_precision_session {
     int reaped;
     int wait_status;
     uint64_t sequence;
+    uint32_t program_has_time_input;
 };
 
 static void clear_issue(cs_osdi_precision_process_issue *out) {
@@ -108,11 +109,16 @@ static int wait_response(cs_osdi_precision_session *s, uint64_t expected, uint64
             if (count != 1) { int error = count < 0 ? errno : 0; collect_exit(s, until); return fail(s, issue, CS_OSDI_PRECISION_PROCESS_WORKER, error); }
             uint64_t actual = __atomic_load_n(&s->control->response_sequence, __ATOMIC_ACQUIRE);
             if (actual != expected) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
-            if (s->control->response_status > CS_OSDI_PRECISION_NUMERIC_INVARIANT)
+            uint32_t maximum_status = s->geometry.protocol_version == CS_OSDI_RANGE_PROTOCOL_VERSION
+                ? CS_OSDI_PRECISION_NONSMOOTH : CS_OSDI_PRECISION_NUMERIC_INVARIANT;
+            if (s->control->response_status > maximum_status)
                 return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
             if (s->control->response_status != CS_OSDI_PRECISION_SUCCESS) {
                 if (issue) { issue->worker_status = s->control->response_status; issue->instruction = s->control->response_detail; }
-                return fail(s, issue, CS_OSDI_PRECISION_PROCESS_NUMERIC, 0);
+                int32_t code = s->geometry.protocol_version == CS_OSDI_RANGE_PROTOCOL_VERSION
+                    && s->control->response_status == CS_OSDI_PRECISION_NONSMOOTH
+                    ? CS_OSDI_PRECISION_PROCESS_NONSMOOTH : CS_OSDI_PRECISION_PROCESS_NUMERIC;
+                return fail(s, issue, code, 0);
             }
             return CS_OSDI_PRECISION_PROCESS_SUCCESS;
         }
@@ -131,6 +137,22 @@ static int add_region(cs_osdi_precision_control_v1 *header, unsigned region,
 }
 static void *region(cs_osdi_precision_session *s, unsigned index) {
     return (unsigned char *)s->mapping + s->geometry.regions[index].byte_offset;
+}
+/* Called only after the worker has validated the complete immutable program. */
+static int retain_time_input_fact(cs_osdi_precision_session *s) {
+    uint64_t bytes = s->geometry.regions[0].element_count;
+    if (bytes < sizeof(CSOsdiPrecisionProgramHeader)) return 0;
+    CSOsdiPrecisionProgramHeader header;
+    memcpy(&header, region(s, 0), sizeof(header));
+    CSOsdiPrecisionSection inputs = header.inputs;
+    if (inputs.stride != sizeof(CSOsdiPrecisionInput) || inputs.offset > bytes
+        || inputs.count > (bytes - inputs.offset) / inputs.stride) return 0;
+    for (uint32_t i = 0; i < inputs.count; ++i) {
+        CSOsdiPrecisionInput input;
+        memcpy(&input, (unsigned char *)region(s, 0) + inputs.offset + (uint64_t)i * inputs.stride, sizeof(input));
+        if (input.kind == CS_OSDI_PRECISION_TIME) s->program_has_time_input = 1;
+    }
+    return 1;
 }
 static int safe_fd(int fd) { return fcntl(fd, F_DUPFD_CLOEXEC, 6); }
 static int make_pipe(int fds[2]) {
@@ -186,7 +208,7 @@ int32_t cs_osdi_precision_process_close(cs_osdi_precision_session **owner,
     return CS_OSDI_PRECISION_PROCESS_SUCCESS;
 }
 
-int32_t cs_osdi_precision_process_create(const char *worker_path,
+static int32_t process_create(uint32_t operation, const char *worker_path,
     const unsigned char *program, uint64_t program_bytes,
     const unsigned char *setup, uint64_t setup_bytes,
     uint32_t descriptor_index, uint32_t active_count, uint32_t raw_node_count,
@@ -205,7 +227,7 @@ int32_t cs_osdi_precision_process_create(const char *worker_path,
     return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_UNSUPPORTED, 0);
 #else
     cs_osdi_precision_control_v1 header = {0};
-    header.magic = CS_OSDI_PRECISION_MAGIC; header.protocol_version = CS_OSDI_PRECISION_PROTOCOL_VERSION;
+    header.magic = CS_OSDI_PRECISION_MAGIC; header.protocol_version = operation;
     header.header_bytes = sizeof(header); header.byte_order = CS_OSDI_PRECISION_BYTE_ORDER;
     header.descriptor_index = descriptor_index; header.active_count = active_count; header.raw_node_count = raw_node_count;
     header.arena_bytes = options->arena_bytes; header.minimum_precision_bits = options->minimum_precision_bits;
@@ -217,7 +239,8 @@ int32_t cs_osdi_precision_process_create(const char *worker_path,
     if (!add_region(&header, 0, program_bytes, 1, &bytes) || !add_region(&header, 1, setup_bytes, 1, &bytes))
         return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
     for (unsigned i = 2; i < 14; ++i) {
-        uint64_t count = i < 6 ? active_count : i < 12 ? raw_node_count : matrix;
+        unsigned matrix_start = operation == CS_OSDI_RANGE_PROTOCOL_VERSION ? 10 : 12;
+        uint64_t count = i < 6 ? active_count : i < matrix_start ? raw_node_count : matrix;
         if (!add_region(&header, i, count, sizeof(double), &bytes)) return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
     }
     /* Darwin POSIX shared memory rounds its object size to the host page size. */
@@ -268,6 +291,9 @@ int32_t cs_osdi_precision_process_create(const char *worker_path,
         || __atomic_load_n(&s->control->request_sequence, __ATOMIC_ACQUIRE) != 0) {
         result = fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0); goto failed;
     }
+    if (operation == CS_OSDI_RANGE_PROTOCOL_VERSION && !retain_time_input_fact(s)) {
+        result = fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0); goto failed;
+    }
     *out = s; return 0;
 failed:
     if (!error) error = errno;
@@ -284,26 +310,62 @@ failed:
 #endif
 }
 
+int32_t cs_osdi_precision_process_create(const char *worker_path,
+    const unsigned char *program, uint64_t program_bytes,
+    const unsigned char *setup, uint64_t setup_bytes,
+    uint32_t descriptor_index, uint32_t active_count, uint32_t raw_node_count,
+    const cs_osdi_precision_process_options *options,
+    cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue) {
+    return process_create(CS_OSDI_PRECISION_PROTOCOL_VERSION, worker_path, program, program_bytes,
+        setup, setup_bytes, descriptor_index, active_count, raw_node_count, options,
+        cancelled, cancel_context, out, issue);
+}
+
+int32_t cs_osdi_range_process_create(const char *worker_path,
+    const unsigned char *program, uint64_t program_bytes,
+    const unsigned char *setup, uint64_t setup_bytes,
+    uint32_t descriptor_index, uint32_t active_count, uint32_t raw_node_count,
+    const cs_osdi_precision_process_options *options,
+    cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue) {
+    return process_create(CS_OSDI_RANGE_PROTOCOL_VERSION, worker_path, program, program_bytes,
+        setup, setup_bytes, descriptor_index, active_count, raw_node_count, options,
+        cancelled, cancel_context, out, issue);
+}
+
 static int normalized(double high, double low) { return isfinite(high) && isfinite(low) && high + low == high; }
+static int ordered(double lower_high, double lower_low, double upper_high, double upper_low) {
+    return lower_high < upper_high || (lower_high == upper_high && lower_low <= upper_low);
+}
 static int valid_context(const cs_osdi_precision_context_v1 *context) {
     if (!context || context->reserved || !normalized(context->time_high, context->time_low)) return 0;
     if (context->mode == CS_OSDI_PRECISION_TRANSIENT_INITIALIZATION) return context->time_high == 0 && context->time_low == 0;
     return context->mode == CS_OSDI_PRECISION_TRANSIENT && context->time_high >= 0 && !(context->time_high == 0 && context->time_low < 0);
 }
-int32_t cs_osdi_precision_process_evaluate(cs_osdi_precision_session *s,
+static int32_t process_evaluate(uint32_t operation, cs_osdi_precision_session *s,
     const double *candidate_high, const double *candidate_low,
     const double *reference_high, const double *reference_low, uint64_t active_count,
     const cs_osdi_precision_context_v1 *candidate, const cs_osdi_precision_context_v1 *reference,
     uint32_t precision_bits, cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
-    cs_osdi_precision_result_view *out, cs_osdi_precision_process_issue *issue) {
-    clear_issue(issue); if (out) memset(out, 0, sizeof(*out));
+    void *out, cs_osdi_precision_process_issue *issue) {
+    clear_issue(issue);
+    if (out) memset(out, 0, operation == CS_OSDI_RANGE_PROTOCOL_VERSION
+        ? sizeof(cs_osdi_range_result_view) : sizeof(cs_osdi_precision_result_view));
     if (!s || s->invalid) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CLOSED, 0);
+    if (s->geometry.protocol_version != operation)
+        return fail(s, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
     if (!out || active_count != s->geometry.active_count || (active_count && (!candidate_high || !candidate_low || !reference_high || !reference_low))
         || !valid_context(candidate) || !valid_context(reference) || precision_bits < s->options.minimum_precision_bits
         || precision_bits > s->options.maximum_precision_bits || s->sequence >= CS_OSDI_PRECISION_MAX_SEQUENCE)
         return fail(s, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
+    if (operation == CS_OSDI_RANGE_PROTOCOL_VERSION && (candidate->mode != reference->mode
+        || !ordered(candidate->time_high, candidate->time_low, reference->time_high, reference->time_low)))
+        return fail(s, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
     for (uint64_t i = 0; i < active_count; ++i)
-        if (!normalized(candidate_high[i], candidate_low[i]) || !normalized(reference_high[i], reference_low[i]))
+        if (!normalized(candidate_high[i], candidate_low[i]) || !normalized(reference_high[i], reference_low[i])
+            || (operation == CS_OSDI_RANGE_PROTOCOL_VERSION
+                && !ordered(candidate_high[i], candidate_low[i], reference_high[i], reference_low[i])))
             return fail(s, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
     const double *inputs[] = {candidate_high,candidate_low,reference_high,reference_low};
     for (unsigned i = 0; i < 4; ++i) if (active_count) memcpy(region(s, i + 2), inputs[i], (size_t)active_count * sizeof(double));
@@ -323,6 +385,7 @@ int32_t cs_osdi_precision_process_evaluate(cs_osdi_precision_session *s,
         || h->minimum_precision_bits != fixed->minimum_precision_bits || h->maximum_precision_bits != fixed->maximum_precision_bits
         || h->maximum_work_units != fixed->maximum_work_units || memcmp(h->regions, fixed->regions, sizeof(h->regions))
         || memcmp(h->program_sha256, fixed->program_sha256, 32) || memcmp(h->worker_profile_sha256, fixed->worker_profile_sha256, 32)
+        || (operation == CS_OSDI_RANGE_PROTOCOL_VERSION && h->requested_precision_bits != precision_bits)
         || __atomic_load_n(&h->request_sequence, __ATOMIC_ACQUIRE) != s->sequence
         || memcmp(&h->candidate, candidate, sizeof(*candidate)) || memcmp(&h->reference, reference, sizeof(*reference)))
         return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
@@ -333,19 +396,62 @@ int32_t cs_osdi_precision_process_evaluate(cs_osdi_precision_session *s,
     uint64_t nodes = h->raw_node_count;
     for (unsigned i = 6; i < 14; ++i) {
         const double *values = region(s, i);
-        uint64_t n = i < 12 ? nodes : nodes * nodes;
+        unsigned matrix_start = operation == CS_OSDI_RANGE_PROTOCOL_VERSION ? 10 : 12;
+        uint64_t n = i < matrix_start ? nodes : nodes * nodes;
         for (uint64_t j = 0; j < n; ++j)
-            if (!isfinite(values[j]) || ((i == 8 || i == 11) && values[j] < 0))
+            if (!isfinite(values[j]) || (operation == CS_OSDI_PRECISION_PROTOCOL_VERSION
+                && (i == 8 || i == 11) && values[j] < 0))
                 return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
     }
-    for (uint64_t j = 0; j < nodes; ++j)
-        if (!normalized(((double *)region(s, 6))[j], ((double *)region(s, 7))[j])
-            || !normalized(((double *)region(s, 9))[j], ((double *)region(s, 10))[j]))
-            return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+    if (operation == CS_OSDI_RANGE_PROTOCOL_VERSION) {
+        for (unsigned i = 6; i < 14; i += 2) {
+            const double *lower = region(s, i), *upper = region(s, i + 1);
+            uint64_t count = i < 10 ? nodes : nodes * nodes;
+            for (uint64_t j = 0; j < count; ++j)
+                if (lower[j] > upper[j]) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+        }
+    } else {
+        for (uint64_t j = 0; j < nodes; ++j)
+            if (!normalized(((double *)region(s, 6))[j], ((double *)region(s, 7))[j])
+                || !normalized(((double *)region(s, 9))[j], ((double *)region(s, 10))[j]))
+                return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
+    }
     if (cancelled && cancelled(cancel_context)) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CANCELLED, 0);
-    *out = (cs_osdi_precision_result_view){nodes, region(s,6), region(s,7), region(s,8), region(s,9), region(s,10), region(s,11),
-        region(s,12), region(s,13), h->used_precision_bits, h->has_maximum_timestep, h->maximum_timestep, h->completed_work_units, s->sequence};
+    if (operation == CS_OSDI_RANGE_PROTOCOL_VERSION) {
+        *(cs_osdi_range_result_view *)out = (cs_osdi_range_result_view){
+            .raw_node_count = nodes, .f_lower = region(s,6), .f_upper = region(s,7),
+            .q_lower = region(s,8), .q_upper = region(s,9), .g_lower = region(s,10),
+            .g_upper = region(s,11), .c_lower = region(s,12), .c_upper = region(s,13),
+            .used_precision_bits = h->used_precision_bits, .has_maximum_timestep = h->has_maximum_timestep,
+            .maximum_timestep = h->maximum_timestep, .completed_work_units = h->completed_work_units,
+            .request_sequence = s->sequence, .program_has_time_input = s->program_has_time_input};
+    } else {
+        *(cs_osdi_precision_result_view *)out = (cs_osdi_precision_result_view){nodes, region(s,6), region(s,7), region(s,8), region(s,9), region(s,10), region(s,11),
+            region(s,12), region(s,13), h->used_precision_bits, h->has_maximum_timestep, h->maximum_timestep, h->completed_work_units, s->sequence};
+    }
     return 0;
+}
+
+int32_t cs_osdi_precision_process_evaluate(cs_osdi_precision_session *s,
+    const double *candidate_high, const double *candidate_low,
+    const double *reference_high, const double *reference_low, uint64_t active_count,
+    const cs_osdi_precision_context_v1 *candidate, const cs_osdi_precision_context_v1 *reference,
+    uint32_t precision_bits, cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_precision_result_view *out, cs_osdi_precision_process_issue *issue) {
+    return process_evaluate(CS_OSDI_PRECISION_PROTOCOL_VERSION, s, candidate_high, candidate_low,
+        reference_high, reference_low, active_count, candidate, reference, precision_bits,
+        cancelled, cancel_context, out, issue);
+}
+
+int32_t cs_osdi_range_process_evaluate(cs_osdi_precision_session *s,
+    const double *lower_high, const double *lower_low,
+    const double *upper_high, const double *upper_low, uint64_t active_count,
+    const cs_osdi_precision_context_v1 *lower_context, const cs_osdi_precision_context_v1 *upper_context,
+    uint32_t precision_bits, cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_range_result_view *out, cs_osdi_precision_process_issue *issue) {
+    return process_evaluate(CS_OSDI_RANGE_PROTOCOL_VERSION, s, lower_high, lower_low,
+        upper_high, upper_low, active_count, lower_context, upper_context, precision_bits,
+        cancelled, cancel_context, out, issue);
 }
 
 int32_t cs_osdi_precision_process_identifier(const cs_osdi_precision_session *session) {

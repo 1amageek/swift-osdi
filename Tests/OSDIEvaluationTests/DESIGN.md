@@ -151,3 +151,22 @@ all eight output slabs and preserves the distinction between certified F/DeltaQ
 and approximate G/C. It verifies failure/close/cancellation publish no borrowed
 view and do not consume the separate ordinary model. Evidence hashing and result
 materialization are cold test boundaries, not claimed hot-path zero-copy behavior.
+
+## Smooth-Box Range Verification
+
+`OSDIPrecisionRangeTests` owns the public version-2 range-session contract, separate
+from existing compensated-point tests. It uses the actual generic numeric worker
+and a small retained instruction program with source-faithful nonlinear F/Q and
+spatial derivative roots. Closed-form bounds over nontrivial complete boxes,
+normalized twofold endpoints and explicit time boxes discriminate endpoint-only,
+midpoint and point-DeltaQ substitutes. Time dependency is retained as a fact, not
+silently converted into a spatial derivative claim.
+
+The companion [worker verification](../../Tools/OSDIPrecisionVerification/DESIGN.md)
+owns direct IPC arithmetic/regularity and C process checks. Demanded floor/switch,
+abs/min/max ties and elementary domain faces must refuse the entire view; equal
+numeric singleton inputs do not prove expression identity. Invalid boxes, contexts,
+operation mismatch, alias topology, budgets, cancellation and retained cleanup
+exercise the same exclusive owner and fixed slabs. Existing point tests remain
+unchanged and required. Local analytic fixtures do not qualify compact-model,
+entire-history or causal-circuit behavior.

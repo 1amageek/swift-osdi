@@ -9,18 +9,20 @@ import OSDIRuntime
 enum OSDIEvaluatePrecisionCommand {
     static func run(requestPath: String, outputPath: String) async -> Bool {
         var requestBinding: OSDIEvaluateReport.Binding?
+        var rangeRequest = false
         do {
             let bytes = try read(URL(fileURLWithPath: requestPath), maximum: 16 * 1024 * 1024)
             requestBinding = try binding(Array(bytes))
             let request = try JSONDecoder().decode(OSDIEvaluatePrecisionRequest.self, from: bytes)
+            rangeRequest = request.isRange
             try request.validate()
             let result = try await execute(request, binding: requestBinding!)
             try save(result, path: URL(fileURLWithPath: outputPath), maximum: request.maximumReportBytes)
-            print(request.operation == "snapshot" ? "OSDI precision snapshot passed; program/setup admission only" : "OSDI precision evaluation passed; enclosed F/delta-Q and inexact G/C only")
+            print(request.isRange ? "OSDI smooth-box enclosure passed; local F/Q/G/C bounds only" : request.operation == "snapshot" ? "OSDI precision snapshot passed; program/setup admission only" : "OSDI precision evaluation passed; enclosed F/delta-Q and inexact G/C only")
             return true
         } catch {
             let final = retryCleanup(error)
-            let report = OSDIEvaluatePrecisionReport(binding: requestBinding, input: nil, failure: .init(final))
+            let report = OSDIEvaluatePrecisionReport(binding: requestBinding, input: nil, failure: .init(final), rangeFailure: rangeRequest)
             do { try save(report, path: URL(fileURLWithPath: outputPath), maximum: 4 * 1024 * 1024) }
             catch { FileHandle.standardError.write(Data("Precision failure report write failed: \(error)\n".utf8)) }
             return false
@@ -101,6 +103,9 @@ enum OSDIEvaluatePrecisionCommand {
         if request.operation == "evaluate", request.candidateHigh?.values.count != program.topology.activeUnknownCount {
             throw OSDIEvaluateFailure.invalidUnknowns("Precision coordinates must follow the complete prepared active map")
         }
+        if request.isRange, request.lowerHigh?.values.count != program.topology.activeUnknownCount {
+            throw OSDIEvaluateFailure.invalidUnknowns("Range bounds must follow the complete prepared active map")
+        }
         // Admit the complete owned JSON boundary before copying result spans. UTF-8 JSON
         // escaping costs at most six bytes; numeric value+bit-pattern pairs reserve 64.
         var remaining = request.maximumReportBytes
@@ -114,12 +119,32 @@ enum OSDIEvaluatePrecisionCommand {
         let nodes = UInt64(program.topology.nodes.count)
         let (matrix, overflow) = nodes.multipliedReportingOverflow(by: nodes)
         guard !overflow else { throw OSDIError.resourceLimit }
-        try charge(nodes, factor: 6 * 64); try charge(matrix, factor: 2 * 64); try charge(65536)
-        var session = try await factory.prepare(program: program, worker: worker, source: source,
-            numericProfile: ContentDigest(algorithm: .sha256, hexadecimalValue: request.numericProfileSHA256), options: options)
+        try charge(nodes, factor: (request.isRange ? 4 : 6) * 64)
+        try charge(matrix, factor: (request.isRange ? 4 : 2) * 64); try charge(65536)
+        let numericProfile = try ContentDigest(algorithm: .sha256, hexadecimalValue: request.numericProfileSHA256)
+        var session: OSDIPrecisionSession
+        if request.isRange {
+            session = try await factory.prepareRange(program: program, worker: worker, source: source,
+                numericProfile: numericProfile, options: options)
+        } else {
+            session = try await factory.prepare(program: program, worker: worker, source: source,
+                numericProfile: numericProfile, options: options)
+        }
         var failure: (any Error)?, evaluated: OSDIEvaluatePrecisionReport.Evaluation?
+        var enclosed: OSDIEvaluatePrecisionReport.RangeEvaluation?
         do {
-            if request.operation == "evaluate" {
+            if request.isRange {
+                guard let lowerHigh = request.lowerHigh, let lowerLow = request.lowerLow,
+                      let upperHigh = request.upperHigh, let upperLow = request.upperLow,
+                      let lowerContext = request.lowerContext, let upperContext = request.upperContext else {
+                    throw OSDIEvaluateFailure.invalidRequest("Range enclosure fields are absent")
+                }
+                enclosed = try OSDINativePrecisionEvaluator().evaluateRange(session: &session,
+                    lowerHigh: lowerHigh.values.span, lowerLow: lowerLow.values.span,
+                    upperHigh: upperHigh.values.span, upperLow: upperLow.values.span,
+                    lowerContext: lowerContext.checked(), upperContext: upperContext.checked(),
+                    precisionBits: request.precisionBits) { view in OSDIEvaluatePrecisionReport.RangeEvaluation(view) }
+            } else if request.operation == "evaluate" {
                 guard let candidateHigh = request.candidateHigh, let candidateLow = request.candidateLow,
                       let referenceHigh = request.referenceHigh, let referenceLow = request.referenceLow,
                       let candidateContext = request.candidateContext, let referenceContext = request.referenceContext else {
@@ -134,9 +159,11 @@ enum OSDIEvaluatePrecisionCommand {
         } catch { failure = error }
         do { try session.close() } catch { failure = combine(failure, error) }
         if let failure { throw failure }
-        guard request.operation == "snapshot" || evaluated != nil else { throw OSDIEvaluateFailure.invalidUnknowns("Precision evaluation published no view") }
+        guard request.operation == "snapshot" || (request.isRange ? enclosed != nil : evaluated != nil) else {
+            throw OSDIEvaluateFailure.invalidUnknowns("Explicit numerical operation published no view")
+        }
         let result = OSDIEvaluatePrecisionReport(binding: binding, input: request,
-            program: .init(program), prepared: prepared, evaluation: evaluated)
+            program: .init(program), prepared: prepared, evaluation: evaluated, rangeEvaluation: enclosed)
         try result.validate(); return result
     }
     private static func combine(_ primary: (any Error)?, _ secondary: any Error) -> any Error {

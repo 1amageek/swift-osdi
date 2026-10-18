@@ -9,7 +9,7 @@ import OSDIRuntime
 enum OSDIEvaluateEntry {
     static func main() async {
         if CommandLine.arguments == [CommandLine.arguments[0], "--help"] {
-            print("Usage: osdi-evaluate --request REQUEST.json --output REPORT.json\n       osdi-evaluate --precision-request REQUEST.json --output REPORT.json")
+            print("Usage: osdi-evaluate --request REQUEST.json --output REPORT.json\n       osdi-evaluate --precision-request REQUEST.json --output REPORT.json\nPrecision input selects stateless-precision-v1 or explicit stateless-smooth-box-v2 enclosure.")
             return
         }
         let arguments = CommandLine.arguments

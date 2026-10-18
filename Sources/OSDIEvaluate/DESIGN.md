@@ -124,3 +124,24 @@ bounded subprocess timeouts, saves/reloads exact bits, checks the compound-defau
 sub-ULP result against independent decimal arithmetic, repeats fresh sessions and
 checks malformed requests, capability/identity/worker/resource failures. No
 transport-only worker is used as numerical qualification.
+
+## Explicit Smooth-Box Request
+
+The same `--precision-request` host command accepts the separate schema-2 profile
+`stateless-smooth-box-v2` with operation `enclose`. It requires explicitly named
+`lowerHigh/lowerLow/upperHigh/upperLow` vectors and `lowerContext/upperContext`;
+all point candidate/reference fields must be absent. The version-1 precision
+request and report retain their existing meaning and remain unchanged.
+Range execution selects the public range preparation/evaluation requirements on
+the same exact program/worker and cleanup lifecycle. Its report stage is
+`osdi-smooth-range-enclosure`, and only `rangeEvaluation` contains absolute F/Q
+and spatial G/C lower/upper endpoints. A point `evaluation` must be absent.
+
+All eight endpoint planes retain finite binary64 values and exact bit patterns,
+checked dimensions/order and complete input box/context/model/program/profile
+binding. The conservative `programHasTimeInput` fact is serialized without claiming
+explicit time partials. Source regularity or domain refusal publishes only failure.
+No CLI result certifies a circuit, continuity across boxes, all-history behavior or
+an unsupported seam. Capacity admission accounts for four vector and four matrix
+planes plus their JSON value/bit representations before copying borrowed results;
+atomic save and strict reloaded validation remain mandatory.

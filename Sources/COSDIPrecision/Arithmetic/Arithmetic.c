@@ -283,6 +283,52 @@ int cs_precision_supported(uint32_t op) {
          (op >= 34 && op <= 47) || (op >= 49 && op <= 64) || op == 67 ||
          op == 73 || op == 74;
 }
+int cs_precision_regularity(cs_precision_math *m, uint32_t op,
+                            const cs_precision_value *a,
+                            const cs_precision_value *b,
+                            int active_a, int active_b, int same_source) {
+  if (!active_a && !active_b)
+    return 0;
+  if (!cs_precision_charge(m, 16))
+    return m->status;
+  if ((op >= 53 && op <= 56) || op == 58 || op == 62) {
+    if (!same_source && mpfr_cmp(a->real.high, b->real.low) >= 0 &&
+        mpfr_cmp(a->real.low, b->real.high) <= 0)
+      return CS_OSDI_PRECISION_NONSMOOTH;
+  } else if (active_a && (op == 5 || op == 6 || op == 20 || op == 21)) {
+    mpfr_ptr first = m->temporary[8], last = m->temporary[9];
+    if (op == 5) {
+      mpfr_sub_d(first, a->real.low, 0.5, MPFR_RNDD);
+      mpfr_sub_d(last, a->real.high, 0.5, MPFR_RNDU);
+      mpfr_ceil(first, first);
+      mpfr_floor(last, last);
+    } else {
+      mpfr_ceil(first, a->real.low);
+      mpfr_floor(last, a->real.high);
+    }
+    if (mpfr_cmp(first, last) <= 0 &&
+        !(op == 6 && mpfr_zero_p(first) && mpfr_zero_p(last)))
+      return CS_OSDI_PRECISION_NONSMOOTH;
+  } else if (active_a && op == 10 && zero(&a->real)) {
+    return CS_OSDI_PRECISION_NONSMOOTH;
+  } else if (active_a && (op == 13 || op == 16 || op == 18)) {
+    if (mpfr_zero_p(a->real.low) || mpfr_zero_p(a->real.high))
+      return CS_OSDI_PRECISION_NONSMOOTH;
+  } else if (active_a && op == 17) {
+    if (mpfr_cmp_si(a->real.low, -1) == 0 ||
+        mpfr_cmp_si(a->real.high, -1) == 0)
+      return CS_OSDI_PRECISION_NONSMOOTH;
+  } else if (op == 47 && active_b && zero(&b->real)) {
+    return CS_OSDI_PRECISION_NONSMOOTH;
+  } else if (op == 67 && mpfr_cmp_ui(a->real.low, 0) <= 0) {
+    /* Fixed integer powers are smooth away from negative-power poles, and
+       nonnegative integer powers are polynomial across a zero base. */
+    if (active_b || !singleton(&b->real) || !mpfr_integer_p(b->real.low) ||
+        (mpfr_cmp_ui(b->real.low, 0) < 0 && zero(&a->real)))
+      return CS_OSDI_PRECISION_NONSMOOTH;
+  }
+  return 0;
+}
 int cs_precision_apply(cs_precision_math *m, uint32_t op, cs_precision_value *d,
                        const cs_precision_value *a,
                        const cs_precision_value *b) {
@@ -458,6 +504,20 @@ int cs_precision_midpoint(cs_precision_math *m, const cs_precision_interval *v,
   mpfr_div_2ui(m->temporary[0], m->temporary[0], 1, MPFR_RNDN);
   *out = mpfr_get_d(m->temporary[0], MPFR_RNDN);
   return isfinite(*out) ? 0 : CS_OSDI_PRECISION_NONFINITE_PROJECTION;
+}
+int cs_precision_bounds(cs_precision_math *m, const cs_precision_interval *v,
+                        double *lower, double *upper) {
+  if (!cs_precision_charge(m, 8))
+    return m->status;
+  if (!valid(v) || !mpfr_number_p(v->low) || !mpfr_number_p(v->high))
+    return CS_OSDI_PRECISION_NONFINITE_PROJECTION;
+  double lo = mpfr_get_d(v->low, MPFR_RNDD);
+  double hi = mpfr_get_d(v->high, MPFR_RNDU);
+  if (!isfinite(lo) || !isfinite(hi) || lo > hi)
+    return CS_OSDI_PRECISION_NONFINITE_PROJECTION;
+  *lower = lo;
+  *upper = hi;
+  return 0;
 }
 int cs_precision_project(cs_precision_math *m, const cs_precision_interval *v,
                          double *high, double *low, double *radius) {

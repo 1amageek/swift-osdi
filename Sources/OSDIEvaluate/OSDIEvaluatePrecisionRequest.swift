@@ -82,17 +82,50 @@ struct OSDIEvaluatePrecisionRequest: Codable {
     let referenceLow: Values?
     let candidateContext: Context?
     let referenceContext: Context?
+    let lowerHigh: Values?
+    let lowerLow: Values?
+    let upperHigh: Values?
+    let upperLow: Values?
+    let lowerContext: Context?
+    let upperContext: Context?
     let maximumReportBytes: UInt64
 
+    var isRange: Bool { profile == "stateless-smooth-box-v2" }
+
     func validate() throws {
-        guard schemaVersion == 1, profile == "stateless-precision-v1", ["snapshot", "evaluate"].contains(operation), model.operation == "prepare",
+        let selectionValid = isRange
+            ? schemaVersion == 2 && operation == "enclose"
+            : schemaVersion == 1 && profile == "stateless-precision-v1" && ["snapshot", "evaluate"].contains(operation)
+        guard selectionValid, model.operation == "prepare",
               model.localUnknowns == nil, model.previousState == nil,
               maximumReportBytes > 0, maximumReportBytes <= UInt64(Int.max),
               [model.libraryPath, worker.path, stagingParentDirectory].allSatisfy({ $0.hasPrefix("/") && !$0.utf8.contains(0) }) else {
             throw OSDIEvaluateFailure.invalidRequest("Invalid explicit precision schema, preparation or paths")
         }
         _ = try model.preparationOptions(); _ = try options.checked()
-        if operation == "evaluate" {
+        if isRange {
+            guard candidateHigh == nil, candidateLow == nil, referenceHigh == nil, referenceLow == nil,
+                  candidateContext == nil, referenceContext == nil,
+                  let lowerHigh, let lowerLow, let upperHigh, let upperLow,
+                  let lowerContext, let upperContext else {
+                throw OSDIEvaluateFailure.invalidRequest("Enclose requires explicit lower/upper bounds and no point inputs")
+            }
+            let lower = try lowerContext.checked(), upper = try upperContext.checked()
+            guard lower.mode == upper.mode else { throw OSDIEvaluateFailure.invalidRequest("Box analysis modes must agree") }
+            for vector in [lowerHigh, lowerLow, upperHigh, upperLow] { try vector.validate() }
+            guard lowerHigh.values.count == lowerLow.values.count,
+                  lowerHigh.values.count == upperHigh.values.count,
+                  lowerHigh.values.count == upperLow.values.count,
+                  zip(lowerHigh.values, lowerLow.values).allSatisfy({ $0 + $1 == $0 }),
+                  zip(upperHigh.values, upperLow.values).allSatisfy({ $0 + $1 == $0 }) else {
+                throw OSDIEvaluateFailure.invalidUnknowns("Range endpoints require matching normalized twofold vectors")
+            }
+            // Exact endpoint order is checked by the range worker without rounding away low components.
+        } else if operation == "evaluate" {
+            guard lowerHigh == nil, lowerLow == nil, upperHigh == nil, upperLow == nil,
+                  lowerContext == nil, upperContext == nil else {
+                throw OSDIEvaluateFailure.invalidRequest("Point evaluation accepts no range inputs")
+            }
             guard let candidateHigh, let candidateLow, let referenceHigh, let referenceLow,
                   let candidateContext, let referenceContext else { throw OSDIEvaluateFailure.invalidRequest("Evaluate requires four explicit vectors and both contexts") }
             _ = try candidateContext.checked(); _ = try referenceContext.checked()
@@ -106,7 +139,9 @@ struct OSDIEvaluatePrecisionRequest: Codable {
             }
         } else {
             guard candidateHigh == nil, candidateLow == nil, referenceHigh == nil, referenceLow == nil,
-                  candidateContext == nil, referenceContext == nil else { throw OSDIEvaluateFailure.invalidRequest("Snapshot accepts no evaluation coordinates or contexts") }
+                  candidateContext == nil, referenceContext == nil,
+                  lowerHigh == nil, lowerLow == nil, upperHigh == nil, upperLow == nil,
+                  lowerContext == nil, upperContext == nil else { throw OSDIEvaluateFailure.invalidRequest("Snapshot accepts no evaluation coordinates or contexts") }
         }
         guard precisionBits >= options.minimumPrecisionBits, precisionBits <= options.maximumPrecisionBits else {
             throw OSDIEvaluateFailure.invalidRequest("Selected precision is outside explicit limits")
