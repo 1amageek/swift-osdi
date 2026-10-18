@@ -70,6 +70,20 @@ static void binary(cs_precision_math *m, unsigned op, cs_precision_interval *d,
   } else if (op == 45) {
     mpfr_sub(lo, a->low, b->high, MPFR_RNDD);
     mpfr_sub(hi, a->high, b->low, MPFR_RNDU);
+  } else if (mpfr_number_p(a->low) && mpfr_number_p(a->high) &&
+             mpfr_number_p(b->low) && mpfr_number_p(b->high) &&
+             mpfr_sgn(a->low) > 0 && mpfr_sgn(b->low) > 0 &&
+             mpfr_cmp(a->low, a->high) <= 0 &&
+             mpfr_cmp(b->low, b->high) <= 0) {
+    /* Positive ordered intervals have monotone extrema; retain temporary-first
+       writes so either operand may also own the destination. */
+    if (op == 46) {
+      mpfr_mul(lo, a->low, b->low, MPFR_RNDD);
+      mpfr_mul(hi, a->high, b->high, MPFR_RNDU);
+    } else {
+      mpfr_div(lo, a->low, b->high, MPFR_RNDD);
+      mpfr_div(hi, a->high, b->low, MPFR_RNDU);
+    }
   } else {
     mpfr_srcptr av[2] = {a->low, a->high}, bv[2] = {b->low, b->high};
     for (unsigned i = 0; i < 2; i++)

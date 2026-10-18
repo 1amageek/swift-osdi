@@ -48,9 +48,135 @@ static void interval(cs_precision_interval *v, double lo, double hi) {
   mpfr_set_d(v->low, lo, MPFR_RNDD);
   mpfr_set_d(v->high, hi, MPFR_RNDU);
 }
+static int same_endpoint(mpfr_srcptr actual, mpfr_srcptr expected) {
+  if (mpfr_nan_p(actual) || mpfr_nan_p(expected))
+    return mpfr_nan_p(actual) && mpfr_nan_p(expected);
+  return mpfr_equal_p(actual, expected) &&
+         (!mpfr_zero_p(actual) ||
+          mpfr_signbit(actual) == mpfr_signbit(expected));
+}
+static int reference_binary(unsigned op, mpfr_prec_t precision,
+                            cs_precision_interval *out,
+                            const cs_precision_interval *a,
+                            const cs_precision_interval *b) {
+  if (op == 47 && mpfr_cmp_ui(b->low, 0) <= 0 &&
+      mpfr_cmp_ui(b->high, 0) >= 0)
+    return CS_OSDI_PRECISION_DOMAIN;
+  mpfr_t down[4], up[4];
+  mpfr_srcptr av[] = {a->low, a->high}, bv[] = {b->low, b->high};
+  for (unsigned i = 0; i < 4; i++) {
+    mpfr_init2(down[i], precision);
+    mpfr_init2(up[i], precision);
+    reference(op, down[i], av[i / 2], bv[i % 2], MPFR_RNDD);
+    reference(op, up[i], av[i / 2], bv[i % 2], MPFR_RNDU);
+  }
+  unsigned minimum = 0, maximum = 0;
+  for (unsigned i = 1; i < 4; i++) {
+    if (mpfr_cmp(down[i], down[minimum]) < 0)
+      minimum = i;
+    if (mpfr_cmp(up[i], up[maximum]) > 0)
+      maximum = i;
+  }
+  mpfr_set(out->low, down[minimum], MPFR_RNDD);
+  mpfr_set(out->high, up[maximum], MPFR_RNDU);
+  for (unsigned i = 0; i < 4; i++) {
+    mpfr_clear(down[i]);
+    mpfr_clear(up[i]);
+  }
+  return mpfr_nan_p(out->low) || mpfr_nan_p(out->high) ||
+                 mpfr_cmp(out->low, out->high) > 0
+             ? CS_OSDI_PRECISION_DOMAIN
+             : 0;
+}
+static void binary_fixture(cs_precision_interval *value, unsigned index) {
+  static const char *bounds[][2] = {
+      {"0", "0"}, {"-0", "-0"}, {"-0", "0"}, {"0", "-0"},
+      {"0", "1"}, {"-1", "0"}, {"-1", "1"}, {"1", "2"},
+      {"0.1", "0.3"},
+      {"1.00000000000000000000000000000000000000000000000000001",
+       "1.00000000000000000000000000000000000000000000000000009"},
+      {"-3", "-2"}, {"-3", "2"}, {"2", "1"},
+      {"-inf", "-1"}, {"1", "inf"}, {"-inf", "inf"},
+      {"inf", "inf"}, {"-inf", "-inf"}, {"nan", "nan"},
+      {"nan", "1"}, {"1", "nan"}};
+  if (index < sizeof(bounds) / sizeof(bounds[0])) {
+    assert(mpfr_set_str(value->low, bounds[index][0], 10, MPFR_RNDD) == 0);
+    assert(mpfr_set_str(value->high, bounds[index][1], 10, MPFR_RNDU) == 0);
+  } else {
+    mpfr_exp_t exponent = index == 21 ? mpfr_get_emin() / 2 - 2
+                                     : mpfr_get_emax() / 2 + 2;
+    mpfr_set_ui_2exp(value->low, 1, exponent, MPFR_RNDN);
+    mpfr_set_ui_2exp(value->high, 3, exponent, MPFR_RNDN);
+  }
+}
+static unsigned binary_differential(void) {
+  const uint32_t precisions[] = {53, 80, 128, 256, 512};
+  unsigned checks = 0;
+  for (unsigned p = 0; p < 2 * sizeof(precisions) / sizeof(precisions[0]); p++) {
+    uint32_t precision = precisions[p / 2];
+    cs_precision_math math;
+    cs_precision_math_init(&math, precision, 65);
+    cs_precision_value a = {.type = 1, .initialized = 1},
+                       b = {.type = 1, .initialized = 1}, out = {.type = 1};
+    mpfr_init2(a.real.low, precision + (p % 2 ? 13 : 0));
+    mpfr_init2(a.real.high, precision + (p % 2 ? 13 : 0));
+    mpfr_init2(b.real.low, precision + (p % 2 ? 29 : 0));
+    mpfr_init2(b.real.high, precision + (p % 2 ? 29 : 0));
+    mpfr_init2(out.real.low, precision - (p % 2 ? 7 : 0));
+    mpfr_init2(out.real.high, precision - (p % 2 ? 7 : 0));
+    cs_precision_interval expected;
+    mpfr_init2(expected.low, precision);
+    mpfr_init2(expected.high, precision);
+    for (unsigned ai = 0; ai < 23; ai++)
+      for (unsigned bi = 0; bi < 23; bi++)
+        for (unsigned op = 46; op <= 47; op++)
+          for (unsigned alias = 0; alias < 3; alias++) {
+            binary_fixture(&a.real, ai);
+            binary_fixture(&b.real, bi);
+            interval(&out.real, -7, 11);
+            out.initialized = 0;
+            cs_precision_value *destination =
+                alias == 1 ? &a : alias == 2 ? &b : &out;
+            mpfr_set_prec(expected.low, mpfr_get_prec(destination->real.low));
+            mpfr_set_prec(expected.high, mpfr_get_prec(destination->real.high));
+            cs_precision_interval_copy(&expected, &destination->real);
+            int expected_status = reference_binary(op, precision, &expected,
+                                                   &a.real, &b.real);
+            math.work = 0;
+            math.status = 0;
+            unsigned initialized = destination->initialized;
+            int status = cs_precision_apply(&math, op, destination, &a, &b);
+            if (status != expected_status ||
+                !same_endpoint(destination->real.low, expected.low) ||
+                !same_endpoint(destination->real.high, expected.high)) {
+              fprintf(stderr,
+                      "Corner differential failure p=%u op=%u a=%u b=%u "
+                      "alias=%u status=%d expected=%d\n",
+                      precision, op, ai, bi, alias, status, expected_status);
+              abort();
+            }
+            assert(math.work == 65 && math.status == 0);
+            assert(destination->initialized == (status ? initialized : 1));
+            cs_precision_interval_copy(&expected, &destination->real);
+            initialized = destination->initialized;
+            assert(cs_precision_apply(&math, op, destination, &a, &b) ==
+                   CS_OSDI_PRECISION_WORK_EXHAUSTED);
+            assert(math.work == 65 &&
+                   math.status == CS_OSDI_PRECISION_WORK_EXHAUSTED &&
+                   destination->initialized == initialized &&
+                   same_endpoint(destination->real.low, expected.low) &&
+                   same_endpoint(destination->real.high, expected.high));
+            checks++;
+          }
+    mpfr_clears(a.real.low, a.real.high, b.real.low, b.real.high, out.real.low,
+                out.real.high, expected.low, expected.high, (mpfr_ptr)0);
+  }
+  return checks;
+}
 int main(void) {
   cs_precision_arena arena;
   assert(cs_precision_arena_open(&arena, 8u << 20));
+  unsigned corner_checks = binary_differential();
   cs_precision_math math;
   cs_precision_math_init(&math, 256, UINT64_C(100000000));
   cs_precision_value a = {.type = 1, .initialized = 1},
@@ -202,10 +328,11 @@ int main(void) {
          WEXITSTATUS(child_status) == CS_OSDI_PRECISION_EXIT_ARENA);
   mpfr_clears(x, y, value, upper, step, (mpfr_ptr)0);
   mpfr_free_cache();
-  printf("{\"intervalSamples\":%u,\"peakRequestedArenaBytes\":%llu,"
+  printf("{\"intervalSamples\":%u,\"intervalCornerComparisons\":%u,"
+         "\"peakRequestedArenaBytes\":%llu,"
          "\"allocationRequests\":%llu,\"reallocationRequests\":%llu,"
          "\"copiedBytes\":%llu}\n",
-         checks, (unsigned long long)arena.peak_bytes,
+         checks, corner_checks, (unsigned long long)arena.peak_bytes,
          (unsigned long long)arena.allocations,
          (unsigned long long)arena.reallocations,
          (unsigned long long)arena.copied_bytes);

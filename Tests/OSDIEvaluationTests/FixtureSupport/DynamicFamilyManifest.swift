@@ -27,6 +27,28 @@ struct DynamicFamilyManifest: Decodable {
         let input: Input
         let reference: Reference
     }
+    struct Observation: Decodable {
+        struct NoiseSource: Decodable {
+            let name: String
+            let kind: UInt32?
+            let positiveNodeIndex: Int
+            let negativeNodeIndex: Int?
+        }
+        let nodes: [String]
+        let collapseMap: [Int?]
+        let stateCount: Int
+        let localUnknowns: [Double]
+        let f: [Double]
+        let q: [Double]
+        let g: [Double]
+        let c: [Double]
+        let noiseDensities: [Double]
+        let noiseSources: [NoiseSource]
+        let nextState: [Double]
+        let modelFlags: UInt32
+        let maximumTimestep: Double?
+        let parameters: [EvaluationReference.Parameter]
+    }
     let libraries: [Library]
     let cases: [Case]
 }

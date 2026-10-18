@@ -81,6 +81,7 @@ static void load_noise(void *instance,void *model,double frequency,double *desti
     (void)instance;(void)model;(void)frequency;
     if (PROTOCOL_MODE==10) { destination[0]=-1; return; }
     if (PROTOCOL_MODE==11) { destination[0]=NAN; return; }
+    if (PROTOCOL_MODE==14) { destination[0]=-0.0; return; }
     abort();
 }
 static uint32_t given(void *storage,uint32_t id) { (void)storage;(void)id;return 0; }
@@ -96,13 +97,13 @@ static void jacobian_offset(void *instance,void *model,size_t offset) {
 static void noise_parameters(void *instance,void *model,double *power,double *exponent) {
     (void)instance;(void)model;(void)power;(void)exponent;abort();
 }
-#if PROTOCOL_MODE == 10 || PROTOCOL_MODE == 11
+#if PROTOCOL_MODE == 10 || PROTOCOL_MODE == 11 || PROTOCOL_MODE == 14
 static OsdiNoiseSource noise_sources[]={{"invalid-spectrum",{0,UINT32_MAX}}};
 static uint32_t noise_types[]={NOISE_TYPE_WHITE};
 #endif
 OsdiDescriptor OSDI_DESCRIPTORS[]={
     {
-#if PROTOCOL_MODE == 10 || PROTOCOL_MODE == 11
+#if PROTOCOL_MODE == 10 || PROTOCOL_MODE == 11 || PROTOCOL_MODE == 14
      .num_noise_src=1,.noise_sources=noise_sources,.noise_source_type=noise_types,
 #endif
      .name="protocol_transport",.num_nodes=1,.num_terminals=1,.nodes=nodes,

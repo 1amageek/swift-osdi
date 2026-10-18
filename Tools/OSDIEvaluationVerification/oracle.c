@@ -45,6 +45,17 @@ static void vector(const double *values,uint32_t count) {
     for(uint32_t index=0;index<count;++index) { if(index)putchar(','); real(values[index]); }
     putchar(']');
 }
+/* Preserve invalid PSD as observed evidence so consumers can prove typed rejection. */
+static void noise_vector(const double *values,uint32_t count) {
+    putchar('[');
+    for(uint32_t index=0;index<count;++index) {
+        if(index)putchar(',');
+        if(isnan(values[index]))string("NaN");
+        else if(isinf(values[index]))string(signbit(values[index])?"-Infinity":"Infinity");
+        else real(values[index]);
+    }
+    putchar(']');
+}
 static uint32_t representative(uint32_t *parents,uint32_t index) {
     while(parents[index]!=index) index=parents[index];
     return index;
@@ -220,7 +231,16 @@ int main(int argc,char **argv) {
     printf(",\"nextState\":");vector(next_state,d->num_states);
     double *noise=allocate(d->num_noise_src,sizeof(double));
     if(mode==4 && d->num_noise_src)d->load_noise(instance,model,frequency,noise);
-    printf(",\"noiseDensities\":");vector(noise,mode==4?d->num_noise_src:0);
+    printf(",\"noiseDensities\":");noise_vector(noise,mode==4?d->num_noise_src:0);
+    printf(",\"noiseSources\":[");
+    for(uint32_t index=0;index<d->num_noise_src;++index) {
+        if(index)putchar(',');printf("{\"name\":");string(d->noise_sources[index].name);
+        printf(",\"kind\":");if(d->noise_source_type)printf("%u",d->noise_source_type[index]);else printf("null");
+        printf(",\"positiveNodeIndex\":%u,\"negativeNodeIndex\":",d->noise_sources[index].nodes.node_1);
+        if(d->noise_sources[index].nodes.node_2==UINT32_MAX)printf("null");else printf("%u",d->noise_sources[index].nodes.node_2);
+        putchar('}');
+    }
+    putchar(']');
     printf(",\"maximumTimestep\":");
     double bound=d->bound_step_offset==UINT32_MAX?INFINITY:*(double *)checked(instance,d->instance_size,d->bound_step_offset,sizeof(double));
     if(isinf(bound)&&bound>0)printf("null");else real(bound);

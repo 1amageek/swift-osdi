@@ -100,3 +100,20 @@ schemas are unchanged.
 ## Precision Composition
 
 The optional precision lane is owned by [Precision Evaluation](../PrecisionEvaluation/DESIGN.md).
+
+## Signed Noise Power and Small-Signal PSD
+
+The ordinary noise context publishes independent source power spectral densities
+at a fixed operating point. OSDI `load_noise` may return signed power, including
+the sign-preserving flicker modulation used by BSIM-BULK. The consumer first
+requires each raw value to be finite, then publishes its magnitude as source PSD;
+negative zero becomes positive zero. This is the small-signal power conversion,
+not a fallback for a failed model. NaN and infinity remain explicit failures
+before the scoped view. It changes no source function, source identity, endpoint,
+frequency exponent, correlation topology or downstream transfer calculation.
+Pnoise and time-domain noise require their own modulation/history contract and
+must not infer support from this fixed-bias conversion.
+
+The implementation and primary references are owned by
+[DeviceEvaluation](../../COSDI/DeviceEvaluation/DESIGN.md). Tests retain raw signed
+oracle observations and independently compare public nonnegative PSD values.

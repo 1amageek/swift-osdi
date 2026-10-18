@@ -419,8 +419,12 @@ int32_t cs_osdi_evaluate_context(cs_osdi_evaluator *e, const cs_osdi_evaluation_
         memset(e->noise_densities, 0, (size_t)noise_count * sizeof(double));
         d->load_noise(e->instance, e->model, context->noise_frequency_hz, e->noise_densities);
         status = check_callback(e, error, 0); if (status) return status;
-        for (uint32_t i = 0; i < noise_count; ++i) if (!isfinite(e->noise_densities[i]) || e->noise_densities[i] < 0)
-            return issue(e, error, CS_OSDI_NONFINITE_OUTPUT, "noise_density", "Native noise density must be finite and nonnegative");
+        for (uint32_t i = 0; i < noise_count; ++i) {
+            if (!isfinite(e->noise_densities[i]))
+                return issue(e, error, CS_OSDI_NONFINITE_OUTPUT, "noise_density", "Native noise power must be finite");
+            /* Fixed-bias source PSD is the magnitude of signed OSDI noise power. */
+            e->noise_densities[i] = fabs(e->noise_densities[i]);
+        }
     }
     *out = (cs_osdi_result_view){.node_count=d->num_nodes, .active_unknown_count=e->active_count,
         .state_count=d->num_states, .f=e->f, .q=e->q, .g=e->g, .c=e->c, .next_state=e->next_state,

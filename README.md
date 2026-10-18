@@ -393,7 +393,7 @@ state, integration and rejection. Positive infinity means no timestep bound.
 
 The `osdi-evaluate` CLI preserves schema 1 `dc-static-point`. Schema 2 requires
 `profile: dynamic-point` and `context` containing `mode`, `timeSeconds`, and
-`noiseFrequencyHz` only for noise. It saves source metadata, raw PSD and optional
+`noiseFrequencyHz` only for noise. It saves source metadata, fixed-bias source PSD magnitude and optional
 maximum timestep with the existing exact artifact/request bindings. Native images
 remain trusted code. These point values do not establish solved circuit results.
 
@@ -402,3 +402,41 @@ the exact four-family capture manifest produced by the CoreSpice qualification
 tools. The focused `OSDIDynamicEvaluationTests` suite uses its solved raw node
 values to compare AC, IC, transient and two noise frequencies with the independent
 point ABI oracle. Existing S1/S2 filtered suites retain their prior inputs.
+
+
+## Latest-family qualification and performance
+
+| Official profile | Source authority |
+|---|---|
+| BSIM-BULK 107.2.1 | Berkeley / Si2 CMC |
+| BSIM-CMG 112.1.0 | Berkeley / Si2 CMC |
+| BSIM-IMG 103.1.0 | Berkeley / Si2 CMC |
+| BSIM-SOI 101.0.0 | [Si2 September 2026 release](https://si2.org/wp-content/uploads/CMC/models/BSIM-SOI_101.0.0_09152026.tar.gz) |
+
+SOI101 has six terminals and `BODYMOD`; old seven-terminal SOI4.7 inputs are
+retained only as regressions. `prepare_soi101.py --help` describes explicit
+latest-model point preparation. `verify_families.py --help` verifies each supplied
+family through six actual CLI contexts and reloads exact-bound reports against a
+direct ABI observer. These are point evaluations, not solved circuit trajectories
+or foundry qualification. The ordinary JSON schema canonicalizes signed zero;
+nonzero values retain binary64 bits. API comparisons retain every bit.
+
+Fixed-bias noise checks finiteness before converting signed OSDI noise power to
+its magnitude. This is not Pnoise or stochastic transient-noise support.
+
+The `OSDIRealModelPrecisionTests` suite additionally requires the retained
+`OSDI_REAL_PRECISION_REQUEST_DIRECTORY`, `OSDI_REAL_PRECISION_REFERENCE`,
+`OSDI_REAL_PRECISION_INDEPENDENT_RECEIPT`, `OSDI_PRECISION_WORKER`, and
+`OSDI_PRECISION_NUMERIC_PROFILE_SHA256` qualification inputs. The latest SOI
+regression uses `OSDI_SOI101_PRECISION_DIRECTORY`, containing the exact inputs and
+`latest-qualification.json` produced by `verify_soi101.py` (see `--help`). This tool joins
+public CLI results with an independent 512-bit source-program replay. F/DeltaQ
+are enclosures; G/C are approximate Newton aids. SOI101 was tested with an
+explicit 256 MiB arena; the 64 MiB refusal is retained and is not silently retried.
+
+`benchmark_models.py --help` compares immutable before/after workers on identical
+programs, explicit limits and continuous request streams. `measure_program.py
+--help` measures private-arena activity separately. Both default to every supplied
+manifest entry and record explicit subset exclusions. Heap counters do not imply
+zero private-arena allocation or zero total copying; worker latency does not
+establish full-circuit acceleration.

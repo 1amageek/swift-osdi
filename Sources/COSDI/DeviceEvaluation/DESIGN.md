@@ -120,7 +120,7 @@ A typed context selects the analysis bits and absolute seconds. The original C
 entry point forwards to the unchanged DC profile. Noise alone requests CALC_NOISE
 and calls load_noise at the positive finite context frequency after that eval.
 Preparation allocates one stable density buffer through the checked workspace
-allocator. PSD must be finite and nonnegative; no fabs/clamping is performed.
+allocator. The signed-power conversion below owns publication of source PSD.
 The result publishes zero noise count outside noise mode. Before every eval the
 optional bound-step slot is reset to positive infinity to prevent stale limits.
 After success its positive finite value or no-limit is returned. Invalid limits,
@@ -130,6 +130,29 @@ The upstream ABI remains unchanged. The noise-info C accessor returns admitted
 name/type/raw endpoints; source units are derived from residual node metadata.
 General Verilog-A hidden-state or delay support is not inferred. Caller-owned
 accept/reject history and external foreign-code allocations remain outside scope.
+
+### Signed Power Conversion
+
+The public noise buffer contains fixed-bias, small-signal source PSD rather than
+raw signed `load_noise` output. Every raw value must first be finite; then `fabs`
+converts it in place to nonnegative source PSD, including canonical positive zero.
+NaN and either infinity reject the evaluation with `noise_density` and leave the
+output view cleared. The same prepared buffer is reused without another allocation
+or copy. F/Q/G/C, candidate state, source metadata, and all other modes are unchanged.
+The caller still owns transfer-function application and circuit noise assembly.
+Periodic and time-domain noise require a separate modulation/history contract.
+
+| Source authority | Relevant contract |
+|---|---|
+| [Accellera Verilog-AMS 2023, section 4.6.4.2](https://accellera.org/images/downloads/standards/v-ams/VAMS-LRM-2023.pdf) | The noise power arguments have no nonnegative-first-argument constraint. |
+| [Coram, McAndrew, Gullapalli, and Kundert, *Flicker Noise Modeling in Verilog-A*, pages 6-8](https://kenkundert.com/docs/flicker-noise.pdf) | Signed noise modulation preserves polarity information, including BSIM-BULK's `sigvds` case. This does not imply periodic-noise support here. |
+| [ngspice OSDI consumer, commit a1210a257d61b0c7c5e83221b0e49b6f72a55395, line 130](https://github.com/imr/ngspice/blob/a1210a257d61b0c7c5e83221b0e49b6f72a55395/src/osdi/osdinoise.c#L130) | The independent small-signal consumer applies `fabs` to source power before multiplying by transfer magnitude squared. |
+
+The consumer regression compares public PSD against the magnitude of independently
+observed finite raw OSDI noise, including the BSIM-BULK reverse-bias signed source.
+Protocol fixtures distinguish negative finite power, positive/negative zero, and
+nonfinite rejection; the oracle retains raw signed values. The ordinary phase
+comparisons also verify unchanged F/Q/G/C, state, source identity, and mode counts.
 
 The node-info accessor exports `has_reactive_residual` as 0/1 directly from the
 admitted raw node offset sentinel. Loading already validates every present offset.

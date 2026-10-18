@@ -72,3 +72,20 @@ keeps state/integration ownership outside the oracle point operation.
 The existing bounded protocol builder also emits reactive-offset absence and
 time/state-charge variants for the [metadata tests](../../Tests/OSDIEvaluationTests/DESIGN.md).
 These do not alter the nineteen numeric model points or finite-difference matrix.
+
+## Real-Family CLI Matrix
+
+`verify_families.py` executes the actual `osdi-evaluate` process for every real-device
+case in an explicit manifest and the ordinary six-context matrix. Each request,
+report, invocation, diagnostics and exact tool/model identity is retained. A separate
+read/decode checks saved bit patterns and exact request binding; all raw values,
+PSD, state, flags, bounds, parameters and collapse mapping are compared with the
+direct-ABI executable. Both child paths have external timeouts. Completion of this
+matrix establishes the consumer of those exact artifacts, not latest-source or
+foundry physical qualification.
+
+Ordinary schema 2 persists JSON number arrays: the Swift encoder canonicalizes
+signed zero. CLI comparison requires exact binary64 bits for every finite nonzero
+value, numerical equality for zeros, and records every zero-sign canonicalization.
+This does not weaken the API bit comparison or precision reports, which carry
+explicit bit patterns. The tool does not claim ordinary JSON preserves zero signs.

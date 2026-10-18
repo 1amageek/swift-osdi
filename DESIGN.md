@@ -191,3 +191,50 @@ precision capability, exhausted resources and interrupted helper operations
 publish no result and cannot select the ordinary lane implicitly. Its exact
 compiler/program/worker/numeric-library provenance and measurements are separate
 from the historical binary64 qualification.
+
+## Four-Family Completion and Performance Qualification
+
+The completion task first closes this package's model boundary before resuming the
+parent causal/all-corner work. The ordinary lane must evaluate original F/Q/G/C,
+explicit modes, scoped parameters, Kelvin temperature, internal/collapsed nodes,
+noise and candidate state. Fixed-bias noise converts finite signed OSDI power
+to source PSD magnitude; it does not discard nonfinite failures or establish
+Pnoise/time-domain-noise semantics. The precision lane must preserve original nonlinear F
+and model-owned DeltaQ with the same directed rounding, work policy, failure and
+scoped-borrow/lifetime contracts. It does not inherit circuit-solver ownership.
+
+The existing exact regression profiles are BULK 107.2.1, CMG 112.1.0, IMG 103.1.0
+and SOI 4.7.0. Their emitted programs are stateless and have no time/analysis inputs;
+ordinary state tests still verify the separate generic previous/next-state seam.
+These facts do not extend support to a newly acquired model. At task admission,
+Si2 lists SOI 101.0.0, 100.1.2 and 4.7.1 as production versions while the Berkeley
+page still lists earlier releases. The authentic Si2 SOI101.0.0 archive has now been acquired, with source and NOTICE
+identifying the September 15, 2026 release. Its six-terminal interface differs
+from the old seven-terminal source and requires fresh setup/topology/numerical
+qualification. The other three freshly acquired official source trees match the
+existing source/include bytes. SOI4.7.0 remains a regression baseline, never a
+substitute for the new model. Exact acquisition receipts live with task evidence.
+
+| Owner | Completion evidence |
+|---|---|
+| PointEvaluation | Public real-model F/Q/G/C and PSD against direct ABI, all active-coordinate finite differences, scoped setup facts and retry/lifetime failures |
+| PrecisionExecution / ProgramEvaluation | Real low-sensitive paired endpoints, independently qualified F/DeltaQ intervals, explicit approximate G/C, exact program/setup and worker binding, failure and cleanup |
+| Arithmetic | Independent directed four-corner endpoint comparison for any specialized mul/div path; unchanged precision, domain/status, alias and work semantics |
+| Verification tools | Same-condition Release before/after cold/first/steady timing, exact output comparison outside timed intervals, allocation/copy scope and immutable receipts |
+| Package integration | Actual API and CLI with saved/reloaded bit patterns, exact source/compiler/artifact identities and no partial-success publication |
+
+The initial speed change may specialize strictly positive finite interval
+multiplication/division using monotonic endpoint selection. Zero, nonfinite and
+other-sign cases retain the existing four-corner implementation. Both paths use
+the same intermediate precision, directed rounding, final conversion and work
+charge; temporary results preserve output/input aliasing. No setup cache, lower
+precision, tangent charge approximation, omitted root or relaxed tolerance is
+introduced. This local contract is owned by Arithmetic's child design.
+
+Performance comparisons use immutable before/after worker images built with the
+same compiler, optimization, static numeric libraries and semantic flags. The
+same program, setup, endpoint vectors, precision, budgets and audit settings are
+used in alternating fresh-process rounds. Startup, first request and continuous
+steady requests are separate measurements. Heap and copy observations are scoped;
+no total zero-copy or full-circuit speed claim follows from a worker measurement.
+The parent must revalidate adopted exact revisions and affected circuit paths.
