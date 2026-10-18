@@ -23,13 +23,13 @@ actor OSDIFixtureCache {
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent("swift-osdi-fixtures-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        guard let compilerPath = ProcessInfo.processInfo.environment["OSDI_OPENVAF_COMPILER"],
-              !compilerPath.isEmpty else {
-            throw OSDIFixtureError.missingOpenVAF("OSDI_OPENVAF_COMPILER is not set")
-        }
-        let openvaf = URL(fileURLWithPath: compilerPath)
-        guard FileManager.default.isExecutableFile(atPath: openvaf.path) else {
-            throw OSDIFixtureError.missingOpenVAF(compilerPath)
+        var compilerArguments: [String] = []
+        if ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1" {
+            guard let compilerPath = ProcessInfo.processInfo.environment["OSDI_OPENVAF_COMPILER"],
+                  FileManager.default.isExecutableFile(atPath: compilerPath) else {
+                throw OSDIFixtureError.missingOpenVAF("OSDI_OPENVAF_COMPILER must select an executable for requested model qualification")
+            }
+            compilerArguments = ["--openvaf", compilerPath]
         }
         let log = output.appendingPathComponent("builder.log")
         guard FileManager.default.createFile(atPath: log.path, contents: nil) else {
@@ -41,10 +41,9 @@ actor OSDIFixtureCache {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [
             "python3", root.appendingPathComponent("Tools/OSDIVerification/build.py").path,
-            "--output", output.path, "--clang", "/usr/bin/clang",
-            "--header", root.appendingPathComponent("Sources/COSDI/ABI/osdi_0_4.h").path,
-            "--openvaf", openvaf.path
-        ]
+            "--output", output.path, "--clang", ProcessInfo.processInfo.environment["OSDI_TEST_CLANG"] ?? "/usr/bin/clang",
+            "--header", root.appendingPathComponent("Sources/COSDI/ABI/osdi_0_4.h").path
+        ] + compilerArguments
         process.standardOutput = handle
         process.standardError = handle
         try process.run()

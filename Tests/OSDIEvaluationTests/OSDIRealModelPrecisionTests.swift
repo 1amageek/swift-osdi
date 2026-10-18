@@ -5,7 +5,7 @@ import OSDIContracts
 import OSDIRuntime
 import Testing
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"), .serialized, .timeLimit(.minutes(1)))
 struct OSDIRealModelPrecisionTests {
     private static let families = ["bulk", "cmg", "img", "soi"]
 
@@ -328,7 +328,7 @@ struct OSDIRealModelPrecisionTests {
             }
     }
 
-    @Test func fourRealFamiliesRetainIndependentlyQualifiedPairedPointAndOwnerLifetimes() async throws {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_LEGACY_SOI_QUALIFICATION"] == "1", "Requires explicit OSDI_LEGACY_SOI_QUALIFICATION=1 and the original legacy four-family precision receipts")) func fourRealFamiliesRetainIndependentlyQualifiedPairedPointAndOwnerLifetimes() async throws {
         let decoder = JSONDecoder()
         let referenceData = try Data(contentsOf: URL(fileURLWithPath: Self.environment("OSDI_REAL_PRECISION_REFERENCE")))
         let baseline = try decoder.decode(Baseline.self, from: referenceData)

@@ -1,0 +1,101 @@
+OpenVAF Compiler Verification Fixture
+
+This verification-only capture comes from:
+  Repository: https://github.com/1amageek/swift-openvaf.git
+  Commit: 174310120990a492be23407a6e310848c1177290
+  Directory: Tools/OpenVAFCompilerProfile
+
+The original producer remains the source authority. PROVENANCE.json records
+original and captured file hashes. This capture does not assert remote
+publication of the original commit or execution of the captured producer.
+
+Changed-source notice (2026-10-18, 1amageek): Source.json changes only
+precision.programHeader.path from
+../../../swift-osdi/Sources/COSDI/include/OSDICompilerPrecision.h to
+../../Sources/COSDI/include/OSDICompilerPrecision.h for independent checkout
+resolution. The patch, build driver, inspector and semantic profile are unchanged.
+
+Upstream compiler patch
+-----------------------
+full-residuals.patch modifies OpenVAF/OpenVAF-Reloaded at commit
+fdf2522b70f42793f64b1c72f0195c96dea0cc19. The affected upstream packages declare
+GPL-3.0. The GNU GPL version 3 text and upstream copyright notice are retained in
+../../ThirdParty/OpenVAF-Reloaded/LICENSE, with exact upstream identity in
+../../ThirdParty/OpenVAF-Reloaded/Source.json. Those terms remain applicable to
+upstream-derived patch material; the support license below does not replace them.
+
+The patch adds opt-in full-residual and source-precision compiler profiles and
+associated regressions. These changes originate from 1amageek's swift-openvaf
+commits a3e4135cfa6733f006bdea2d999aa6763f325118 (2026-10-17),
+bd45cf6bc9350343d80b03f1b946543ec71c830b (2026-10-18), and
+174310120990a492be23407a6e310848c1177290 (2026-10-18). No upstream compiler,
+third-party model source or generated model binary is included in this capture.
+
+Original support attribution and license
+---------------------------------------
+OpenVAFSupport — Copyright (c) 2026, 1amageek
+Repository: https://github.com/1amageek/swift-openvaf
+License: OpenVAFSupport Attribution License 1.0
+
+The original repository license is reproduced verbatim below for the retained
+support materials and associated documentation.
+
+OpenVAFSupport Attribution License 1.0
+
+Copyright (c) 2026, 1amageek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to use, copy,
+modify, merge, publish, distribute, sublicense, and/or sell copies of the
+Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+1. Attribution notice.
+
+   Any product, service, command line tool, application, library distribution,
+   source distribution, binary distribution, or hosted workflow that is made
+   available to third parties and incorporates, links to, wraps, embeds, or
+   otherwise uses the Software must provide a reasonably visible attribution
+   notice to its users or recipients.
+
+   The attribution notice must include:
+
+   - the name "OpenVAFSupport";
+   - the copyright notice above;
+   - the name of this license; and
+   - a link or reference to the project repository when reasonably practical.
+
+   The attribution notice may be provided in an about screen, credits screen,
+   licenses screen, documentation, package metadata, command line `--version` or
+   `--license` output, generated license bundle, or another place that is
+   reasonably accessible to users or recipients.
+
+2. Source redistributions.
+
+   Redistributions of source code must retain this license text, the copyright
+   notice above, and the disclaimer below.
+
+3. Binary redistributions.
+
+   Redistributions in binary form must reproduce this license text, the
+   copyright notice above, and the disclaimer below in the documentation and/or
+   other materials provided with the distribution, in addition to satisfying the
+   attribution notice requirement above.
+
+4. No endorsement.
+
+   Neither the name of the copyright holder nor the names of contributors may be
+   used to endorse or promote products derived from this Software without
+   specific prior written permission.
+
+5. Private internal use.
+
+   Private internal use that is not made available to third parties is permitted
+   without publishing an attribution notice.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/1amageek/CircuiteFoundation.git",
-                 revision: "c952ac5ebe3c21bf0cbd6d6ac239130efd732b3a")
+                 revision: "ae88104c556f5802819713ed741f5b2fffffc2d9")
     ],
     targets: [
         .systemLibrary(name: "CGMP", pkgConfig: "gmp", providers: [.brew(["gmp"])]),

@@ -5,14 +5,14 @@ import Testing
 
 @Suite(.serialized, .timeLimit(.minutes(1)))
 struct OSDIEvaluationTests {
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func independentFiniteDifferenceQualificationRequiresEveryCoordinate() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         #expect(fixtures.finiteDifferenceChecks == 1204)
         #expect(fixtures.finiteDifferenceStatus == "passed", "Every active coordinate must satisfy the full-residual derivative contract")
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func allNineteenActualModelPointsMatchIndependentRawABI() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         #expect(fixtures.cases.count == 19)
@@ -52,7 +52,7 @@ struct OSDIEvaluationTests {
         }
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func analyticRCAndFlowUnitsRemainDiscriminating() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         for (name, conductance, capacitance) in [("rc-linear", 0.001, 2e-12), ("rc-first", 0.001, 2e-12), ("rc-second", 0.003, 4e-12)] {
@@ -72,7 +72,7 @@ struct OSDIEvaluationTests {
         #expect(separate.collapseMap == [0, 1, 2])
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func invalidTypedAssignmentsAndNativeBoundsFailWithoutPoisoningLibrary() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         let point = try fixtures.point("typed-default")
@@ -110,7 +110,7 @@ struct OSDIEvaluationTests {
         try library.close()
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func invalidContractsAndNativeResourceBudgetsRemainFailures() async throws {
         #expect(throws: OSDIContractError.invalidParameterValue) {
             try OSDIParameterAssignment(name: "scale", scope: .instance, value: .real(.nan))
@@ -148,7 +148,7 @@ struct OSDIEvaluationTests {
         try library.close()
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func wrongDimensionsNonfiniteUnknownsClosedModelAndExclusivePreparationFail() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         let point = try fixtures.point("rc-linear")
@@ -199,7 +199,7 @@ struct OSDIEvaluationTests {
         try library.close()
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func concurrentMetadataAndReentrantCallbackRespectPreparedOwner() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         let point = try fixtures.point("rc-linear")
@@ -233,7 +233,7 @@ struct OSDIEvaluationTests {
 
     @Test
     func explicitPreviousStateProducesCandidateWithoutImplicitAcceptance() async throws {
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
         let path = try protocolPath("state", fixtures)
         let library = try await EvaluationArtifact(path).load()
         let options = try protocolOptions()
@@ -253,7 +253,7 @@ struct OSDIEvaluationTests {
 
     @Test
     func flagsAndNonfiniteOutputNeverPublishAnEvaluationView() async throws {
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
         for (name, flags, code) in [("fatal", UInt32(2), Int32(17)), ("finish", 4, 17),
                                    ("stop", 8, 17), ("limiting", 1, 17),
                                    ("unknown_flags", 0x80000000, 17), ("nonfinite_output", 0, 19)] {
@@ -279,7 +279,7 @@ struct OSDIEvaluationTests {
 
     @Test
     func ownedAndLiteralDiagnosticsAreCopiedAndBudgetsAreEnforced() async throws {
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
         let library = try await EvaluationArtifact(protocolPath("diagnostics", fixtures)).load()
         let options = try protocolOptions()
         var model = try OSDINativeModelPreparer().prepare(library: library, descriptorIndex: 0, options: options)
@@ -348,7 +348,7 @@ struct OSDIEvaluationTests {
         try OSDIParameterAssignment(name: name, scope: scope, value: value)
     }
 
-    private func protocolPath(_ name: String, _ fixtures: EvaluationFixtureManifest) throws -> String {
+    private func protocolPath(_ name: String, _ fixtures: ProtocolFixtureManifest) throws -> String {
         guard let fixture = fixtures.protocolLibraries[name] else {
             throw EvaluationFixtureError.invalidReference("missing protocol fixture \(name)")
         }

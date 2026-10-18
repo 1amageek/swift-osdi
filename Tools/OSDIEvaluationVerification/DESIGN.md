@@ -16,6 +16,14 @@ VA fixtures with an explicit compiler and pin the existing unchanged BSIM artifa
 `compile_bsim.py` generates that artifact once from the unchanged 107.2.1 source,
 explicit include directory and selected compiler using `--full-residuals`. Its
 receipt binds the input snapshots, compiler build receipt, ABI header and output.
+The target triple is explicit (`--target`, retaining the original macOS arm64
+default). `prepare_soi101.py` requires the expected generated image SHA-256 as an
+input, independently of its unchanged official source identity; a newly built
+image is never silently substituted for the historic qualified binary.
+`verify_families.py --library-ids` selects explicit manifest library entries and
+records both selected and excluded IDs; its default still requires the four
+baseline families and includes SOI 101 when advertised. Every selected library
+must have actual point cases and an exact artifact identity.
 
 ## Related Designs
 

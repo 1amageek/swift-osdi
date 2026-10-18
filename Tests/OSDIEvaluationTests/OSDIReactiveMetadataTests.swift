@@ -16,8 +16,8 @@ struct OSDIReactiveMetadataTests {
             hasReactiveResidual: false)
         #expect(!absent.hasReactiveResidual)
 
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
-        let limits = try fixtures.point("rc-linear").input.options().limits
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
+        let limits = try EvaluationFixtureRequest.limits()
         for (name, present) in [("time_state_charge", true), ("no_charge", false)] {
             guard let fixture = fixtures.protocolLibraries[name] else { throw EvaluationFixtureError.invalidReference(name) }
             let library = try await EvaluationArtifact(fixture.path).load()

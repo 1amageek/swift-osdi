@@ -12,8 +12,8 @@ zeroed storage and library lifetime. It does not qualify numeric F/Q evaluation.
 
 Exercise the public OSDINativeLibraryLoader through SHA-256 LocalArtifactReferencer,
 ArtifactAccessIntent and the real ArtifactRootCapability. Use direct C fixtures only
-as independent ABI/lifetime inputs. Actual OpenVAF-generated F/Q model libraries
-must be admitted as well. Inject read/close failures through protocol wrappers of
+as independent ABI/lifetime inputs. Explicitly selected qualification also admits actual OpenVAF-generated F/Q
+model libraries. Inject read/close failures through protocol wrappers of
 real artifact sessions, preserving real root-session cleanup.
 
 ## Related Designs
@@ -70,3 +70,10 @@ run and sanitizer run own library/storage behavior; fixture compilation and help
 type checking alone do not establish completion. Changes to artifact validation,
 metadata publication, storage borrows or owner shutdown invalidate corresponding
 regressions. Unsupported hosts remain outside successful qualification.
+
+## Standalone Selection
+
+The [standalone verification contract](../../Tools/OSDIStandaloneVerification/DESIGN.md)
+owns explicit qualification selectors. Default metadata/protocol inputs need only
+the C compiler; requested actual-model qualification retains the original input
+validation and fails on missing compiler/artifact evidence.

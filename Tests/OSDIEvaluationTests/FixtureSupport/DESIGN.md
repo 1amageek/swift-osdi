@@ -8,7 +8,7 @@ independent.
 
 ## Responsibilities and Boundaries
 
-Require explicit `OSDI_OPENVAF_COMPILER` and `OSDI_BSIM_LIBRARY` paths, plus
+For selected model qualification, require explicit `OSDI_OPENVAF_COMPILER` and `OSDI_BSIM_LIBRARY` paths, plus
 `OSDI_BSIM_SHA256`. Optional `OSDI_COMPILER_PROFILE_RECEIPT` binds the compiler
 source/patch/build receipt when supplied by the qualification owner. Build and
 capture into a fresh UUID directory, retain diagnostics and expose only immutable
@@ -41,3 +41,10 @@ ordering rather than constructing expected topology from production outputs.
 Root executes tests after fixture capture cost is measured. Changing the builder
 schema or scoped runtime interface requires this decoder and comparisons to change
 with it; stale references fail identity checks.
+
+## Standalone Selection
+
+The [standalone verification contract](../../../Tools/OSDIStandaloneVerification/DESIGN.md)
+owns explicit qualification selectors. Default metadata/protocol inputs need only
+the C compiler; requested actual-model qualification retains the original input
+validation and fails on missing compiler/artifact evidence.

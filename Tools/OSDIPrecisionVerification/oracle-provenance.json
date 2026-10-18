@@ -1,0 +1,28 @@
+{
+  "schema": "osdi.independent-oracle-source-transfer.v1",
+  "copyright": "Copyright (c) 2026 1amageek. Package license applies.",
+  "originRepository": "https://github.com/1amageek/CoreSpice.git",
+  "originHead": "2497958b15f4df5fc025640b29c992d604f7a53e",
+  "sourceStatus": "Sources are untracked or ignored at transfer; originHead does not identify their content. SHA-256 identities below are authoritative.",
+  "originDirectory": "Tools/OSDIDCVerification/Precision",
+  "sources": [
+    {
+      "path": "reference.c",
+      "sha256": "759a31c81904f3d268333f98ef0835c2ec62de054f02c3381340adddb0e5656c"
+    },
+    {
+      "path": "driver.py",
+      "sha256": "15216345443272f4a592989cd87041374ff7f4d04ebb02853633db54cebd8d8f"
+    },
+    {
+      "path": "verify.py",
+      "sha256": "cdf7b61ee8321679771889399d2507e3672ce34d8e061829e17b41e69e89c771"
+    }
+  ],
+  "changes": [
+    "reference.c retains the independent generic program interpreter; register capacity is an explicit compiler definition.",
+    "independent_replay.py retains only bounded build/replay, generic behavioral controls and exact dyadic containment comparison.",
+    "Native build inputs use explicit selections or pkg-config discovery and static MPFR/GMP archives."
+  ],
+  "scope": "Independent test-only published-program interpreter; no model equations, circuit solver or production CoreSpice code."
+}

@@ -19,9 +19,11 @@ def main(args):
     includes = args.includes.resolve(strict=True)
     header = args.header.resolve(strict=True)
     provenance = args.compiler_profile_receipt.resolve(strict=True)
+    compiler_sha = digest(compiler)
     if digest(source) != SOURCE_SHA or digest(header) != HEADER_SHA:
         raise RuntimeError('Unchanged BSIM 107.2.1 source or pinned ABI header identity mismatch.')
     json.loads(provenance.read_text())
+    provenance_sha = digest(provenance)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     snapshots = output/'input-snapshots'
@@ -30,22 +32,32 @@ def main(args):
     shutil.copyfile(header, snapshots/'osdi_0_4.h')
     shutil.copyfile(provenance, snapshots/'compiler-profile-receipt.json')
     shutil.copytree(includes, snapshots/'includes')
+    snapshot_hashes = {str(path.relative_to(snapshots)): digest(path)
+                       for path in sorted(snapshots.rglob('*')) if path.is_file()}
+    if (snapshot_hashes['bsimbulk.va'] != SOURCE_SHA or snapshot_hashes['osdi_0_4.h'] != HEADER_SHA or
+            snapshot_hashes['compiler-profile-receipt.json'] != provenance_sha):
+        raise RuntimeError('Source, ABI header or provenance changed while snapshotting build inputs.')
     commands = []
     version = run([compiler, '--version'], output, 'compiler-version', commands)
     help_text = run([compiler, '--help'], output, 'compiler-help', commands)
     if '--full-residuals' not in help_text:
         raise RuntimeError('Compiler does not advertise --full-residuals.')
     library = output/'bsimbulk107-full-residuals.osdi'
-    run([compiler, '--full-residuals', '-O', '1', '--target', 'aarch64-apple-darwin',
+    run([compiler, '--full-residuals', '-O', '1', '--target', args.target,
          '-I', snapshots/'includes', snapshots/'bsimbulk.va', '-o', library],
         output, 'compile-bsim', commands)
     # Verify the generated image without modifying its signed bytes.
     run(['/usr/bin/codesign', '--verify', '--verbose=2', library], output, 'verify-signature', commands)
+    if (digest(compiler) != compiler_sha or digest(provenance) != provenance_sha or
+            snapshot_hashes != {str(path.relative_to(snapshots)): digest(path)
+                                for path in sorted(snapshots.rglob('*')) if path.is_file()}):
+        raise RuntimeError('Compiler or snapshotted build input changed during compilation.')
     receipt = {'schema': 'osdi.full-residuals-artifact.v1', 'profile': 'full-residuals',
                'sourceSHA256': SOURCE_SHA, 'headerSHA256': HEADER_SHA,
                'includeSHA256': {str(path.relative_to(snapshots/'includes')): digest(path)
                                  for path in sorted((snapshots/'includes').rglob('*')) if path.is_file()},
-               'compiler': {'path': str(compiler), 'sha256': digest(compiler), 'version': version.strip()},
+               'compiler': {'path': str(compiler), 'sha256': compiler_sha, 'version': version.strip()},
+               'target': args.target, 'inputSnapshots': snapshot_hashes,
                'compilerProfileReceiptSHA256': digest(provenance),
                'artifact': {'path': str(library), 'sha256': digest(library), 'byteCount': library.stat().st_size},
                'builderSHA256': digest(__file__), 'commands': commands,
@@ -58,6 +70,8 @@ if __name__ == '__main__':
     parser = ArgumentParser(description=__doc__)
     for argument in ('compiler', 'source', 'includes', 'header', 'compiler-profile-receipt', 'output'):
         parser.add_argument('--'+argument, type=Path, required=True)
+    parser.add_argument('--target', default='aarch64-apple-darwin',
+                        help='Explicit OpenVAF target triple; signature verification requires a macOS target')
     def interrupted(signum, frame):
         raise KeyboardInterrupt(f'BSIM compiler helper interrupted by signal {signum}')
     signal.signal(signal.SIGTERM, interrupted)

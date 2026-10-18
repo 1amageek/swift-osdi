@@ -31,7 +31,7 @@ struct OSDIPrecisionTests {
             setupDigest: try OSDIPrecisionProgramBuilder.digest(setup), semanticProfile: digest)
     }
     @Test func scopedTransportAndIdempotentClose() async throws {
-        let artifact = try EvaluationArtifact(external("OSDI_PRECISION_TRANSPORT_WORKER"))
+        let artifact = try EvaluationArtifact(try await ProtocolFixtureCache.shared.fixtures().transportWorker.path)
         let program = try transportProgram(mode: 0, reference: artifact.intent.expectedReference)
         var session = try await OSDINativePrecisionSessionPreparer().prepare(program: program,
             worker: artifact.intent, source: artifact.source, numericProfile: program.programDigest, options: policy())
@@ -60,7 +60,7 @@ struct OSDIPrecisionTests {
     }
     @Test func failedWorkersPublishNoViewAndRetainNoChild() async throws {
         for mode: UInt8 in [1,2,3,4,6,7,8,9,10] {
-            let artifact = try EvaluationArtifact(external("OSDI_PRECISION_TRANSPORT_WORKER"))
+            let artifact = try EvaluationArtifact(try await ProtocolFixtureCache.shared.fixtures().transportWorker.path)
             let program = try transportProgram(mode: mode, reference: artifact.intent.expectedReference)
             do {
                 var session = try await OSDINativePrecisionSessionPreparer().prepare(program: program,
@@ -100,7 +100,7 @@ struct OSDIPrecisionTests {
                 cleanupTimeoutNanoseconds: 1, pollNanoseconds: 1)
         }
     }
-    @Test func actualCompilerProgramPreservesCompoundDefaultsAndLowCoordinates() async throws {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs")) func actualCompilerProgramPreservesCompoundDefaultsAndLowCoordinates() async throws {
         let artifact = try EvaluationArtifact(external("OSDI_PRECISION_MODEL"))
         let worker = try EvaluationArtifact(external("OSDI_PRECISION_WORKER"))
         let profile = try ContentDigest(algorithm: .sha256, hexadecimalValue: external("OSDI_PRECISION_SEMANTIC_SHA256"))
@@ -138,7 +138,7 @@ struct OSDIPrecisionTests {
         model.close(); try library.close()
     }
 
-    @Test func explicitScopedPrimitiveFactsRemainGivenAndOriginalModelSurvivesFailure() async throws {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs")) func explicitScopedPrimitiveFactsRemainGivenAndOriginalModelSurvivesFailure() async throws {
         let artifact = try EvaluationArtifact(external("OSDI_PRECISION_MODEL"))
         let library = try await artifact.load()
         let profile = try ContentDigest(algorithm: .sha256, hexadecimalValue: external("OSDI_PRECISION_SEMANTIC_SHA256"))

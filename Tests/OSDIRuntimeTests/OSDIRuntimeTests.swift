@@ -46,7 +46,7 @@ struct OSDIRuntimeTests {
         }
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func admitsActualOpenVAFResistiveAndReactiveModels() async throws {
         let fixtures = try await OSDIFixtureCache.shared.fixtures()
         for (name, expected) in [("linear_rc", ["linear_rc"]), ("two_models", ["first_rc", "second_rc"])] {

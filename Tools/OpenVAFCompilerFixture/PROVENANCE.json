@@ -1,0 +1,66 @@
+{
+  "schema": "osdi.compiler-verification-fixture-capture.v1",
+  "capturedOn": "2026-10-18",
+  "source": {
+    "repository": "https://github.com/1amageek/swift-openvaf.git",
+    "commit": "174310120990a492be23407a6e310848c1177290",
+    "directory": "Tools/OpenVAFCompilerProfile",
+    "authority": "The original producer at this exact commit; this capture does not assert that the commit is remotely published."
+  },
+  "upstream": {
+    "repository": "https://github.com/OpenVAF/OpenVAF-Reloaded.git",
+    "commit": "fdf2522b70f42793f64b1c72f0195c96dea0cc19",
+    "licensePath": "../../ThirdParty/OpenVAF-Reloaded/LICENSE"
+  },
+  "files": [
+    {
+      "sourcePath": "Tools/OpenVAFCompilerProfile/build.py",
+      "sourceSHA256": "1a74a80366b65317b0efae312193e9323f4cbe1adc6fe88ab63aa219275e7b4d",
+      "capturedPath": "build.py",
+      "capturedSHA256": "1a74a80366b65317b0efae312193e9323f4cbe1adc6fe88ab63aa219275e7b4d",
+      "adaptations": []
+    },
+    {
+      "sourcePath": "Tools/OpenVAFCompilerProfile/inspect_precision.py",
+      "sourceSHA256": "46ca852f25ad26426c0d427c77bfa33ccfb63c5081d32015863d7198b30b94c5",
+      "capturedPath": "inspect_precision.py",
+      "capturedSHA256": "46ca852f25ad26426c0d427c77bfa33ccfb63c5081d32015863d7198b30b94c5",
+      "adaptations": []
+    },
+    {
+      "sourcePath": "Tools/OpenVAFCompilerProfile/Source.json",
+      "sourceSHA256": "0c4bfc5d971d8c268e1310bd88169e46e4f70b8fc5f1bb8ba4f292c4c8893d02",
+      "capturedPath": "Source.json",
+      "capturedSHA256": "4488f187ec623ff54b45d9a68f61e22564ccd50bb0b75a77cc6cb63f89fe9854",
+      "adaptations": [
+        {
+          "field": "precision.programHeader.path",
+          "originalValue": "../../../swift-osdi/Sources/COSDI/include/OSDICompilerPrecision.h",
+          "capturedValue": "../../Sources/COSDI/include/OSDICompilerPrecision.h",
+          "reason": "Resolve the unchanged program header inside an independently named swift-osdi checkout, without a sibling repository or checkout-name assumption."
+        }
+      ]
+    },
+    {
+      "sourcePath": "Tools/OpenVAFCompilerProfile/PrecisionSemantics.json",
+      "sourceSHA256": "a85f38191b22ccf3b084f0892ee0fa51752d37f0defa6b62dee929935be35104",
+      "capturedPath": "PrecisionSemantics.json",
+      "capturedSHA256": "a85f38191b22ccf3b084f0892ee0fa51752d37f0defa6b62dee929935be35104",
+      "adaptations": []
+    },
+    {
+      "sourcePath": "Tools/OpenVAFCompilerProfile/full-residuals.patch",
+      "sourceSHA256": "543243ca7cae5357d62108d0c34d3d0d3e5b7e635fe5125ca38fbd444acc2eb3",
+      "capturedPath": "full-residuals.patch",
+      "capturedSHA256": "543243ca7cae5357d62108d0c34d3d0d3e5b7e635fe5125ca38fbd444acc2eb3",
+      "adaptations": []
+    }
+  ],
+  "retainedOriginalLicense": {
+    "sourcePath": "LICENSE",
+    "sourceSHA256": "cf03101ab512aeed6dc954ecd79d0657f502251b99b79f7d15385c69fdc50d76",
+    "capturedIn": "NOTICE",
+    "licenseName": "OpenVAFSupport Attribution License 1.0"
+  },
+  "evidenceBoundary": "Source capture and provenance only. No compiler build, model generation, test, or qualification execution is claimed; prior receipts do not establish execution of the adapted profile."
+}

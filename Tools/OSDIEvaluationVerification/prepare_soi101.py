@@ -8,7 +8,6 @@ from build import digest, run, save
 
 
 SOURCE_SHA = 'cba0d2de068e86b026d9580c9d8ab78f592ccc3d9dc8efb98fb5d67182be0a87'
-IMAGE_SHA = 'a8f1fb4e3913eb70a62c0b9972c92cec775ef4d5344919f3c13beb896d4afe3c'
 
 
 def require(condition, detail):
@@ -56,7 +55,10 @@ def specifications():
 def prepare(args):
     source, library, cli = [value.resolve(strict=True) for value in (args.source, args.library, args.cli)]
     require(digest(source) == SOURCE_SHA, 'SOI 101.0.0 unchanged official source identity mismatch')
-    require(digest(library) == IMAGE_SHA, 'SOI 101.0.0 exact generated image identity mismatch')
+    image_sha = args.expected_image_sha256.lower()
+    require(len(image_sha) == 64 and all(value in '0123456789abcdef' for value in image_sha),
+            'Expected image identity must be a SHA-256 hex digest')
+    require(digest(library) == image_sha, 'SOI 101.0.0 exact generated image identity mismatch')
     baseline = args.manifest.resolve(strict=True)
     manifest = json.loads(baseline.read_bytes())
     require(not any(item['id'] == 'soi101' for item in manifest['libraries']), 'Latest SOI already present')
@@ -69,7 +71,7 @@ def prepare(args):
         request = {
             'schemaVersion': 2, 'operation': 'prepare', 'profile': 'dynamic-point',
             'context': {'mode': 'dc', 'timeSeconds': 0.0},
-            'libraryPath': str(library), 'expectedSHA256': IMAGE_SHA, 'expectedByteCount': size,
+            'libraryPath': str(library), 'expectedSHA256': image_sha, 'expectedByteCount': size,
             'limits': {'maximumDescriptors': 64, 'maximumMetadataBytes': 16_777_216,
                        'maximumStorageBytes': 67_108_864},
             'readBudget': {'maximumPageByteCount': 65_536, 'maximumTotalByteCount': size,
@@ -90,7 +92,7 @@ def prepare(args):
         require(report['succeeded'] and report['input'] == request, identifier+': public prepare')
         require(report['requestBinding'] == {'sha256': digest(request_path), 'byteCount': request_path.stat().st_size},
                 identifier+': request binding')
-        require(report['artifactBinding'] == {'sha256': IMAGE_SHA, 'byteCount': size}, identifier+': image binding')
+        require(report['artifactBinding'] == {'sha256': image_sha, 'byteCount': size}, identifier+': image binding')
         require(report['descriptor']['terminalCount'] == 6 and report['descriptor']['nodeCount'] == 14,
                 identifier+': latest six-terminal descriptor')
         topology = report['prepared']['topology']
@@ -135,7 +137,7 @@ def prepare(args):
         checks.append({'caseID': identifier, 'prepareRequestSHA256': digest(request_path),
                        'prepareReportSHA256': digest(report_path), 'activeUnknownCount': len(groups),
                        'stateCount': topology['stateCount'], 'diagnostics': report['prepared']['diagnostics']})
-    manifest['libraries'].append({'id': 'soi101', 'path': str(library), 'sha256': IMAGE_SHA,
+    manifest['libraries'].append({'id': 'soi101', 'path': str(library), 'sha256': image_sha,
                                  'descriptorIndex': 0, 'descriptorName': 'bsimsoi'})
     manifest['cases'].extend(points)
     manifest['status'] = 'prepared-not-evaluation-qualified'
@@ -144,7 +146,7 @@ def prepare(args):
         'schema': 'osdi.soi101-explicit-points.v1', 'status': 'prepared-not-evaluation-qualified',
         'baselineManifest': {'path': str(baseline), 'sha256': digest(baseline)},
         'source': {'path': str(source), 'sha256': SOURCE_SHA, 'release': '101.0.0', 'releaseDate': '2026-09-15'},
-        'artifact': {'path': str(library), 'sha256': IMAGE_SHA, 'byteCount': size},
+        'artifact': {'path': str(library), 'sha256': image_sha, 'byteCount': size},
         'cli': {'path': str(cli), 'sha256': digest(cli)}, 'toolSHA256': digest(__file__),
         'caseCount': len(points), 'checks': checks, 'commands': receipts,
         'qualificationScope': 'Explicit biased points with public prepared topology; no KCL solve, transient trajectory, physical model qualification or foundry qualification'}
@@ -159,4 +161,6 @@ if __name__ == '__main__':
     parser = ArgumentParser(description=__doc__)
     for argument in ('source', 'library', 'cli', 'manifest', 'output'):
         parser.add_argument('--'+argument, type=Path, required=True)
+    parser.add_argument('--expected-image-sha256', required=True,
+                        help='Exact SHA-256 from the selected external compiler artifact receipt')
     prepare(parser.parse_args())

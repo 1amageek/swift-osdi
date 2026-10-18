@@ -38,11 +38,18 @@ def exact(actual, expected, label):
 def verify(args):
     manifest = json.loads(args.manifest.read_bytes())
     libraries = {item['id']: item for item in manifest['libraries']}
+    require(len(libraries) == len(manifest['libraries']), 'Manifest library IDs must be unique.')
+    required_families = (set(args.library_ids) if args.library_ids is not None
+                         else FAMILIES.intersection(libraries))
+    require(required_families and required_families.issubset(libraries),
+            'Selected library IDs must be explicit manifest entries.')
+    if args.library_ids is not None:
+        require(len(args.library_ids) == len(required_families), 'Selected library IDs must be unique.')
+    else:
+        require({'bsim', 'cmg', 'img', 'soi'}.issubset(required_families),
+                'The default profile requires the four baseline families; select --library-ids for other entries.')
     points = [point for point in manifest['cases']
-              if any(device['library'] in FAMILIES for device in point['input']['devices'])]
-    required_families = FAMILIES.intersection(libraries)
-    require({'bsim', 'cmg', 'img', 'soi'}.issubset(required_families),
-            'The supplied manifest must include the four baseline families.')
+              if any(device['library'] in required_families for device in point['input']['devices'])]
     require({device['library'] for point in points for device in point['input']['devices']} == required_families,
             'Every advertised real-model library, including SOI 101 when present, requires actual cases.')
     args.output.mkdir(parents=True, exist_ok=False)
@@ -165,6 +172,8 @@ def verify(args):
                'oracleSHA256': digest(args.oracle), 'caseCount': len(points),
                'persistenceScope': 'Ordinary schema 2 JSON numbers retain finite nonzero binary64 bits; signed zero is numerically equal and encoder-canonicalized. API bits and precision explicit bit patterns are checked separately.',
                'requiredLibraryIDs': sorted(required_families),
+               'excludedLibraryIDs': sorted(set(libraries) - required_families),
+               'toolSHA256': digest(__file__),
                'evaluatedContextCount': sum(check['status'] == 'passed' for check in checks),
                'signedNoiseContextCount': sum(bool(check.get('signedDirectABINoise')) for check in checks),
                'rejectedRawNoiseCount': sum(check['status'] == 'consumer-rejected-raw-noise' for check in checks),
@@ -188,4 +197,6 @@ if __name__ == '__main__':
     parser.add_argument('--cli', type=Path, required=True)
     parser.add_argument('--oracle', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--library-ids', nargs='+',
+                        help='Explicit real-model library IDs; defaults to the retained baseline matrix plus advertised SOI 101')
     verify(parser.parse_args())

@@ -92,8 +92,8 @@ zero, so sampled derivative inference cannot satisfy the metadata contract.
 ## Precision Execution
 
 `OSDIPrecisionTests` owns scoped shared-slab views, exact worker acquisition,
-helper failure/cancellation and close behavior. `OSDI_PRECISION_TRANSPORT_WORKER`
-points to the C transport oracle; it does not qualify arithmetic.
+helper failure/cancellation and close behavior. `ProtocolFixtureCache`
+builds the tracked C transport oracle; it does not qualify arithmetic.
 `OSDI_PRECISION_MODEL`, `OSDI_PRECISION_WORKER` and
 `OSDI_PRECISION_SEMANTIC_SHA256` and `OSDI_PRECISION_NUMERIC_PROFILE_SHA256` bind the actual compiler compound-default fixture
 and statically linked numeric helper. Tests discriminate binary64-folded defaults,
@@ -170,3 +170,15 @@ operation mismatch, alias topology, budgets, cancellation and retained cleanup
 exercise the same exclusive owner and fixed slabs. Existing point tests remain
 unchanged and required. Local analytic fixtures do not qualify compact-model,
 entire-history or causal-circuit behavior.
+
+## Standalone Selection
+
+The [standalone verification contract](../../Tools/OSDIStandaloneVerification/DESIGN.md)
+owns selectors and fixture preparation. Protocol-only state, flags, diagnostics,
+noise, reactive metadata and precision transport tests use `ProtocolFixtureCache`
+without compiling VA models or capturing BSIM finite differences. Selected actual
+model tests retain all existing assertions and explicit required inputs. The dynamic
+family manifest accepts current SOI 101 without a legacy SOI artifact, while every
+supplied legacy case still runs. The original legacy four-family precision receipt
+regression has its own explicit selector; its CoreSpice-prefixed evidence schemas
+are external receipt formats, not a package/runtime dependency.

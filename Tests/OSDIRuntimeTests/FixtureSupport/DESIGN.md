@@ -32,7 +32,7 @@ concurrent test setup -> cache actor -> one retained preparation Task
 
 ## Contracts and Invariants
 
-All test suites use the same actor and preparation task. The test requires an existing executable selected by `OSDI_OPENVAF_COMPILER`;
+All test suites use the same actor and preparation task. Explicit model qualification requires an existing executable selected by `OSDI_OPENVAF_COMPILER`;
 there is no sibling-workspace compiler fallback. The builder receives explicit
 source/header/compiler/output paths and does not modify global environment settings. Preparation polls a monotonic twenty-five-second deadline, terminates on
 failure/cancellation and uses an independent task for its bounded cleanup window.
@@ -55,3 +55,10 @@ Builder-only qualification covers compilation of twenty-seven metadata libraries
 and two real OpenVAF models on the native host. Root-owned runtime tests establish the
 actual loader, storage and close behavior. Updating builder schema or root paths
 requires the manifest decoder and test setup to change together.
+
+## Standalone Selection
+
+The [standalone verification contract](../../../Tools/OSDIStandaloneVerification/DESIGN.md)
+owns explicit qualification selectors. Default metadata/protocol inputs need only
+the C compiler; requested actual-model qualification retains the original input
+validation and fails on missing compiler/artifact evidence.

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Bounded public paired-point qualification of the authentic SOI 101 image."""
+if not __debug__:
+    raise RuntimeError('SOI qualification requires assertion-enabled Python; optimized execution is unsupported')
+
 import argparse
 import copy
 import hashlib
@@ -79,46 +82,6 @@ def cold_refusal_controls(pairs):
     return results
 
 
-def build_oracle(driver, original_build, out, register_limit):
-    import difflib
-    out.mkdir(parents=True, exist_ok=False)
-    original = json.loads(original_build.read_text())
-    selected = {}
-    for item in original['inputs']:
-        snapshot = item['snapshot']
-        if Path(snapshot['path']).name in ['reference.c', 'OSDICompilerPrecision.h']:
-            assert driver.identity(snapshot['path']) == snapshot
-            selected[Path(snapshot['path']).name] = Path(snapshot['path'])
-    text = selected['reference.c'].read_text()
-    assert text.count('MAX_REGS=200000') == 1
-    assert register_limit >= 203736
-    changed = text.replace('MAX_REGS=200000', 'MAX_REGS=' + str(register_limit))
-    (out / 'reference.c').write_text(changed)
-    (out / 'OSDICompilerPrecision.h').write_bytes(selected['OSDICompilerPrecision.h'].read_bytes())
-    (out / 'admission-bound.diff').write_text(''.join(difflib.unified_diff(text.splitlines(True), changed.splitlines(True),
-        fromfile=str(selected['reference.c']), tofile=str(out / 'reference.c'))))
-    binary = out / 'precision-reference'
-    libraries = [Path('/opt/homebrew/lib/libmpfr.6.dylib'), Path('/opt/homebrew/lib/libgmp.10.dylib')]
-    command = ['/usr/bin/clang', '-std=c17', '-O1', '-Wall', '-Wextra', '-Werror',
-               '-I' + str(out), '-I/opt/homebrew/include', str(out / 'reference.c'),
-               *map(str, libraries), '-o', str(binary)]
-    execution = driver.run(command, out, 'compile', timeout=30)
-    result = {'schema': 'corespice.independent-precision-admission-extension.v1',
-              'originalBuild': driver.identity(original_build), 'originalSources': [driver.identity(v) for v in selected.values()],
-              'sources': [driver.identity(out / n) for n in selected], 'diff': driver.identity(out / 'admission-bound.diff'),
-              'compiler': driver.identity('/usr/bin/clang'), 'arithmeticLibraries': [driver.identity(x) for x in libraries],
-              'arithmeticHeaders': [driver.identity('/opt/homebrew/include/' + x) for x in ['mpfr.h', 'gmp.h']],
-              'execution': execution, 'scope': 'Only MAX_REGS changes from 200000 to ' + str(register_limit) + '; evaluation semantics unchanged.'}
-    if execution['exitCode'] != 0 or execution['timedOut']:
-        result['status'] = 'build_failed'
-        driver.write_json(out / 'receipt.json', result)
-        raise SystemExit(2)
-    result['binary'] = driver.identity(binary)
-    result['status'] = 'passed'
-    driver.write_json(out / 'receipt.json', result)
-    return binary
-
-
 def finalize(driver, point, admission_path, comparison_path, cold_refusals):
     original = json.loads((point / 'receipt.json').read_text())
     comparison = json.loads(Path(comparison_path).read_text())
@@ -127,8 +90,12 @@ def finalize(driver, point, admission_path, comparison_path, cold_refusals):
     assert comparison['workerReport']['sha256'] == sha(point / 'model-verification.json')
     admission = json.loads(Path(admission_path).read_text())
     assert admission['status'] == 'passed' and admission['binary']['sha256'] == comparison['independentBinary']['sha256']
+    controls_path = point / 'independent-controls/verification.json'
+    independent_controls = json.loads(controls_path.read_text())
+    assert independent_controls['passed'] and independent_controls['binary']['sha256'] == comparison['independentBinary']['sha256']
     compiler_receipt = json.loads(Path(original['inputs']['compile_receipt']['path']).read_text())
-    compiler = driver.identity(compiler_receipt['command'][0])
+    import native_build
+    compiler = native_build.identity(compiler_receipt['command'][0])
     assert compiler['sha256'] == compiler_receipt['compilerSHA256']
     pairs, cold_records = [], []
     for report_path in cold_refusals:
@@ -150,6 +117,7 @@ def finalize(driver, point, admission_path, comparison_path, cold_refusals):
              'selectedNumericProfile': original['workers']['optimized']['profile'],
              'modelVerification': driver.identity(point / 'model-verification.json'),
              'independentAdmission': driver.identity(admission_path),
+             'independentControls': driver.identity(controls_path),
              'independentComparison': driver.identity(comparison_path),
              'coldResourceRefusals': cold_records, 'coldRefusalValidationControls': controls,
              'cases': [{'id': name, 'request': driver.identity(point / (name + '-optimized-request.json')),
@@ -162,17 +130,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['cli', 'model', 'preparation', 'compile-receipt', 'source', 'acquisition',
                  'baseline-worker', 'baseline-profile', 'optimized-worker', 'optimized-profile',
-                 'semantic-profile', 'independent-original-build', 'independent-tools', 'output']:
+                 'semantic-profile', 'output']:
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--arena-bytes', type=int, required=True)
     parser.add_argument('--oracle-register-limit', type=int, required=True)
     parser.add_argument('--cold-resource-refusal', type=Path, action='append', required=True)
+    import native_build
+    native_build.arguments(parser)
     args = parser.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import verify_cli
-    sys.path.insert(0, str(args.independent_tools.resolve()))
-    import driver
-    import verify
+    import independent_replay as driver
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     staging = out / 'staging'
@@ -200,7 +168,7 @@ def main():
                      'numericProfileSHA256': workers['optimized']['numeric']}
     inputs = {key: driver.identity(getattr(args, key)) for key in
               ['cli', 'model', 'preparation', 'source', 'acquisition', 'compile_receipt',
-               'semantic_profile', 'independent_original_build']}
+               'semantic_profile']}
 
     def run(name, request):
         request_path, report_path = out / (name + '-request.json'), out / (name + '-report.json')
@@ -211,9 +179,14 @@ def main():
             child = subprocess.Popen(argv, stdout=stdout, stderr=stderr, start_new_session=True)
             try:
                 code = child.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                os.killpg(child.pid, signal.SIGKILL)
-                child.wait()
+            except BaseException as error:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait(timeout=5)
+                if not isinstance(error, subprocess.TimeoutExpired):
+                    raise
                 code = 124
         command = {'case': name, 'argv': argv, 'exitCode': code,
                    'seconds': time.monotonic() - started, 'timeoutSeconds': 30,
@@ -311,6 +284,7 @@ def main():
                 assert all(evaluations['baseline'][k]['bitPatterns'] == evaluations['optimized'][k]['bitPatterns'] for k in keys)
                 evaluation = evaluations['optimized']
                 worker_report['families'][case_id] = {'status': 0, 'exit': 0, 'precisionBits': 256,
+                    'arenaBytes': args.arena_bytes, 'maximumWork': request['options']['maximumWorkUnits'],
                     'programPath': str(out / (case_id + '.program')), 'programSHA256': program['programSHA256'],
                     'setupPath': str(out / (case_id + '.setup')), 'setupSHA256': program['setupSHA256'],
                     'semanticProfileSHA256': semantic, 'vectors': vectors, 'contexts': contexts,
@@ -325,16 +299,17 @@ def main():
     worker_report['succeeded'] = all(case['status'] == 'passed' for case in cases)
     save(out / 'model-verification.json', worker_report)
     independent_ok = False
-    if worker_report['families']:
+    if worker_report['succeeded']:
         try:
-            oracle = build_oracle(driver, args.independent_original_build, out / 'independent-oracle', args.oracle_register_limit)
-            verify.compare_worker(oracle, out / 'model-verification.json', out / 'independent')
+            oracle = driver.build(out / 'independent-oracle', args)
+            driver.selfchecks(oracle, out / 'independent-controls')
+            driver.compare_worker(oracle, out / 'model-verification.json', out / 'independent')
             independent_ok = True
         except Exception as error:
             save(out / 'independent-failure.json', {'reason': type(error).__name__ + ': ' + str(error)})
     assert sha(args.cli) == inputs['cli']['sha256'], 'CLI changed during experiment'
     result = {'schema': 'osdi.soi101.precision-point-qualification.v1',
-              'status': 'passed' if worker_report['succeeded'] and independent_ok else 'failed',
+              'status': 'pending-finalization' if worker_report['succeeded'] and independent_ok else 'failed',
               'scope': worker_report['scope'], 'inputs': inputs, 'workers': workers,
               'cases': cases, 'independent512FDeltaQ': independent_ok,
               'commands': driver.identity(out / 'commands.json'),
@@ -342,8 +317,15 @@ def main():
     if (out / 'independent/comparison.json').exists():
         result['independentComparison'] = driver.identity(out / 'independent/comparison.json')
     save(out / 'receipt.json', result)
-    if result['status'] == 'passed':
-        finalize(driver, out, out / 'independent-oracle/receipt.json', out / 'independent/comparison.json', args.cold_resource_refusal)
+    if result['status'] == 'pending-finalization':
+        try:
+            finalize(driver, out, out / 'independent-oracle/receipt.json', out / 'independent/comparison.json', args.cold_resource_refusal)
+        except Exception as error:
+            result['status'] = 'failed'
+            result['finalizationFailure'] = type(error).__name__ + ': ' + str(error)
+        else:
+            result['status'] = 'passed'
+        save(out / 'receipt.json', result)
     print(json.dumps({'status': result['status'], 'cases': [(c['id'], c['status'], c.get('failure')) for c in cases],
                       'independent512FDeltaQ': independent_ok, 'receipt': str(out / 'receipt.json')}))
     raise SystemExit(0 if result['status'] == 'passed' else 2)

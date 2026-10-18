@@ -1,0 +1,130 @@
+name: Standalone native verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: ordinary-debug
+            configuration: debug
+            precision: false
+            sanitizer: ''
+          - lane: precision-release
+            configuration: release
+            precision: true
+            sanitizer: ''
+          - lane: precision-address
+            configuration: debug
+            precision: true
+            sanitizer: address
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install and verify Swift 6.4.0 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import platform
+          import subprocess
+          import re
+          assert platform.machine() == 'arm64', 'macos-26 must provide arm64'
+          assert int(platform.mac_ver()[0].split('.')[0]) >= 26
+          package = pathlib.Path(os.environ['RUNNER_TEMP']) / 'swift-6.4.0-RELEASE-osx.pkg'
+          url = 'https://download.swift.org/swift-6.4.0-release/xcode/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE-osx.pkg'
+          subprocess.run(['curl', '--fail', '--location', '--retry', '2', '--max-time', '180',
+                          '--output', str(package), url], check=True, timeout=200)
+          signature = subprocess.check_output(['pkgutil', '--check-signature', str(package)], text=True, timeout=30)
+          assert 'Developer ID Installer: Swift Open Source (V9AUD2URP3)' in signature, signature
+          subprocess.run(['installer', '-target', 'CurrentUserHomeDirectory', '-pkg', str(package)],
+                         check=True, timeout=300)
+          swift = pathlib.Path.home() / 'Library/Developer/Toolchains/swift-6.4.0-RELEASE.xctoolchain/usr/bin/swift'
+          version = subprocess.check_output([str(swift), '--version'], text=True, timeout=30)
+          assert re.search(r'\bSwift version 6\.4(?:\.0)?(?:\s|\()', version) and 'DEVELOPMENT' not in version, version
+          print(version)
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'OSDI_CI_SWIFT={swift}\n')
+          PY
+      - name: Install numeric build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          subprocess.run(['brew', 'install', 'gmp', 'mpfr', 'pkgconf'], check=True, timeout=600)
+          subprocess.run(['pkg-config', '--modversion', 'gmp', 'mpfr'], check=True, timeout=30)
+          PY
+      - name: Run bounded standalone verification
+        env:
+          OSDI_CI_LANE: ${{ matrix.lane }}
+          OSDI_CI_CONFIGURATION: ${{ matrix.configuration }}
+          OSDI_CI_PRECISION: ${{ matrix.precision }}
+          OSDI_CI_SANITIZER: ${{ matrix.sanitizer }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--swift "$OSDI_CI_SWIFT" --clang /usr/bin/clang
+                --output "$GITHUB_WORKSPACE/.verification/ci-$OSDI_CI_LANE"
+                --configuration "$OSDI_CI_CONFIGURATION" --jobs 2 --timeout-seconds 1200)
+          if [[ "$OSDI_CI_PRECISION" == true ]]; then args+=(--precision); fi
+          if [[ -n "$OSDI_CI_SANITIZER" ]]; then args+=(--sanitize "$OSDI_CI_SANITIZER"); fi
+          python3 Tools/OSDIStandaloneVerification/run.py "${args[@]}"
+      - name: Run separate public-product consumer
+        if: matrix.lane == 'ordinary-debug'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          manifest = (root / 'Package.swift').read_text()
+          bindings = re.findall(r'\.package\(url:\s*"([^"]*CircuiteFoundation[^"]*)",\s*revision:\s*"([0-9a-f]{40})"', manifest)
+          assert len(bindings) == 1, 'Expected one exact CircuiteFoundation URL/revision'
+          url, revision = bindings[0]
+          source_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=30).strip()
+          # A detached external clone checks public products; remote release availability is a separate gate.
+          subprocess.run([sys.executable, 'Tools/OSDIConsumerVerification/verify_consumer.py',
+                          '--source-url', root.as_uri(), '--source-revision', source_revision,
+                          '--foundation-url', url, '--foundation-revision', revision,
+                          '--scratch', str(Path(os.environ['RUNNER_TEMP']) / 'osdi-consumer'),
+                          '--swift', os.environ['OSDI_CI_SWIFT'], '--clang', '/usr/bin/clang',
+                          '--timeout-seconds', '1200'], check=True, timeout=2400)
+          PY
+      - name: Retain receipts and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.lane }}
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            .verification/ci-${{ matrix.lane }}/receipt.json
+            .verification/ci-${{ matrix.lane }}/*.stdout
+            .verification/ci-${{ matrix.lane }}/*.stderr
+            .verification/ci-${{ matrix.lane }}/fixtures/manifest.json
+            .verification/ci-${{ matrix.lane }}/numeric/receipt.json
+            .verification/ci-${{ matrix.lane }}/numeric/numeric-profile.json
+            ${{ runner.temp }}/osdi-consumer/receipt.json
+            ${{ runner.temp }}/osdi-consumer/failure.json

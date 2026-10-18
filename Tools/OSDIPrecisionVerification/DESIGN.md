@@ -6,6 +6,14 @@ Parent: [swift-osdi](../../DESIGN.md). No children. Own reproducible static buil
 ## Responsibilities and Boundaries
 Build the same production C sources using installed static MPFR/GMP archives. Preserve exact compiler, SDK, headers, archives, source and worker identities. Test actual child IPC and independent high-precision mathematical references; complete model/circuit qualification remains owned by CoreSpice.
 
+`build_worker.py` accepts explicit `--cc`, `--sdk`, `--mpfr-prefix` and
+`--gmp-prefix` selections. An omitted numeric prefix is resolved through the
+selected `--pkg-config` executable's `includedir` and `libdir`; discovery never
+installs dependencies. The native macOS qualification still links exact static
+archives and rejects non-system dynamic dependencies. Receipts retain the actual
+compiler, SDK settings, discovery tool, numeric headers/archives and source hashes
+and refuse changes to those inputs during the build.
+
 ## Related Designs
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
@@ -20,6 +28,35 @@ interval operators -> separate 512-bit MPFR reference -> sampled containment
 
 ## Contracts and Invariants
 All subprocesses have external timeouts. Worker failure exposes no successful view. The nonlinear sub-ULP fixture distinguishes complete evaluation from F(high)+G(high)*low. Source setup/phi/resource fixtures reject plausible incomplete implementations. Expression identity tests include a BULK-shaped duplicate division/power predicate, an unequal expression with overlapping enclosures, colliding hash buckets, work refusal and fixed identity-capacity exhaustion. Inactive-value/control fixtures require a disabled undefined intermediate to succeed while demanded values, unsupported control regions, effects, loops and external entries fail. Normalized candidate/reference pairs are asserted before real-model runs. The projection regression covers a rounded low component reaching an odd high component midpoint.
+
+`verify_models.py --manifest` replays every explicitly supplied `families` entry,
+with exact program/setup identities, four coordinate vectors, two contexts and
+per-entry precision/arena/work limits. `--families` records a deliberate subset.
+The existing `--snapshots` directory profile retains the four legacy regression
+points, including SOI 4.7.0; it does not imply latest-model qualification.
+
+`independent_replay.py build` compiles the tool-local independent `reference.c`
+against only the public precision-program schema and selected static MPFR/GMP
+archives. `--oracle-register-limit` makes admission capacity explicit and does not
+alter evaluation semantics. The build receipt binds compiler, source/header
+snapshots, numeric libraries/headers, SDK settings and resulting binary. Generic
+success/refusal controls precede SOI 101 numerical comparison.
+`verify_soi101.py` uses this local helper without private sibling imports; its
+compiler/SDK/numeric selections use the same explicit discovery interface as the
+worker builder. The owned generic interpreter and minimal replay/comparison code
+were transferred from CoreSpice verification tools; `oracle-provenance.json`
+retains original paths, SHA-256 identities and the repository HEAD separately
+from the untracked/ignored source content. Package licensing covers the transferred
+owned code. No model physics or circuit solver is copied into these helpers.
+The SOI qualification receipt remains pending until independent build/control/
+comparison bindings and all four cold-resource refusal pairs pass finalization.
+A finalization failure records a failed receipt, even when the positive point
+evaluations passed. Exact independent replay inputs are rechecked after the child
+exits; changed inputs cannot publish successful numerical evidence.
+`verify_soi101.py` requires Python's normal assertion-enabled execution profile.
+The module refuses optimized execution (`-O`, `-OO` or `PYTHONOPTIMIZE`) before
+imports, evidence reads/writes or child startup, preserving the binding and
+qualification checks implemented with assertions.
 
 ## Verification and Change Impact
 Run build_worker.py with --output-dir, then verify_worker.py with --worker under an external timeout. ArithmeticTests.c links the same production arithmetic/arena/identity sources. verify_models.py reuses exact native snapshot bytes and records explicit raw-point vectors, both contexts, all output slabs, first-request timing and optional OS-heap interposition samples; these points are not circuit solutions. Repeat using address/undefined sanitizers. Record steady process/IPC latency separately from arithmetic allocation requests; zero total allocation is not assumed.

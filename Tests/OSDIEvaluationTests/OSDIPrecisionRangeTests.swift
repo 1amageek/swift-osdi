@@ -4,7 +4,7 @@ import OSDIContracts
 @testable import OSDIRuntime
 import Testing
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["OSDI_PRECISION_QUALIFICATION"] == "1", "Requires explicit OSDI_PRECISION_QUALIFICATION=1 and the real GMP/MPFR worker"), .serialized, .timeLimit(.minutes(1)))
 struct OSDIPrecisionRangeTests {
     private struct Fixtures: Decodable {
         struct Entry: Decodable {

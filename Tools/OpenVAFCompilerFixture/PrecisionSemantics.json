@@ -1,0 +1,31 @@
+{
+  "schema": "openvaf.source-precision.semantic-profile.v1",
+  "programVersion": 1,
+  "literalSemantics": "exact-frontend-decoded-binary64-int32-utf8",
+  "injectedPrimitiveDefaults": "compiler-flagged-exact-bits-instance-then-model-then-default-no-native-cache",
+  "structuralTopology": "cfg-identities-and-liveness-before-metadata-capture-source-proved-primitive-zero-contributions",
+  "compoundSemantics": "retain-source-mir-before-f64-folding-and-native-cache-split",
+  "builtinCompounds": "explicit-ln-limexp-cutoff-and-vt-kb-div-q",
+  "stateProfile": "stateless",
+  "stagesPerEndpoint": [
+    "model-setup",
+    "instance-setup",
+    "evaluate"
+  ],
+  "derivatives": "original-dae-automatic-differentiation-ssa-at-compensated-point",
+  "inputs": "exact-scoped-parameter-value-given-temperature-connectivity-simulation-context-and-hi-lo-coordinates",
+  "collapseAuthority": "shared-prefold-native-operating-point-value-and-control-taint-preparation-only-hints-with-current-implications",
+  "outputRoots": "raw-F-Q-G-C-resolved-parameter-collapse-and-maximum-step",
+  "control": "typed-cfg-simultaneous-predecessor-phi-definite-boolean-selection",
+  "integerSemantics": "modulo32-signed-divrem-logical-right-shift-real-cast-ties-away-truncation-explicit",
+  "extensionSymbols": [
+    "OSDI_PRECISION_V1_COUNT",
+    "OSDI_PRECISION_V1"
+  ],
+  "numericContract": "directed-enclosure-F-and-delta-Q-original-tolerances-inexact-Newton-G-C-midpoints",
+  "failures": "unsupported-domain-ambiguous-precision-work-storage-and-helper-exit-are-terminal",
+  "inactiveArithmeticPolicy": {
+    "authority": "swift-osdi/Sources/COSDIPrecision/ProgramEvaluation/DESIGN.md",
+    "semantics": "deferred-domain-and-indeterminate-value-status-selected-phi-select-roots-only;invalid-control-only-proved-finite-acyclic-pure-convergent-regions;effects-facts-resources-immediate"
+  }
+}

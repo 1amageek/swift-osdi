@@ -1,0 +1,1356 @@
+diff --git a/melange/core/src/veriloga.rs b/melange/core/src/veriloga.rs
+index c679dce..ff8b326 100644
+--- a/melange/core/src/veriloga.rs
++++ b/melange/core/src/veriloga.rs
+@@ -74,6 +74,8 @@ pub fn compile_va(path: &Utf8Path, opts: &Opts) -> Result<Vec<Box<dyn DeviceImpl
+             .context("openvaf does currently not support this hardware/os")?,
+         target_cpu: "native".to_owned(),
+         dry_run: false,
++        full_residuals: false,
++        precision_profile: None,
+         dump_mir: false,
+         dump_unopt_mir: false,
+         dump_ir: false,
+diff --git a/openvaf/hir_lower/src/expr.rs b/openvaf/hir_lower/src/expr.rs
+index 14780cc..145c9c3 100644
+--- a/openvaf/hir_lower/src/expr.rs
++++ b/openvaf/hir_lower/src/expr.rs
+@@ -481,7 +481,12 @@ impl BodyLoweringCtx<'_, '_, '_> {
+             BuiltIn::limexp => {
+                 let arg0 = self.lower_expr(args[0]);
+                 // let (state, store) = self.stateful_callback(CallBackKind::StoreState);
+-                let cut_off = self.ctx.fconst(1e30f64.ln());
++                let cut_off = if self.ctx.intern.precision_semantics {
++                    let value = self.ctx.fconst(1e30);
++                    self.ctx.ins().ln(value)
++                } else {
++                    self.ctx.fconst(1e30f64.ln())
++                };
+                 let off = self.ctx.fconst(1e30f64);
+ 
+                 // let change = self.ctx.ins().fsub(arg0, state);
+@@ -769,7 +774,13 @@ impl BodyLoweringCtx<'_, '_, '_> {
+                 const KB: f64 = 1.3806488e-23;
+                 const Q: f64 = 1.602176565e-19;
+ 
+-                let fac = self.ctx.fconst(KB / Q);
++                let fac = if self.ctx.intern.precision_semantics {
++                    let kb = self.ctx.fconst(KB);
++                    let q = self.ctx.fconst(Q);
++                    self.ctx.ins().fdiv(kb, q)
++                } else {
++                    self.ctx.fconst(KB / Q)
++                };
+                 let temp = match args.get(0) {
+                     Some(temp) => self.lower_expr(*temp),
+                     None => self.ctx.use_param(ParamKind::Temperature),
+diff --git a/openvaf/hir_lower/src/lib.rs b/openvaf/hir_lower/src/lib.rs
+index a3b0e4d..27e65ff 100644
+--- a/openvaf/hir_lower/src/lib.rs
++++ b/openvaf/hir_lower/src/lib.rs
+@@ -264,6 +264,7 @@ pub struct AbsDelayInfo {
+ /// information from the HIR. This allows the MIR to remain independent of the frontend/HIR
+ #[derive(Debug, PartialEq, Clone)]
+ pub struct HirInterner {
++    pub precision_semantics: bool,
+     pub outputs: IndexMap<PlaceKind, PackedOption<Value>, BuildHasherDefault<FxHasher>>,
+     pub params: TiMap<Param, ParamKind, Value>,
+     pub callbacks: TiSet<FuncRef, CallBackKind>,
+@@ -287,6 +288,7 @@ pub type LiveParams<'a> = FilterMap<
+ impl Default for HirInterner {
+     fn default() -> Self {
+         Self {
++            precision_semantics: false,
+             outputs: IndexMap::with_hasher(BuildHasherDefault::<FxHasher>::default()),
+             params: TiMap::default(),
+             callbacks: TiSet::default(),
+@@ -477,6 +479,7 @@ pub struct MirBuilder<'a> {
+     /// When set, lower the module's imperative `initial`/`final` procedural body
+     /// (the standalone runner lane) instead of the analog DAE bodies.
+     procedural: bool,
++    precision_semantics: bool,
+ }
+ 
+ impl<'a> MirBuilder<'a> {
+@@ -496,11 +499,17 @@ impl<'a> MirBuilder<'a> {
+             lower_equations: false,
+             tag_writes: false,
+             procedural: false,
++            precision_semantics: false,
+         }
+     }
+ 
+     /// Lower the module's standalone `initial`/`final` procedural body instead of the
+     /// analog DAE bodies. Used by the VerilogA runner (`openvaf-r run`).
++    pub fn with_precision_semantics(mut self) -> Self {
++        self.precision_semantics = true;
++        self
++    }
++
+     pub fn with_procedural(mut self) -> Self {
+         self.procedural = true;
+         self
+@@ -546,6 +555,7 @@ impl<'a> MirBuilder<'a> {
+     pub fn build(self, literals: &mut Rodeo) -> (Function, HirInterner) {
+         let mut func = Function::default();
+         let mut interner = HirInterner::default();
++        interner.precision_semantics = self.precision_semantics;
+ 
+         let mut ctx_;
+         let ctx = if let Some(ctx) = self.ctx {
+diff --git a/openvaf/hir_lower/src/stmt.rs b/openvaf/hir_lower/src/stmt.rs
+index 6220575..93fe392 100644
+--- a/openvaf/hir_lower/src/stmt.rs
++++ b/openvaf/hir_lower/src/stmt.rs
+@@ -392,7 +392,14 @@ impl BodyLoweringCtx<'_, '_, '_> {
+             F_ZERO,
+         );
+ 
+-        let rhs = lower_rhs(self);
++        // HIR proves only primitive integer/real zero literals here. Preserve
++        // that source fact without requiring binary64 arithmetic folding of an
++        // integer-to-real cast; compound expressions still lower in full.
++        let rhs = if self.ctx.intern.precision_semantics && rhs_is_zero {
++            F_ZERO
++        } else {
++            lower_rhs(self)
++        };
+         if rhs == F_ZERO {
+             return;
+         }
+diff --git a/openvaf/openvaf-driver/src/cli_def.rs b/openvaf/openvaf-driver/src/cli_def.rs
+index 88d98d4..5aa7062 100644
+--- a/openvaf/openvaf-driver/src/cli_def.rs
++++ b/openvaf/openvaf-driver/src/cli_def.rs
+@@ -26,6 +26,9 @@ pub fn main_command() -> Command {
+             output(),
+             batchmode(),
+             dry_run(),
++            full_residuals(),
++            Arg::new(PRECISION_PROFILE).long(PRECISION_PROFILE).num_args(1)
++                .help("Emit a source-faithful precision-v1 program with a 64-hex semantic profile digest."),
+             dump_mir(),
+             dump_unopt_mir(),
+             dump_ir(),
+@@ -49,6 +52,8 @@ pub fn main_command() -> Command {
+ pub const INTERFACE: &str = "interface";
+ pub const BATCHMODE: &str = "batchmode";
+ pub const DRYRUN: &str = "dry-run";
++pub const PRECISION_PROFILE: &str = "precision-v1";
++pub const FULL_RESIDUALS: &str = "full-residuals";
+ pub const DUMPMIR: &str = "dump-mir";
+ pub const DUMPUNOPTMIR: &str = "dump-unopt-mir";
+ pub const DUMPIR: &str = "dump-ir";
+@@ -95,6 +100,11 @@ fn dry_run() -> Arg {
+         .long_help("Run compilation without producing any output.\nUsed for testing.")
+ }
+ 
++fn full_residuals() -> Arg {
++    flag(FULL_RESIDUALS, FULL_RESIDUALS)
++        .help("Preserve full residuals and derivatives for internal small-signal coordinates.")
++}
++
+ fn dump_mir() -> Arg {
+     flag(DUMPMIR, "dump-mir")
+         .help("Dump MIR during compilation.")
+diff --git a/openvaf/openvaf-driver/src/cli_process.rs b/openvaf/openvaf-driver/src/cli_process.rs
+index b617b3f..c60e78a 100644
+--- a/openvaf/openvaf-driver/src/cli_process.rs
++++ b/openvaf/openvaf-driver/src/cli_process.rs
+@@ -11,8 +11,8 @@ use termcolor::{Color, ColorChoice, ColorSpec, WriteColor};
+ 
+ use crate::cli_def::{
+     ALLOW, BATCHMODE, CACHE_DIR, CODEGEN, DEFINE, DENY, DRYRUN, DUMPIR, DUMPMIR, DUMPUNOPTIR,
+-    DUMPUNOPTMIR, INCLUDE, INPUT, LINTS, OPT_LVL, OUTPUT, SUPPORTED_TARGETS, TARGET, TARGET_CPU,
+-    WARN,
++    DUMPUNOPTMIR, FULL_RESIDUALS, PRECISION_PROFILE, INCLUDE, INPUT, LINTS, OPT_LVL, OUTPUT, SUPPORTED_TARGETS,
++    TARGET, TARGET_CPU, WARN,
+ };
+ use crate::{CompilationDestination, Opts};
+ 
+@@ -107,6 +107,16 @@ pub fn matches_to_opts(matches: ArgMatches) -> Result<Opts> {
+     let target_cpu: String =
+         matches.get_one(TARGET_CPU).cloned().unwrap_or_else(|| default_cpu.to_owned());
+ 
++    let precision_profile = matches.get_one::<String>(PRECISION_PROFILE).map(|value| {
++        if value.len()!=64 || !value.bytes().all(|b|b.is_ascii_hexdigit()) {
++            bail!("precision-v1 requires exactly 64 hexadecimal digits");
++        }
++        let mut digest=[0u8;32];
++        for (index,byte) in digest.iter_mut().enumerate() {
++            *byte=u8::from_str_radix(&value[index*2..index*2+2],16)?;
++        }
++        Ok(digest)
++    }).transpose()?;
+     Ok(Opts {
+         input,
+         lints,
+@@ -122,6 +132,8 @@ pub fn matches_to_opts(matches: ArgMatches) -> Result<Opts> {
+         dump_ir: matches.get_flag(DUMPIR),
+         dump_unopt_ir: matches.get_flag(DUMPUNOPTIR),
+         dry_run: matches.get_flag(DRYRUN),
++        full_residuals: matches.get_flag(FULL_RESIDUALS),
++        precision_profile,
+     })
+ }
+ 
+diff --git a/openvaf/openvaf-driver/src/main.rs b/openvaf/openvaf-driver/src/main.rs
+index 88cb7ff..343a852 100644
+--- a/openvaf/openvaf-driver/src/main.rs
++++ b/openvaf/openvaf-driver/src/main.rs
+@@ -32,6 +32,7 @@ pub fn main() {
+         .filter_level(log::LevelFilter::Off)
+         .parse_env(env)
+         .init();
++    let precision_requested = matches.get_one::<String>(cli_def::PRECISION_PROFILE).is_some();
+     match wrapped_main(matches) {
+         Ok(err_code) => exit(err_code),
+         Err(err) => {
+@@ -52,6 +53,7 @@ pub fn main() {
+             write!(&mut stderr, ":").unwrap();
+             stderr.set_color(&ColorSpec::new()).unwrap();
+             writeln!(&mut stderr, " failed to compile {input}").unwrap();
++            if precision_requested { exit(DATA_ERROR); }
+         }
+     }
+ }
+diff --git a/openvaf/openvaf-driver/tests/cli.rs b/openvaf/openvaf-driver/tests/cli.rs
+index 61a0dc2..e6ab1f1 100644
+--- a/openvaf/openvaf-driver/tests/cli.rs
++++ b/openvaf/openvaf-driver/tests/cli.rs
+@@ -57,6 +57,7 @@ harness! {
+              // "--dump-json",
+              "--supported-targets",
+              "--batch",
++             "--full-residuals",
+              "--batch --cache-dir sourcegen",
+              "-O 0",
+              "-O 1",
+diff --git a/openvaf/openvaf/src/cache.rs b/openvaf/openvaf/src/cache.rs
+index c838985..fdc79ff 100644
+--- a/openvaf/openvaf/src/cache.rs
++++ b/openvaf/openvaf/src/cache.rs
+@@ -51,5 +51,12 @@ fn hash(db: &CompilationDB, defines: &[String]) -> md5::Digest {
+ pub fn file_name(db: &CompilationDB, opts: &Opts) -> String {
+     let hash = u128::from_ne_bytes(*hash(db, &opts.defines));
+     let hash = base_n::encode(hash, base_n::CASE_INSENSITIVE);
+-    format!("{}.osdi", hash)
++    if let Some(profile) = opts.precision_profile {
++        let profile: String=profile.iter().map(|v|format!("{v:02x}")).collect();
++        format!("{}.precision-v1-{}.osdi",hash,profile)
++    } else if opts.full_residuals {
++        format!("{}.full-residuals.osdi", hash)
++    } else {
++        format!("{}.osdi", hash)
++    }
+ }
+diff --git a/openvaf/openvaf/src/lib.rs b/openvaf/openvaf/src/lib.rs
+index 34f4583..34fbca1 100644
+--- a/openvaf/openvaf/src/lib.rs
++++ b/openvaf/openvaf/src/lib.rs
+@@ -48,6 +48,8 @@ pub enum CompilationTermination {
+ #[derive(Debug, Clone)]
+ pub struct Opts {
+     pub dry_run: bool,
++    pub full_residuals: bool,
++    pub precision_profile: Option<[u8;32]>,
+     pub defines: Vec<String>,
+     pub codegen_opts: Vec<String>,
+     pub lints: Vec<(String, LintLevel)>,
+@@ -213,7 +215,9 @@ pub fn compile(opts: &Opts) -> Result<CompilationTermination> {
+         opts.dump_unopt_mir,
+         opts.dump_ir,
+         opts.dump_unopt_ir,
+-    );
++        opts.full_residuals || opts.precision_profile.is_some(),
++        opts.precision_profile,
++    ).map_err(anyhow::Error::msg)?;
+ 
+     // Dump natures, disciplines, and their attributes
+     /*
+diff --git a/openvaf/openvaf/tests/integration.rs b/openvaf/openvaf/tests/integration.rs
+index 1d67e87..56b224a 100644
+--- a/openvaf/openvaf/tests/integration.rs
++++ b/openvaf/openvaf/tests/integration.rs
+@@ -31,6 +31,8 @@ fn compile_and_load(root_file: &Utf8Path) -> &'static OsdiDescriptor {
+         ),
+         target_cpu: "native".to_owned(),
+         dry_run: false,
++        full_residuals: false,
++        precision_profile: None,
+         dump_mir: false,
+         dump_unopt_mir: false,
+         dump_ir: false,
+diff --git a/openvaf/osdi/src/lib.rs b/openvaf/osdi/src/lib.rs
+index 80ac86e..20815a1 100644
+--- a/openvaf/osdi/src/lib.rs
++++ b/openvaf/osdi/src/lib.rs
+@@ -49,6 +49,7 @@ mod eval;
+ mod load;
+ mod ndatable;
+ mod noise;
++mod precision;
+ mod setup;
+ 
+ const OSDI_VERSION: (u32, u32) = (0, 4);
+@@ -82,15 +83,27 @@ pub fn compile<'a>(
+     dump_unopt_mir: bool,
+     dump_ir: bool,
+     dump_unopt_ir: bool,
+-) -> (Vec<Utf8PathBuf>, Vec<CompiledModule<'a>>, Rodeo) {
++    full_residuals: bool,
++    precision_profile: Option<[u8; 32]>,
++) -> Result<(Vec<Utf8PathBuf>, Vec<CompiledModule<'a>>, Rodeo), String> {
+     initialize_llvm();
+     let mut literals = Rodeo::new();
+     let mut lim_table = TiSet::default();
+     let mnames: Vec<_> = modules.iter().map(|m| m.module.name(db)).collect();
++    let precision_modules: Option<Vec<_>> = precision_profile.map(|_| modules.iter()
++        .map(|module| sim_back::precision::PrecisionModule::new(db,module,&mut literals)).collect());
+     let modules: Vec<_> = modules
+         .iter()
+         .map(|module| {
+-            let mir = CompiledModule::new(db, module, &mut literals, dump_unopt_mir, dump_mir);
++            let mir = CompiledModule::new_with_precision(
++                db,
++                module,
++                &mut literals,
++                dump_unopt_mir,
++                dump_mir,
++                full_residuals,
++                precision_profile.is_some(),
++            );
+             for cb in mir.intern.callbacks.iter() {
+                 if let CallBackKind::BuiltinLimit { name, num_args } = *cb {
+                     lim_table.ensure(OsdiLimFunction { name, num_args: num_args - 2 });
+@@ -137,6 +150,7 @@ pub fn compile<'a>(
+     // Build natures, disciplines, and attributes vectors, intern strings in Rodeo
+     let (natures_vec, disciplines_vec, attributes_vec) = nda_arrays(&*db, &mut literals);
+ 
++    let mut precision_error = None;
+     rayon_core::scope(|scope| {
+         let db = db;
+         let literals_ = &literals;
+@@ -271,6 +285,18 @@ pub fn compile<'a>(
+         let cx = new_codegen(back, &llmod, &literals);
+         let tys = OsdiTys::new(&cx, NonNull::from(target_data).as_ptr());
+ 
++        if let (Some(modules), Some(profile)) = (&precision_modules, precision_profile) {
++            let mut programs = Vec::new();
++            for (index, (module, precise)) in osdi_modules.iter().zip(modules).enumerate() {
++                let unit = OsdiCompilationUnit::new(&db,module,&cx,&tys,false);
++                match precision::serialize(&unit,precise,&literals,index as u32,profile) {
++                    Ok(program) => programs.push(program),
++                    Err(error) => { precision_error = Some(error); return; }
++                }
++            }
++            precision::export(&cx,&programs);
++        }
++
+         let descriptors: Vec<_> = osdi_modules
+             .iter()
+             .map(|module| {
+@@ -416,7 +442,8 @@ pub fn compile<'a>(
+ 
+     paths.push(main_file);
+     unsafe { LLVMDisposeTargetData(NonNull::from(target_data).as_ptr()) };
+-    (paths, compiled_modules, literals)
++    if let Some(error) = precision_error { return Err(error); }
++    Ok((paths, compiled_modules, literals))
+ }
+ 
+ impl OsdiModule<'_> {
+diff --git a/openvaf/osdi/src/metadata.rs b/openvaf/osdi/src/metadata.rs
+index 7cf7514..dfcbc24 100644
+--- a/openvaf/osdi/src/metadata.rs
++++ b/openvaf/osdi/src/metadata.rs
+@@ -520,7 +520,7 @@ impl OsdiModule<'_> {
+     }
+ }
+ 
+-fn sim_unknown_info(
++pub(crate) fn sim_unknown_info(
+     unknown: SimUnknownKind,
+     residual_nature_kind: ResidualNatureKind,
+     db: &CompilationDB,
+diff --git a/openvaf/osdi/src/precision.rs b/openvaf/osdi/src/precision.rs
+new file mode 100644
+index 0000000..47c0532
+--- /dev/null
++++ b/openvaf/osdi/src/precision.rs
+@@ -0,0 +1,450 @@
++//! Independent, pointer-free source precision program serialization.
++use std::collections::{HashMap, HashSet};
++use hir::{CompilationDB, Parameter, Type};
++use hir_lower::{CallBackKind, HirInterner, ParamKind, PlaceKind};
++use lasso::Rodeo;
++use mir::{Block, Const, Function, InstructionData, Opcode, Value, ValueDef};
++use sim_back::{precision::{PrecisionFunction, PrecisionModule}, SimUnknownKind};
++use crate::{compilation_unit::OsdiCompilationUnit, inst_data::OsdiInstanceParam};
++const NONE: u32 = u32::MAX;
++const HEADER_BYTES: usize = 248;
++
++fn words(values: &[u32]) -> Vec<u8> {
++    values.iter().flat_map(|v| v.to_le_bytes()).collect()
++}
++fn type_id(ty: &Type) -> Result<u32, String> {
++    match ty { Type::Real => Ok(1), Type::Integer => Ok(2), Type::Bool => Ok(3),
++        Type::String => Ok(4), _ => Err(format!("precision: unsupported type {ty:?}")) }
++}
++
++#[derive(Default)]
++struct Tables {
++    registers: Vec<u8>, constants: Vec<u8>, inputs: Vec<u8>, functions: Vec<u8>,
++    blocks: Vec<u8>, instructions: Vec<u8>, phi_edges: Vec<u8>, roots: Vec<u8>,
++    parameters: Vec<u8>, nodes: Vec<u8>, strings: Vec<u8>,
++}
++impl Tables {
++    fn string(&mut self, value: &str) -> (u32, u32) {
++        let offset = self.strings.len() as u32;
++        self.strings.extend_from_slice(value.as_bytes());
++        (offset, value.len() as u32)
++    }
++    fn root(&mut self, function: u32, kind: u32, value: u32, row: u32, col: u32) -> u32 {
++        let id = self.roots.len() as u32 / 24;
++        self.roots.extend(words(&[function, kind, value, row, col, 0])); id
++    }
++    fn input(&mut self, function: u32, destination: u32, kind: u32, index: u32, aux: u32) {
++        self.inputs.extend(words(&[function, destination, kind, index, aux, 0]));
++    }
++    fn register(&mut self, ty: u32) -> u32 {
++        let result = self.registers.len() as u32 / 8;
++        self.registers.extend(words(&[ty, 0])); result
++    }
++    fn finish(self, descriptor: u32, nodes: u32, profile: [u8; 32]) -> Result<Vec<u8>, String> {
++        let mut output = Vec::new();
++        output.extend_from_slice(b"OSDIPR1\0");
++        output.extend(words(&[1, HEADER_BYTES as u32]));
++        output.extend_from_slice(&0u64.to_le_bytes());
++        output.extend(words(&[1, descriptor, nodes, 0]));
++        output.extend_from_slice(&profile);
++        let sections = [(&self.registers,8),(&self.constants,16),(&self.inputs,24),
++            (&self.functions,24),(&self.blocks,40),(&self.instructions,24),
++            (&self.phi_edges,16),(&self.roots,24),(&self.parameters,32),
++            (&self.nodes,16),(&self.strings,1)];
++        let mut offset = HEADER_BYTES as u64;
++        for (bytes, stride) in sections {
++            if bytes.len() % stride != 0 || bytes.len()/stride > u32::MAX as usize {
++                return Err("precision: table geometry overflow".into());
++            }
++            output.extend_from_slice(&offset.to_le_bytes());
++            output.extend(words(&[(bytes.len()/stride) as u32, stride as u32]));
++            offset = offset.checked_add(bytes.len() as u64)
++                .ok_or("precision: program byte count overflow")?;
++            offset = (offset + 7) & !7;
++        }
++        assert_eq!(output.len(), HEADER_BYTES);
++        for (bytes, _) in sections {
++            output.extend(bytes);
++            while output.len() % 8 != 0 { output.push(0); }
++        }
++        let count = output.len() as u64;
++        output[16..24].copy_from_slice(&count.to_le_bytes());
++        Ok(output)
++    }
++}
++
++struct Serializer<'a, 'db> {
++    tables: Tables,
++    db: &'db CompilationDB,
++    literals: &'a Rodeo,
++    parameter_ids: HashMap<(Parameter, u32), u32>,
++    raw_nodes: HashMap<SimUnknownKind, u32>,
++    model_roots: HashMap<Parameter, u32>,
++    instance_roots: HashMap<Parameter, u32>,
++    builtin_parameters: HashMap<hir::ParamSysFun, u32>,
++}
++
++impl Serializer<'_, '_> {
++    fn parameter(&self, parameter: Parameter, stage: u32) -> Result<u32, String> {
++        let scope = if stage == 1 { 1 } else if self.parameter_ids.contains_key(&(parameter,2)) { 2 } else { 1 };
++        self.parameter_ids.get(&(parameter,scope)).copied()
++            .ok_or_else(|| format!("precision: missing parameter {}", parameter.name(self.db)))
++    }
++    fn prior(&self, parameter: Parameter, stage: u32) -> Option<u32> {
++        if stage == 2 { self.model_roots.get(&parameter).copied() }
++        else { self.instance_roots.get(&parameter).or_else(|| self.model_roots.get(&parameter)).copied() }
++    }
++    fn node(&self, node: SimUnknownKind) -> Result<u32, String> {
++        self.raw_nodes.get(&node).copied().ok_or_else(|| format!("precision: unmapped node {node:?}"))
++    }
++    fn param_type(&self, kind: ParamKind) -> Result<u32, String> {
++        match kind { ParamKind::Param(parameter) => type_id(&parameter.ty(self.db)),
++            ParamKind::ParamGiven{..}|ParamKind::PortConnected{..}|ParamKind::EnableIntegration|ParamKind::EnableLim => Ok(3),
++            ParamKind::Abstime|ParamKind::Temperature|ParamKind::Voltage{..}|ParamKind::Current(_)|ParamKind::ImplicitUnknown(_)|ParamKind::ParamSysFun(_) => Ok(1),
++            _ => Err(format!("precision: stateful input {kind:?} unsupported in v1")) }
++    }
++    fn bind_param(&mut self, function: u32, stage: u32, dst: u32, kind: ParamKind) -> Result<(), String> {
++        match kind {
++            ParamKind::Param(parameter) => {
++                if stage == 3 {
++                    let prior = self.prior(parameter, stage).ok_or("precision: unresolved eval parameter")?;
++                    self.tables.input(function,dst,11,prior,0);
++                } else {
++                    let id = self.parameter(parameter, stage)?;
++                    let prior = if stage == 2 { self.prior(parameter,stage).unwrap_or(NONE) } else { NONE };
++                    self.tables.input(function,dst,1,id,prior);
++                }
++            }
++            ParamKind::ParamGiven{param} => { let id=self.parameter(param,stage)?; self.tables.input(function,dst,2,id,0); }
++            ParamKind::Temperature => self.tables.input(function,dst,3,0,0),
++            ParamKind::Abstime => self.tables.input(function,dst,4,0,0),
++            ParamKind::EnableIntegration => self.tables.input(function,dst,5,0,0),
++            ParamKind::EnableLim => self.tables.input(function,dst,6,0,0),
++            ParamKind::PortConnected{port} => {
++                let index=self.node(SimUnknownKind::KirchoffLaw(port))?;
++                self.tables.input(function,dst,7,index,0);
++            }
++            ParamKind::Voltage{hi,lo} => {
++                let hi=self.node(SimUnknownKind::KirchoffLaw(hi))?;
++                let lo=lo.map(|n|self.node(SimUnknownKind::KirchoffLaw(n))).transpose()?.unwrap_or(NONE);
++                self.tables.input(function,dst,10,hi,lo);
++            }
++            ParamKind::Current(current) => { let n=self.node(SimUnknownKind::Current(current))?; self.tables.input(function,dst,10,n,NONE); }
++            ParamKind::ImplicitUnknown(eq) => { let n=self.node(SimUnknownKind::Implicit(eq))?; self.tables.input(function,dst,10,n,NONE); }
++            ParamKind::ParamSysFun(kind) => {
++                let id=*self.builtin_parameters.get(&kind).ok_or("precision: missing built-in parameter")?;
++                self.tables.input(function,dst,1,if stage==1 {id-1}else{id},NONE);
++            }
++            _ => return Err(format!("precision: unsupported stateful input {kind:?}")),
++        }
++        Ok(())
++    }
++    fn function(&mut self, stage: u32, source: &PrecisionFunction,
++        roots: &[(u32,Value,u32,u32)]) -> Result<(), String> {
++        let function = &source.function;
++        let interner = &source.interner;
++        let function_id = stage-1;
++        let register_base=self.tables.registers.len() as u32/8;
++        let mut live=HashSet::new();
++        for block in function.layout.blocks() {
++            for inst in function.layout.block_insts(block) {
++                live.extend(function.dfg.inst_results(inst).iter().copied());
++                live.extend(function.dfg.instr_args(inst).iter().copied());
++            }
++        }
++        live.extend(roots.iter().map(|root|root.1));
++        let values:Vec<_>=function.dfg.values().filter(|v|live.contains(v)).collect();
++        let registers:HashMap<_,_>=values.iter().enumerate().map(|(i,&v)|(v,register_base+i as u32)).collect();
++        let mut types=vec![0;function.dfg.num_values()];
++        for &value in &values {
++            let ty=match function.dfg.value_def(value) {
++                ValueDef::Const(Const::Float(_))=>1, ValueDef::Const(Const::Int(_))=>2,
++                ValueDef::Const(Const::Bool(_))=>3, ValueDef::Const(Const::Str(_))=>4,
++                ValueDef::Param(p)=>if function.dfg.value_dead(value) {1} else {self.param_type(*interner.params.get_index(p).ok_or("precision: unbound parameter")?.0)?},
++                ValueDef::Result(inst,_)=> {
++                    let op=function.dfg.insts[inst].opcode() as u8;
++                    match op { 1|4|5|6|8|19|34..=43=>2, 2|9|10|49..=64=>3,
++                        3|7|11|13..=18|20..=33|44..=48|65..=67=>1,
++                        71=>match &function.dfg.insts[inst] {
++                            InstructionData::Call{func_ref,..}=>match interner.callbacks[*func_ref] { CallBackKind::Analysis=>2, _=>1 }, _=>0 },
++                        _=>0 }
++                }, ValueDef::Invalid=>0,
++            };
++            types[usize::from(value)]=ty;
++        }
++        // Phi and optbarrier inherit their operand type; resolve cycles from typed incoming edges.
++        loop {
++            let mut changed=false;
++            for &value in &values {
++                if types[usize::from(value)]!=0 {continue;}
++                if let ValueDef::Result(inst,_) = function.dfg.value_def(value) {
++                    let ty=function.dfg.instr_args(inst).iter().map(|v|types[usize::from(*v)]).find(|&t|t!=0).unwrap_or(0);
++                    if ty!=0 {types[usize::from(value)]=ty;changed=true;}
++                }
++            }
++            if !changed {break;}
++        }
++        for &value in &values {
++            // Unused detached values are not consumed; a bool register is harmless storage.
++            self.tables.register(types[usize::from(value)].max(1));
++            let dst=registers[&value];
++            match function.dfg.value_def(value) {
++                ValueDef::Const(constant)=> {
++                    let (ty,bits)=match constant {Const::Float(v)=>(1,v.bits()),Const::Int(v)=>(2,v as i64 as u64),
++                        Const::Bool(v)=>(3,v as u64),Const::Str(v)=>{let (o,n)=self.tables.string(self.literals.resolve(&v));(4,((n as u64)<<32)|o as u64)}};
++                    self.tables.constants.extend(words(&[dst,ty]));self.tables.constants.extend(bits.to_le_bytes());
++                }
++                ValueDef::Param(p)=> { if !function.dfg.value_dead(value) {
++                    self.bind_param(function_id,stage,dst,*interner.params.get_index(p).ok_or("precision: missing parameter")?.0)?;
++                }}
++                _=>{}
++            }
++        }
++        let blocks:Vec<_>=function.layout.blocks().collect();
++        let block_base=self.tables.blocks.len() as u32/40;
++        let block_map:HashMap<Block,u32>=blocks.iter().enumerate().map(|(i,&b)|(b,block_base+i as u32)).collect();
++        self.tables.functions.extend(words(&[stage,block_map[&function.layout.entry_block().ok_or("precision: no entry block")?],block_base,blocks.len() as u32,0,0]));
++        for block in blocks {
++            let first_instruction=self.tables.instructions.len() as u32/24;
++            let first_phi=self.tables.phi_edges.len() as u32/16;
++            let mut term=[0,NONE,NONE,NONE];
++            for inst in function.layout.block_insts(block) {
++                let data=&function.dfg.insts[inst];
++                let dst=function.dfg.inst_results(inst).first().map(|v|registers[v]).unwrap_or(NONE);
++                match data {
++                    InstructionData::Branch{cond,then_dst,else_dst,..}=>term=[2,registers[cond],block_map[then_dst],block_map[else_dst]],
++                    InstructionData::Jump{destination}=>term=[1,NONE,block_map[destination],NONE],
++                    InstructionData::Exit=>term=[0,NONE,NONE,NONE],
++                    InstructionData::PhiNode(phi)=>for (pred,value) in function.dfg.phi_edges(phi) {
++                        self.tables.phi_edges.extend(words(&[dst,block_map[&pred],registers[&value],0]));
++                    },
++                    InstructionData::Call{func_ref,args}=> {
++                        let args=args.as_slice(&function.dfg.insts.value_lists);
++                        self.callback(function_id,stage,&registers,dst,&interner.callbacks[*func_ref],args,function)?;
++                    }
++                    _=> {
++                        let args=function.dfg.instr_args(inst);
++                        let a=args.first().map(|v|registers[v]).unwrap_or(NONE);
++                        let b=args.get(1).map(|v|registers[v]).unwrap_or(NONE);
++                        self.tables.instructions.extend(words(&[data.opcode() as u32,dst,a,b,NONE,0]));
++                    }
++                }
++            }
++            self.tables.blocks.extend(words(&[function_id,first_instruction,
++                self.tables.instructions.len() as u32/24-first_instruction,first_phi,
++                self.tables.phi_edges.len() as u32/16-first_phi,term[0],term[1],term[2],term[3],0]));
++        }
++        let mut collapse_roots = HashMap::new();
++        for &(kind,value,row,col) in roots {
++            let register = registers[&value];
++            if kind == 6 {
++                if let Some(&(root_id, previous)) = collapse_roots.get(&(row,col)) {
++                    let yes=self.tables.register(3);
++                    self.tables.constants.extend(words(&[yes,3]));
++                    self.tables.constants.extend(1u64.to_le_bytes());
++                    let merged=self.tables.register(3);
++                    self.tables.instructions.extend(words(&[74,merged,previous,yes,register,0]));
++                    let block_offset=self.tables.blocks.len()-40;
++                    if u32::from_le_bytes(self.tables.blocks[block_offset+20..block_offset+24].try_into().unwrap())!=0 {
++                        return Err("precision: collapse merge requires function exit block".into());
++                    }
++                    let count=u32::from_le_bytes(self.tables.blocks[block_offset+8..block_offset+12].try_into().unwrap())+1;
++                    self.tables.blocks[block_offset+8..block_offset+12].copy_from_slice(&count.to_le_bytes());
++                    let value_offset=root_id as usize*24+8;
++                    self.tables.roots[value_offset..value_offset+4].copy_from_slice(&merged.to_le_bytes());
++                    collapse_roots.insert((row,col),(root_id,merged));
++                    continue;
++                }
++            }
++            let id=self.tables.root(function_id,kind,registers[&value],row,col);
++            if kind==6 { collapse_roots.insert((row,col),(id,register)); }
++            if kind==5 {
++                let parameter=self.parameter_ids.iter().find_map(|(&(p,scope),&i)|(i==row&&scope==col).then_some(p)).ok_or("precision: invalid parameter root")?;
++                if stage==1 {self.model_roots.insert(parameter,id);} else {self.instance_roots.insert(parameter,id);}
++            }
++        }
++        Ok(())
++    }
++    fn callback(&mut self, function_id:u32, _stage:u32, registers:&HashMap<Value,u32>, dst:u32,
++        callback:&CallBackKind, args:&[Value], function:&Function)->Result<(),String> {
++        match callback {
++            CallBackKind::SimParam|CallBackKind::SimParamOpt|CallBackKind::Analysis=> {
++                let name=match args.first().map(|&v|function.dfg.value_def(v)) {
++                    Some(ValueDef::Const(Const::Str(name)))=>self.literals.resolve(&name),
++                    _=>return Err("precision: dynamic system fact name unsupported".into()),
++                };
++                let (offset,len)=self.tables.string(name);
++                if matches!(callback,CallBackKind::Analysis) {
++                    // The fact is Boolean; upstream analysis() returns I32, used
++                    // by original IBCAST conditions and IFCAST arithmetic.
++                    let fact=self.tables.register(3);
++                    self.tables.input(function_id,fact,9,offset,len);
++                    self.tables.instructions.extend(words(&[8,dst,fact,NONE,NONE,0]));
++                }
++                else if args.len()==1 {self.tables.input(function_id,dst,8,offset,len);}
++                else {
++                    let condition=self.tables.register(3);
++                    let supplied=self.tables.register(1);
++                    self.tables.input(function_id,condition,12,offset,len);
++                    self.tables.input(function_id,supplied,8,offset,len);
++                    self.tables.instructions.extend(words(&[74,dst,condition,supplied,registers[&args[1]],0]));
++                }
++            }
++            CallBackKind::CollapseHint(..)=>{},
++            CallBackKind::Print{..}=>{}, // Ordinary admission retains diagnostics; this program owns arithmetic and fatal flags.
++            CallBackKind::SetRetFlag(flag)=> {
++                let status=match flag {hir_lower::RetFlag::Abort=>1,hir_lower::RetFlag::Finish=>2,
++                    hir_lower::RetFlag::Stop=>4,hir_lower::RetFlag::Limited=>8};
++                self.tables.instructions.extend(words(&[73,NONE,status,NONE,NONE,0]));
++            }
++            CallBackKind::ParamInfo(kind,_)=>if matches!(kind,hir_lower::ParamInfoKind::Invalid) {
++                self.tables.instructions.extend(words(&[73,NONE,16,NONE,NONE,0]));
++            },
++            _=>return Err(format!("precision: unsupported live callback {callback:?}, destination {dst}")),
++        }
++        Ok(())
++    }
++}
++
++pub fn serialize(unit:&OsdiCompilationUnit<'_, '_, '_>, precision:&PrecisionModule,
++    literals:&Rodeo, descriptor:u32, profile:[u8;32])->Result<Vec<u8>,String> {
++    if !precision.evaluate.interner.lim_state.is_empty() || !precision.evaluate.interner.absdelay.is_empty() {
++        return Err("precision v1 requires stateless model".into());
++    }
++    let db=unit.db;
++    let mut serializer=Serializer {tables:Tables::default(),db,literals,parameter_ids:HashMap::new(),
++        raw_nodes:HashMap::new(),model_roots:HashMap::new(),instance_roots:HashMap::new(),builtin_parameters:HashMap::new()};
++    for (index,&kind) in unit.module.dae_system.unknowns.iter_enumerated() {
++        serializer.raw_nodes.insert(kind,index.into());
++        let (name,_,_,flow,_,_)=crate::metadata::sim_unknown_info(kind,unit.module.dae_system.residual[index].nature_kind,db);
++        let (o,n)=serializer.tables.string(&name);serializer.tables.nodes.extend(words(&[index.into(),o,n,flow as u32]));
++    }
++    let mut native_index=0u32;
++    for parameter in unit.inst_data.params.keys() {
++        let (name,ty)=match parameter {OsdiInstanceParam::User(p)=>(p.name(db).to_string(),type_id(&p.ty(db))?),
++            OsdiInstanceParam::Builtin(b)=>(format!("${b:?}"),1)};
++        for scope in [1,2] {
++            let index=serializer.tables.parameters.len() as u32/32;
++            let (o,n)=serializer.tables.string(&name);let (flags,default_bits)=match parameter {OsdiInstanceParam::Builtin(kind)=>(1,kind.default_value().to_bits()),_ => (0,0)};
++            serializer.tables.parameters.extend(words(&[native_index,scope,ty,o,n,flags]));
++            serializer.tables.parameters.extend(default_bits.to_le_bytes());
++            match parameter {OsdiInstanceParam::User(p)=>{serializer.parameter_ids.insert((*p,scope),index);},
++                OsdiInstanceParam::Builtin(b)=>{if scope==2 {serializer.builtin_parameters.insert(*b,index);}}}
++        }
++        native_index+=1;
++    }
++    for parameter in unit.model_data.params.keys() {
++        let index=serializer.tables.parameters.len() as u32/32;
++        let (o,n)=serializer.tables.string(&parameter.name(db));
++        serializer.tables.parameters.extend(words(&[native_index,1,type_id(&parameter.ty(db))?,o,n,0]));
++        serializer.tables.parameters.extend(0u64.to_le_bytes());
++        serializer.parameter_ids.insert((*parameter,1),index);native_index+=1;
++    }
++    for (stage,function) in [(1,&precision.model_setup),(2,&precision.instance_setup)] {
++        let mut roots=Vec::new();
++        for (&kind,value) in &function.interner.outputs {
++            if let PlaceKind::Param(p)=kind {if let Some(value)=value.expand() {
++                let index=serializer.parameter(p,stage)?;
++                let scope=if stage==1 {1}else{2};roots.push((5,value,index,scope));
++            }}
++        }
++        serializer.function(stage,function,&roots)?;
++    }
++    let mut roots=Vec::new();
++    for (index,&kind) in precision.dae.unknowns.iter_enumerated() {
++        let row=serializer.node(kind)?;let residual=&precision.dae.residual[index];
++        roots.push((1,residual.resist,row,NONE));roots.push((2,residual.react,row,NONE));
++    }
++    for entry in &precision.dae.jacobian {
++        let row=serializer.node(precision.dae.unknowns[entry.row])?;
++        let col=serializer.node(precision.dae.unknowns[entry.col])?;
++        roots.push((3,entry.resist,row,col));roots.push((4,entry.react,row,col));
++    }
++    for &(hi,lo,value) in &precision.collapse {
++        let hi=serializer.node(hi)?;let lo=lo.map(|kind|serializer.node(kind)).transpose()?.unwrap_or(NONE);
++        roots.push((6,value,hi,lo));
++    }
++    if let Some(value)=precision.evaluate.interner.outputs.get(&PlaceKind::BoundStep).and_then(|v|v.expand()) {
++        roots.push((7,value,NONE,NONE));
++    }
++    serializer.function(3,&precision.evaluate,&roots)?;
++    serializer.tables.finish(descriptor,unit.module.dae_system.unknowns.len() as u32,profile)
++}
++
++pub fn export<'ll>(cx:&mir_llvm::CodegenCx<'_, 'll>, programs:&[Vec<u8>]) {
++    let record=cx.ty_struct("CSOsdiPrecisionExportV1",&[cx.ty_int(),cx.ty_int(),cx.ty_int(),cx.ty_int(),cx.ty_aint(64),cx.ty_ptr()]);
++    let mut records=Vec::new();
++    for (index,program) in programs.iter().enumerate() {
++        let values:Vec<_>=program.iter().map(|&v|cx.const_u8(v)).collect();
++        let address=cx.export_array(&format!("__osdi_precision_program_{index}"),cx.ty_char(),&values,true,false);
++        let bytes=cx.const_usize(program.len());
++        records.push(cx.const_struct(record,&[cx.const_unsigned_int(1),cx.const_unsigned_int(32),
++            cx.const_unsigned_int(index as u32),cx.const_unsigned_int(0),bytes,address]));
++    }
++    cx.export_array("OSDI_PRECISION_V1",record,&records,true,false);
++    cx.export_val("OSDI_PRECISION_V1_COUNT",cx.ty_int(),cx.const_unsigned_int(records.len() as u32),true);
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use hir::diagnostics::ConsoleSink;
++
++    fn records(bytes: &[u8], width: usize) -> Vec<Vec<u32>> {
++        bytes.chunks_exact(width * 4).map(|record| record.chunks_exact(4)
++            .map(|word|u32::from_le_bytes(word.try_into().unwrap())).collect()).collect()
++    }
++
++    #[test]
++    fn analysis_fact_preserves_integer_arithmetic_and_condition_consumers() {
++        let db=CompilationDB::new_virtual(r#"
++            `include "disciplines.vams"
++            module precision_analysis(inout p);
++            electrical p;
++            analog I(p)<+(analysis("ic") ? 2.0 : 3.0)+4.0*analysis("ic");
++            endmodule
++        "#).unwrap();
++        let module=sim_back::collect_modules(&db,false,&mut ConsoleSink::new(&db)).unwrap().remove(0);
++        let mut literals=Rodeo::new();
++        let precise=PrecisionModule::new(&db,&module,&mut literals);
++        let mut serializer=Serializer { tables:Tables::default(),db:&db,literals:&literals,
++            parameter_ids:HashMap::new(),raw_nodes:HashMap::new(),model_roots:HashMap::new(),
++            instance_roots:HashMap::new(),builtin_parameters:HashMap::new() };
++        serializer.builtin_parameters.insert(hir::ParamSysFun::mfactor,0);
++        for (index,&node) in precise.dae.unknowns.iter_enumerated() {
++            serializer.raw_nodes.insert(node,index.into());
++        }
++        let roots:Vec<_>=precise.dae.residual.iter_enumerated()
++            .map(|(index,r)|(1,r.resist,index.into(),NONE)).collect();
++        serializer.function(3,&precise.evaluate,&roots).unwrap();
++        let types=records(&serializer.tables.registers,2);
++        let instructions=records(&serializer.tables.instructions,6);
++        let inputs=records(&serializer.tables.inputs,6);
++        assert!(inputs.iter().any(|input|input[2]==9));
++        for input in inputs.iter().filter(|input|input[2]==9) {
++            assert_eq!(types[input[1] as usize][0],3,"analysis fact must remain Boolean");
++        }
++        let mut integer_condition=false;
++        let mut integer_arithmetic=false;
++        for instruction in instructions {
++            match instruction[0] {
++                9 => { // IBCAST consumes the source callback's I32 result.
++                    assert_eq!(types[instruction[2] as usize][0],2,"source analysis condition lost I32");
++                    assert_eq!(types[instruction[1] as usize][0],3);
++                    integer_condition=true;
++                }
++                7 => { // IFCAST consumes the same source I32 type in arithmetic.
++                    assert_eq!(types[instruction[2] as usize][0],2,"source analysis arithmetic lost I32");
++                    assert_eq!(types[instruction[1] as usize][0],1);
++                    integer_arithmetic=true;
++                }
++                8 => {
++                    assert_eq!(types[instruction[2] as usize][0],3);
++                    assert_eq!(types[instruction[1] as usize][0],2);
++                }
++                _=>{}
++            }
++        }
++        assert!(integer_condition && integer_arithmetic);
++    }
++}
+diff --git a/openvaf/osdi/tests/data_tests.rs b/openvaf/osdi/tests/data_tests.rs
+index 513e5c3..039e1c9 100644
+--- a/openvaf/osdi/tests/data_tests.rs
++++ b/openvaf/osdi/tests/data_tests.rs
+@@ -32,7 +32,9 @@ fn test_compile(root_file: &Path) {
+         false,
+         false,
+         false,
+-    );
++        false,
++        None,
++    ).unwrap();
+ }
+ 
+ fn integration_test(dir: &Path) -> Result {
+diff --git a/openvaf/sim_back/src/context.rs b/openvaf/sim_back/src/context.rs
+index 3bbdf0d..48be2de 100644
+--- a/openvaf/sim_back/src/context.rs
++++ b/openvaf/sim_back/src/context.rs
+@@ -33,10 +33,14 @@ pub enum OptimiziationStage {
+ 
+ impl<'a> Context<'a> {
+     pub fn new(db: &'a CompilationDB, literals: &mut Rodeo, module: &'a ModuleInfo) -> Self {
+-        let (mut func, mut intern) = MirBuilder::new(
+-            db,
+-            module.module,
+-            &|kind| match kind {
++        Self::new_with_precision(db, literals, module, false)
++    }
++
++    pub(crate) fn new_with_precision(
++        db: &'a CompilationDB, literals: &mut Rodeo, module: &'a ModuleInfo,
++        precision: bool,
++    ) -> Self {
++        let is_output = |kind| match kind {
+                 PlaceKind::Contribute { .. }
+                 | PlaceKind::ImplicitResidual { .. }
+                 | PlaceKind::CollapseImplicitEquation(_)
+@@ -44,12 +48,13 @@ impl<'a> Context<'a> {
+                 | PlaceKind::BoundStep => true,
+                 PlaceKind::Var(var) => module.op_vars.contains_key(&var),
+                 _ => false,
+-            },
+-            &mut module.op_vars.keys().copied(),
+-        )
++            };
++        let mut required = module.op_vars.keys().copied();
++        let mut builder = MirBuilder::new(db, module.module, &is_output, &mut required)
+         .with_equations()
+-        .with_tagged_writes()
+-        .build(literals);
++        .with_tagged_writes();
++        if precision { builder = builder.with_precision_semantics(); }
++        let (mut func, mut intern) = builder.build(literals);
+         // TODO hidden state
+         intern.insert_var_init(db, &mut func, literals);
+ 
+@@ -164,6 +169,46 @@ impl<'a> Context<'a> {
+         );
+     }
+ 
++    /// Resolve only structural CFG/phi identities before topology copies MIR handles.
++    /// No real compound expression is evaluated or imported from native caches.
++    pub(crate) fn prepare_precision_topology(&mut self) {
++        self.compute_cfg();
++        simplify_cfg_no_phi_merge(&mut self.func, &mut self.cfg);
++        self.compute_outputs(true);
++        dead_code_elimination(&mut self.func, &self.output_values);
++        self.compute_cfg();
++        self.compute_domtree(true, true, true);
++    }
++
++    /// Keep the same preparation-only collapse authority in both precision lanes.
++    /// Run before arithmetic folding: an operating-point-dependent source guard
++    /// must not become a static topology fact after binary64 simplification.
++    pub(crate) fn retain_preparation_collapse(&mut self) {
++        self.compute_cfg();
++        self.compute_domtree(true, true, true);
++        self.refresh_op_dependent_insts();
++        let rejected: Vec<_> = self.func.layout.blocks().flat_map(|block|
++            self.func.layout.block_insts(block)).filter(|&inst| {
++            self.op_dependent_insts.contains(inst)
++                && matches!(self.func.dfg.insts[inst], InstructionData::Call { func_ref, .. }
++                    if self.intern.callbacks[func_ref].ignore_if_op_dependent())
++        }).collect();
++        for inst in rejected {
++            self.func.dfg.zap_inst(inst);
++            self.func.layout.remove_inst(inst);
++        }
++        for (&kind, value) in &mut self.intern.outputs {
++            if matches!(kind, PlaceKind::CollapseImplicitEquation(_)) {
++                if let Some(v) = value.expand() {
++                    let dependent = self.op_dependent_vals.contains(&v)
++                        || self.func.dfg.value_def(v).inst()
++                            .map_or(false, |inst| self.op_dependent_insts.contains(inst));
++                    if dependent { *value = None.into(); }
++                }
++            }
++        }
++    }
++
+     pub fn refresh_op_dependent_insts(&mut self) {
+         let dfg = &mut self.func.dfg;
+         self.op_dependent_vals.clear();
+diff --git a/openvaf/sim_back/src/dae/tests.rs b/openvaf/sim_back/src/dae/tests.rs
+index 8e2dd61..69285ee 100644
+--- a/openvaf/sim_back/src/dae/tests.rs
++++ b/openvaf/sim_back/src/dae/tests.rs
+@@ -19,7 +19,7 @@ fn run_test(src: &str) {
+     context.compute_outputs(true);
+     context.compute_cfg();
+     context.optimize(OptimiziationStage::Initial);
+-    let topology = topology::Topology::new(&mut context);
++    let topology = topology::Topology::new(&mut context, false);
+     let mut dae_system = DaeSystem::new(&mut context, topology);
+     context.compute_cfg();
+     context.optimize(OptimiziationStage::Final);
+diff --git a/openvaf/sim_back/src/init/tests.rs b/openvaf/sim_back/src/init/tests.rs
+index e54a202..1b9b8b7 100644
+--- a/openvaf/sim_back/src/init/tests.rs
++++ b/openvaf/sim_back/src/init/tests.rs
+@@ -21,7 +21,7 @@ fn run_test(src: &str) {
+     cx.compute_cfg();
+     cx.optimize(OptimiziationStage::Initial);
+ 
+-    let topology = Topology::new(&mut cx);
++    let topology = Topology::new(&mut cx, false);
+     let mut dae_system = DaeSystem::new(&mut cx, topology);
+ 
+     cx.compute_cfg();
+diff --git a/openvaf/sim_back/src/lib.rs b/openvaf/sim_back/src/lib.rs
+index 6f67c3b..c09cb1e 100644
+--- a/openvaf/sim_back/src/lib.rs
++++ b/openvaf/sim_back/src/lib.rs
+@@ -17,6 +17,7 @@ pub mod dae;
+ pub mod init;
+ mod module_info;
+ pub mod node_collapse;
++pub mod precision;
+ mod noise;
+ mod topology;
+ 
+@@ -159,9 +160,18 @@ impl<'a> CompiledModule<'a> {
+         literals: &mut Rodeo,
+         dump_unopt_mir: bool,
+         dump_mir: bool,
++        full_residuals: bool,
+     ) -> CompiledModule<'a> {
+-        // Build MIR for the module
+-        let mut cx = Context::new(db, literals, module);
++        Self::new_with_precision(db,module,literals,dump_unopt_mir,dump_mir,full_residuals,false)
++    }
++
++    pub fn new_with_precision(
++        db: &CompilationDB, module: &'a ModuleInfo, literals: &mut Rodeo,
++        dump_unopt_mir: bool, dump_mir: bool, full_residuals: bool,
++        precision: bool,
++    ) -> CompiledModule<'a> {
++        // The opt-in image and side program share the same pre-fold topology.
++        let mut cx = Context::new_with_precision(db, literals, module, precision);
+ 
+         if dump_unopt_mir {
+             println!("Unoptimized MIR (no DAE) of {}", module.module.name(db));
+@@ -171,13 +181,15 @@ impl<'a> CompiledModule<'a> {
+         // Some basic optimization
+         cx.compute_outputs(true);
+         cx.compute_cfg();
+-        cx.optimize(OptimiziationStage::Initial);
++        if precision { cx.prepare_precision_topology(); }
++        else { cx.optimize(OptimiziationStage::Initial); }
+         debug_assert!(cx.func.validate());
+ 
+         // Add extra stuff needed for evaluating the DAE system
+-        let topology = Topology::new(&mut cx);
++        let topology = Topology::new(&mut cx, full_residuals);
+         debug_assert!(cx.func.validate());
+         let mut dae_system = DaeSystem::new(&mut cx, topology);
++        if precision { cx.retain_preparation_collapse(); }
+ 
+         if dump_unopt_mir {
+             println!("Partially optimized MIR (with DAE) of {}", module.module.name(db));
+diff --git a/openvaf/sim_back/src/precision.rs b/openvaf/sim_back/src/precision.rs
+new file mode 100644
+index 0000000..6846258
+--- /dev/null
++++ b/openvaf/sim_back/src/precision.rs
+@@ -0,0 +1,256 @@
++//! Source-faithful precision IR, kept separate from the binary64 optimization lane.
++use hir::{BranchWrite, CompilationDB};
++use hir_lower::{HirInterner, CallBackKind, PlaceKind};
++use mir_build::SSAVariableBuilder;
++use mir::{ControlFlowGraph, InstructionData, Value, FALSE, TRUE};
++use crate::SimUnknownKind;
++use lasso::Rodeo;
++use mir::Function;
++use crate::{context::Context, dae::DaeSystem, topology::Topology, ModuleInfo};
++
++pub struct PrecisionFunction {
++    pub function: Function,
++    pub interner: HirInterner,
++}
++
++pub struct PrecisionModule {
++    pub model_setup: PrecisionFunction,
++    pub instance_setup: PrecisionFunction,
++    pub evaluate: PrecisionFunction,
++    pub dae: DaeSystem,
++    pub collapse: Vec<(SimUnknownKind, Option<SimUnknownKind>, Value)>,
++}
++
++impl PrecisionModule {
++    pub fn new(db: &CompilationDB, module: &ModuleInfo, literals: &mut Rodeo) -> Self {
++        let mut context = Context::new_with_precision(db, literals, module, true);
++        context.prepare_precision_topology();
++        let topology = Topology::new(&mut context, true);
++        let dae = DaeSystem::new(&mut context, topology);
++        context.retain_preparation_collapse();
++        mir_opt::dead_code_elimination(&mut context.func, &context.output_values);
++        let mut cfg = ControlFlowGraph::new();
++        cfg.compute(&context.func);
++        let calls: Vec<_> = context.func.layout.blocks().flat_map(|block|
++            context.func.layout.block_insts(block)).filter_map(|inst| {
++            if let InstructionData::Call { func_ref, .. } = context.func.dfg.insts[inst] {
++                if let CallBackKind::CollapseHint(hi, lo) = context.intern.callbacks[func_ref] {
++                    return Some((hi, lo, inst));
++                }
++            }
++            None
++        }).collect();
++        let mut collapse = Vec::new();
++        let mut ssa = SSAVariableBuilder::new(&cfg);
++        for (hi, lo, inst) in calls {
++            let guard = ssa.define_at_exit(&mut context.func, FALSE, TRUE, inst);
++            collapse.push((SimUnknownKind::KirchoffLaw(hi),
++                lo.map(SimUnknownKind::KirchoffLaw), guard));
++        }
++        // Match NodeCollapse::new's source-owned implication: a collapsed voltage
++        // branch also removes its auxiliary current equation. This is topology,
++        // never a numerical inference from zero F/G values.
++        for (hi, lo, guard) in collapse.clone() {
++            for &kind in dae.unknowns.iter() {
++                if let SimUnknownKind::Current(current) = kind {
++                    if let Ok(branch) = BranchWrite::try_from(current) {
++                        let (a, b) = branch.nodes(db);
++                        let a = SimUnknownKind::KirchoffLaw(a);
++                        let b = b.map(SimUnknownKind::KirchoffLaw);
++                        if (hi == a && lo == b) || (Some(hi) == b && lo == Some(a)) {
++                            collapse.push((kind, None, guard));
++                        }
++                    }
++                }
++            }
++        }
++        for (&kind, value) in &context.intern.outputs {
++            if let PlaceKind::CollapseImplicitEquation(eq) = kind {
++                if let Some(value) = value.expand() {
++                    collapse.push((SimUnknownKind::Implicit(eq), None, value));
++                }
++            }
++        }
++        let mut model_setup = PrecisionFunction {
++            function: Function::default(), interner: HirInterner::default(),
++        };
++        model_setup.interner.precision_semantics = true;
++        let parameters: Vec<_> = module.params.keys().copied().collect();
++        model_setup.interner.insert_param_init(db, &mut model_setup.function,
++            literals, true, false, &parameters);
++        let mut instance_setup = PrecisionFunction {
++            function: Function::default(), interner: HirInterner::default(),
++        };
++        instance_setup.interner.precision_semantics = true;
++        let parameters: Vec<_> = module.params.iter()
++            .filter_map(|(parameter, info)| info.is_instance.then_some(*parameter)).collect();
++        instance_setup.interner.insert_param_init(db, &mut instance_setup.function,
++            literals, true, false, &parameters);
++        for setup in [&mut model_setup, &mut instance_setup] {
++            let mut roots = bitset::BitSet::new_empty(setup.function.dfg.num_values());
++            for value in setup.interner.outputs.values().filter_map(|v| v.expand()) { roots.insert(value); }
++            mir_opt::dead_code_elimination(&mut setup.function, &roots);
++        }
++        // Keep every source output and callback here. The serializer performs only
++        // graph liveness, never arithmetic folding or import of native cache values.
++        Self {
++            model_setup, instance_setup,
++            evaluate: PrecisionFunction { function: context.func, interner: context.intern },
++            dae, collapse,
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use hir_lower::PlaceKind;
++    use hir::diagnostics::ConsoleSink;
++    fn compile(source:&str)->(PrecisionModule,Rodeo) {
++        let db=CompilationDB::new_virtual(source).unwrap();
++        let module=crate::collect_modules(&db,false,&mut ConsoleSink::new(&db)).unwrap().remove(0);
++        let mut strings=Rodeo::new();
++        let precise=PrecisionModule::new(&db,&module,&mut strings);
++        assert!(precise.model_setup.function.validate());
++        assert!(precise.instance_setup.function.validate());
++        assert!(precise.evaluate.function.validate());
++        (precise,strings)
++    }
++    #[test]
++    fn precision_conditional_literal_shorts_keep_source_residual_natures() {
++        let source=r#"
++            `include "disciplines.vams"
++            module precision_natures(inout p, inout t);
++            electrical p;
++            thermal t;
++            parameter integer enabled=1;
++            analog begin
++                if (enabled!=0) begin
++                    V(p)<+0;
++                    Temp(t)<+0;
++                end else begin
++                    I(p)<+V(p)*0.003;
++                    Pwr(t)<+Temp(t)*0.004;
++                end
++            end
++            endmodule
++        "#;
++        let db=CompilationDB::new_virtual(source).unwrap();
++        let module=crate::collect_modules(&db,false,&mut ConsoleSink::new(&db)).unwrap().remove(0);
++        let mut strings=Rodeo::new();
++        let precise=PrecisionModule::new(&db,&module,&mut strings);
++        let native=crate::CompiledModule::new_with_precision(&db,&module,&mut strings,false,false,true,true);
++        assert_eq!(precise.dae.unknowns.len(),2,"primitive zero shorts generated mixed-nature auxiliary rows");
++        assert_eq!(native.dae_system.unknowns.len(),2,"native primitive zero shorts generated mixed-nature auxiliary rows");
++        for dae in [&precise.dae,&native.dae_system] {
++            assert!(dae.residual.iter().all(|r|r.nature_kind==crate::dae::ResidualNatureKind::Flow));
++        }
++    }
++
++    #[test]
++    fn precision_collapse_uses_native_preparation_value_and_control_taint() {
++        for condition in ["V(p)>0", "$abstime>0", "analysis(\"tran\")"] {
++            let source = format!(r#"
++                `include "disciplines.vams"
++                module precision_dynamic_collapse(inout p, inout n);
++                electrical p,n,x;
++                analog begin
++                    if ({condition}) V(x,n)<+0;
++                    else I(x,n)<+V(x,n);
++                    I(p,x)<+V(p,x);
++                end
++                endmodule
++            "#);
++            let db=CompilationDB::new_virtual(&source).unwrap();
++            let module=crate::collect_modules(&db,false,&mut ConsoleSink::new(&db)).unwrap().remove(0);
++            let mut strings=Rodeo::new();
++            let precise=PrecisionModule::new(&db,&module,&mut strings);
++            let native=crate::CompiledModule::new_with_precision(&db,&module,&mut strings,false,false,true,true);
++            assert!(precise.collapse.is_empty(), "dynamic guard admitted: {condition}");
++            assert_eq!(native.node_collapse.num_pairs(),0,"native dynamic guard admitted: {condition}");
++        }
++        let (module,_) = compile(r#"
++            `include "disciplines.vams"
++            module precision_static_collapse(inout p, inout n);
++            electrical p,n,x;
++            parameter integer shorted=1;
++            analog begin
++                if (shorted!=0) V(x,n)<+0;
++                else I(x,n)<+V(x,n);
++                I(p,x)<+V(p,x);
++            end
++            endmodule
++        "#);
++        assert!(!module.collapse.is_empty(),"preparation parameter guard lost");
++    }
++
++    #[test]
++    fn precision_image_and_program_share_prefold_coordinate_axes() {
++        let source=r#"
++            `include "disciplines.vams"
++            module precision_axes(inout p, inout n);
++            electrical p,n,x;
++            parameter integer mode=1;
++            analog begin
++                if (mode!=0) V(x,n)<+0;
++                else I(x,n)<+V(x,n);
++                I(p,x)<+V(p,x)*V(p,x)+ddt(V(p,x)*1e-9);
++            end
++            endmodule
++        "#;
++        let db=CompilationDB::new_virtual(source).unwrap();
++        let module=crate::collect_modules(&db,false,&mut ConsoleSink::new(&db)).unwrap().remove(0);
++        let mut strings=Rodeo::new();
++        let precise=PrecisionModule::new(&db,&module,&mut strings);
++        let native=crate::CompiledModule::new_with_precision(&db,&module,&mut strings,false,false,true,true);
++        assert!(precise.dae.unknowns.iter().eq(native.dae_system.unknowns.iter()));
++    }
++
++    #[test]
++    fn precision_preserves_compound_default_and_source_arithmetic() {
++        let (module,strings)=compile(r#"
++            `include "disciplines.vams"
++            module precision_compound(inout p);
++            electrical p;
++            parameter real k=10000000000000000.0+1.0;
++            analog I(p)<+(k-10000000000000000.0)+V(p)*V(p);
++            endmodule
++        "#);
++        let setup=module.model_setup.function.print(&strings).to_string();
++        assert!(setup.contains("fadd"),"{setup}");
++        let eval=module.evaluate.function.print(&strings).to_string();
++        assert!(eval.contains("fmul"),"{eval}");
++        assert!(eval.contains("fsub"),"{eval}");
++    }
++    #[test]
++    fn precision_expands_builtin_compound_constants() {
++        let (module,strings)=compile(r#"
++            `include "disciplines.vams"
++            module precision_builtin(inout p);
++            electrical p;
++            analog I(p)<+limexp(V(p))+$vt(300.0);
++            endmodule
++        "#);
++        let eval=module.evaluate.function.print(&strings).to_string();
++        assert!(eval.contains("ln"),"{eval}");
++        assert!(eval.contains("fdiv"),"{eval}");
++    }
++    #[test]
++    fn precision_keeps_model_and_instance_default_phi_outputs() {
++        let (module,strings)=compile(r#"
++            `include "disciplines.vams"
++            module precision_defaults(inout p);
++            electrical p;
++            (* type="instance" *) parameter real l=2.0;
++            (* type="instance" *) parameter real w=3.0*l;
++            analog I(p)<+w*V(p);
++            endmodule
++        "#);
++        for setup in [&module.model_setup,&module.instance_setup] {
++            let text=setup.function.print(&strings).to_string();
++            assert!(text.contains("phi"),"{text}");
++            assert!(text.contains("fmul"),"{text}");
++            assert!(setup.interner.outputs.iter().filter(|(k,_)|matches!(k,PlaceKind::Param(_))).count()>=2);
++        }
++    }
++}
+diff --git a/openvaf/sim_back/src/topology.rs b/openvaf/sim_back/src/topology.rs
+index 0133e19..29d20fc 100644
+--- a/openvaf/sim_back/src/topology.rs
++++ b/openvaf/sim_back/src/topology.rs
+@@ -158,7 +158,7 @@ pub(crate) struct Topology {
+ }
+ 
+ impl Topology {
+-    pub(crate) fn new(ctx: &mut Context) -> Self {
++    pub(crate) fn new(ctx: &mut Context, full_residuals: bool) -> Self {
+         let mut branches = TiMap::with_capacity(128);
+         let mut contributes = AHashMap::with_capacity(128);
+         let mut implicit_equations: TiVec<_, _> = ctx
+@@ -309,7 +309,10 @@ impl Topology {
+         drop(postdom_frontiers);
+         builder.builid_analog_operators(operators, &mut ctx.intern);
+         simplify_cfg_no_phi_merge(builder.func, builder.cfg);
+-        builder.prune_small_signal();
++        // Full point evaluation must retain these expressions before differentiation.
++        if !full_residuals {
++            builder.prune_small_signal();
++        }
+         topology.contributes = AHashMap::new();
+         topology
+     }
+diff --git a/openvaf/sim_back/src/topology/test.rs b/openvaf/sim_back/src/topology/test.rs
+index 4b63010..bdd5949 100644
+--- a/openvaf/sim_back/src/topology/test.rs
++++ b/openvaf/sim_back/src/topology/test.rs
+@@ -10,6 +10,10 @@ use crate::context::{Context, OptimiziationStage};
+ use crate::topology::Topology;
+ 
+ fn compile(src: &str) -> (Function, Topology, String) {
++    compile_with_profile(src, false)
++}
++
++fn compile_with_profile(src: &str, full_residuals: bool) -> (Function, Topology, String) {
+     let db = CompilationDB::new_virtual(src).unwrap();
+     let module = crate::collect_modules(&db, false, &mut ConsoleSink::new(&db)).unwrap().remove(0);
+     let mut literals = Rodeo::new();
+@@ -17,7 +21,7 @@ fn compile(src: &str) -> (Function, Topology, String) {
+     context.compute_outputs(true);
+     context.compute_cfg();
+     context.optimize(OptimiziationStage::Initial);
+-    let topology = Topology::new(&mut context);
++    let topology = Topology::new(&mut context, full_residuals);
+     assert!(context.func.validate());
+     (context.func, topology, module.module.name(&db))
+ }
+@@ -257,3 +261,32 @@ fn constant_offset_not_small_signal() {
+         topology.small_signal_vals
+     );
+ }
++
++#[test]
++fn full_residuals_preserve_internal_small_signal_contributions() {
++    let src = indoc! {r#"
++        `include "disciplines.vams"
++        module full_residuals(inout p, inout n);
++            electrical p, n, aux;
++            analog begin
++                I(aux) <+ V(aux) + white_noise(1.0);
++                I(aux) <+ ddt((2e-9 + 0.3e-9*V(p,n))*V(aux));
++                I(p,n) <+ (0.1 + 0.2*V(p,n))*V(aux) + ddt(3e-9*V(aux));
++            end
++        endmodule
++    "#};
++    let (_, specialized, _) = compile_with_profile(src, false);
++    assert!(!specialized.small_signal_vals.is_empty());
++    assert!(specialized
++        .branches()
++        .any(|(_, (_, branch))| { branch.current_src.resist_small_signal != mir::F_ZERO }));
++    let (_, full, _) = compile_with_profile(src, true);
++    assert!(full.small_signal_vals.is_empty());
++    assert!(full.branches().all(|(_, (_, branch))| {
++        branch.current_src.resist_small_signal == mir::F_ZERO
++            && branch.current_src.react_small_signal == mir::F_ZERO
++    }));
++    assert!(full.branches().any(|(_, (_, branch))| {
++        branch.current_src.resist != mir::F_ZERO && branch.current_src.react != mir::F_ZERO
++    }));
++}

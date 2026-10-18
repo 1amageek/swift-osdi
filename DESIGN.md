@@ -2,11 +2,14 @@
 
 ## Purpose and Scope
 
-Parent: [LSI](../DESIGN.md). This independent Swift package connects the existing
-open-source OSDI model ABI to native consumers. S1 establishes artifact admission,
-library/descriptor lifetime and stable zeroed storage. S2 invokes generated
-model/instance setup and point residual/charge/Jacobian evaluation. It does not
-implement device physics, a Verilog-A compiler or a circuit solver.
+This is the standalone package-root design authority for the Swift consumer of
+the existing open-source OSDI 0.4 model ABI. There is no parent design inside this
+source distribution. Integrating systems consume its public contracts without
+requiring a sibling workspace. The package owns exact artifact admission,
+library/descriptor lifetime, stable storage, generated model/instance setup,
+ordinary point evaluation and separate explicit precision/range sessions. It does
+not implement device physics, a Verilog-A compiler or a circuit solver. Historical
+S1/S2/S3/S4 labels below identify development stages, not release support levels.
 Children: [COSDI](Sources/COSDI/DESIGN.md), [OSDIContracts](Sources/OSDIContracts/DESIGN.md),
 [OSDIRuntime](Sources/OSDIRuntime/DESIGN.md), [OSDIInspect](Sources/OSDIInspect/DESIGN.md), [OSDIEvaluate](Sources/OSDIEvaluate/DESIGN.md).
 The S4D optional native precision path adds
@@ -14,25 +17,37 @@ The S4D optional native precision path adds
 [worker entrypoint](Sources/OSDIPrecisionWorker/DESIGN.md), and the host system
 bindings [CMPFR](Sources/CMPFR/DESIGN.md) / [CGMP](Sources/CGMP/DESIGN.md).
 Their selected contracts do not establish a qualified implementation.
+Verification children include [runtime tests](Tests/OSDIRuntimeTests/DESIGN.md),
+[evaluation tests](Tests/OSDIEvaluationTests/DESIGN.md),
+[fixture production](Tools/OSDIVerification/DESIGN.md),
+[evaluation verification](Tools/OSDIEvaluationVerification/DESIGN.md),
+[precision verification](Tools/OSDIPrecisionVerification/DESIGN.md),
+[compiler fixture](Tools/OpenVAFCompilerFixture/DESIGN.md),
+[standalone verification](Tools/OSDIStandaloneVerification/DESIGN.md), and the
+[external public-product consumer](Tools/OSDIConsumerVerification/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
 Use the unmodified OpenVAF-Reloaded 0.4 header and compiled native model directly.
 COSDI is minimal native loading/validation/allocation glue, not a replacement model
 runtime. Swift owns artifact acquisition, scoped lifetimes, typed failures and the
-consumer API. CoreSpice's equations/solver and swift-openvaf's compiler workflow
-remain separate. The initial executable profile is macOS arm64 and exact pinned
-OSDI 0.4 header/compiler fixtures. Native images are not WASM/Embedded artifacts.
+consumer API. An external compiler owns model generation; consumers such as
+CoreSpice own equations, circuit solving, integration and accepted histories. None
+is a runtime build dependency or a required sibling checkout. The supported native
+release profile is macOS 26+ arm64, exact Swift 6.4.0 release and the pinned OSDI
+0.4 header. Compiler/model qualification requires separately exact-bound fixtures.
+Native images are not WASM/Embedded artifacts.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [LSI](../DESIGN.md) | parent | OSDI device-model boundary | Standalone model connection | Point evaluation cannot establish all-history inclusion |
-| [Foundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactReference, ArtifactAccessing and termination | Exact content and bounded read | Location stays separate from identity |
-| [OpenVAF](../swift-openvaf/DESIGN.md) | coordinates with | Compiled model artifact | Compiler is a separate preparation step | No compiler dependency or invocation during load |
-| [Full-residual compiler profile](../swift-openvaf/Tools/OpenVAFCompilerProfile/DESIGN.md) | coordinates with | Source-faithful generation of all-coordinate point values | Exact compiler and profile bind numerical fixtures | Default small-signal specialization does not qualify unrestricted auxiliary F/Q/G/C |
-| [CoreSpice](../CoreSpice/DESIGN.md) | used by | Library metadata and storage lifetime | Future CoreSpiceOSDI adapter | Existing CSR Array borrows are not persistent addresses |
+| [CircuiteFoundation](https://github.com/1amageek/CircuiteFoundation) | depends on | ArtifactReference, ArtifactAccessing and termination | Exact content and bounded read | The manifest's exact revision is authoritative; public fetchability and distribution rights are release gates; location stays separate from identity |
+| [Pinned upstream authority](ThirdParty/OpenVAF-Reloaded/Source.json) | depends on | Unmodified OSDI 0.4 header and its provenance | External OpenVAF-generated artifact boundary | No compiler invocation during runtime load; header admission alone does not qualify model physics or full residuals |
+| [Evaluation verification](Tools/OSDIEvaluationVerification/DESIGN.md) | child | Exact source/compiler/model qualification inputs | Source-faithful all-coordinate point evidence | Default small-signal specialization does not qualify unrestricted auxiliary F/Q/G/C |
+| [Standalone verification](Tools/OSDIStandaloneVerification/DESIGN.md) | child | Bounded deterministic native test execution | Independent checkout test lanes | Generic fixture success is distinct from optional real-model qualification |
+| [External consumer verification](Tools/OSDIConsumerVerification/DESIGN.md) | child | Separate package consuming public products and exact revisions | API/CLI success, failure and persisted result comparison | A local immutable Git clone does not prove canonical remote availability |
+| [OSDIRuntime](Sources/OSDIRuntime/DESIGN.md) | child | Model-local preparation, borrowed results and owner lifetime | External circuit consumers compose its public protocols | Consumers own persistent matrix addresses, solving, state acceptance and all-history proof |
 
 ## Architecture
 
@@ -83,8 +98,8 @@ failure -> close read session + native handle + private file, retaining primary 
 failed native cleanup -> explicit retryable cleanup owner in the typed error
 ```
 
-Ordinary execution never launches or installs a compiler. S1 CLI inspects metadata
-and exercises storage. S2 CLI invokes the public preparation/evaluation protocols
+Ordinary execution never launches or installs a compiler. `osdi-inspect` inspects
+metadata and exercises storage. `osdi-evaluate` invokes the public preparation/evaluation protocols
 and serializes raw descriptor-coordinate values plus topology and exact inputs.
 Neither command claims a solved circuit, physical operating point or interval proof.
 
@@ -108,9 +123,59 @@ binding, nonlinear solving and analyses require later contracts.
 
 ## Verification and Change Impact
 
-### S3 dependency compatibility
+### Independent source distribution contract
 
-S3 aligns the exact CircuiteFoundation dependency with CoreSpice's existing
+```text
+package source + exact public dependency revision + approved rights/notices
+  -> fresh standalone resolution / Debug / Release / native verification
+  -> separate public-product consumer with exact revisions
+  -> optional exact-input model qualification for claimed model profiles
+  -> reviewed source-only release candidate
+```
+
+The release dependency graph must resolve every manifest URL and exact revision
+from its canonical public remote in a fresh environment without sibling checkouts,
+workspace mirrors, edited dependencies or path overrides. The checked-out graph
+must match the declared and resolved identities. Historical local availability
+exceptions below do not satisfy this contract. The final dependency revision and
+license decisions are release admission inputs; this design does not assert that
+an unpublished revision or unresolved permission is publicly distributable.
+
+| Release invariant | Owner and required evidence |
+|---|---|
+| Public exact dependency graph | Package manifest and independent fresh remote resolution; standalone and external-consumer tools retain their scoped execution evidence |
+| Distribution rights | Publisher confirms root/dependency permissions and preserved upstream header license/notices before publication |
+| Standalone user surface | Public products, typed failures and CLI/report contracts remain usable without a consuming application or workspace |
+| Verification distinction | Deterministic native and optional numeric fixtures establish only their selected paths; optional model evidence requires every exact declared input and successful checks |
+| Source-only candidate | No compiled worker, CLI, model library or numeric archive release assets; binary distribution requires a separate linked-license/obligation review |
+| Mathematical scope | Ordinary point and explicit qualified stateless precision/range profiles retain the limits and unfinished consumer obligations defined below |
+
+[Standalone verification](Tools/OSDIStandaloneVerification/DESIGN.md) and
+[external consumer verification](Tools/OSDIConsumerVerification/DESIGN.md) own
+their commands, fixture composition and receipt schemas. [RELEASING.md](RELEASING.md)
+owns the admission/publication sequence and [README.md](README.md) owns user
+prerequisites and supported API/CLI use. Neither a generic CI pass nor a populated
+profile index supplies missing model/source-proof evidence. This distribution
+work adds no new performance guarantee and does not complete the causal/history
+or all-corner obligations below.
+
+### Independent release dependency
+
+The release candidate pins the publicly retrievable CircuiteFoundation revision
+`ae88104c556f5802819713ed741f5b2fffffc2d9`. A separate SwiftPM consumer has compiled,
+linked and exercised the public artifact, preparation, evaluation and cleanup
+contracts against that revision without client experimental flags or dependency
+mirrors. This replaces the historical unpublished S3 availability input below;
+the used public contracts are unchanged. Distribution permission remains a
+separate release gate and is not inferred from public Git availability.
+
+### Historical S3 dependency compatibility — development only
+
+The following records the historical S3 integration snapshot and its local
+availability exception. It does not select the release dependency revision or
+provide release permission or public dependency availability.
+
+S3 aligned the exact CircuiteFoundation dependency with CoreSpice's then-existing
 revision `c952ac5ebe3c21bf0cbd6d6ac239130efd732b3a`. The prior
 `ae88104c556f5802819713ed741f5b2fffffc2d9` to this revision changes host POSIX
 portability and internal directory inventory, while the Core artifact identity,
@@ -135,8 +200,9 @@ semantic revision and is not an edited/path dependency or a publication, release
 or portable release configuration. Verification is native
 macOS arm64 with the fixed Swift 6.4.0 toolchain and qualified full-residual compiler,
 artifact and original compiler receipt; it does not qualify WASM or Embedded.
-The S3 task ledger is [CoreSpice Progress](../CoreSpice/PROGRESS.md); the ledger
-below records the completed S1/S2 package work.
+The historical S3 integration ledger was maintained by the consuming system;
+[PROGRESS.md](PROGRESS.md) is this package task's sole ledger. Historical consuming
+workspace ledgers are not required source-distribution inputs.
 
 S1 tests own actual valid/invalid dynamic images, larger descriptor strides, zeroed
 and stable storage, exact artifact mismatch, cleanup/unload, closed access and lease
@@ -154,10 +220,10 @@ and [evaluation tools](Tools/OSDIEvaluationVerification/DESIGN.md) own that evid
 
 ## S4 Dynamic Evaluation
 
-The user extends the immutable exact local Git availability exception to S4.
-[CoreSpice dynamic composition](../CoreSpice/DESIGN.md#s4-dynamic-osdi-composition-contract)
-owns solver, acceptance, integration and finalization. This package owns explicit
-mode/time/IC context, independent noise-source facts, fresh scoped PSD and a
+Historical S4 development also used the immutable exact local Git availability
+exception; it does not apply to a release. External circuit consumers, including
+CoreSpice, own solver, acceptance, integration and finalization. This package owns
+explicit mode/time/IC context, independent noise-source facts, fresh scoped PSD and a
 per-evaluation optional timestep limit. Existing DC calls and schema 1 stay fixed.
 
 S4 additionally publishes immutable [reactive-row presence](Sources/OSDIContracts/ModelEvaluation/DESIGN.md#reactive-residual-presence)

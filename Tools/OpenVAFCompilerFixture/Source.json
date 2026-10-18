@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/OpenVAF/OpenVAF-Reloaded.git",
+    "commit": "fdf2522b70f42793f64b1c72f0195c96dea0cc19"
+  },
+  "patch": {
+    "path": "full-residuals.patch",
+    "sha256": "543243ca7cae5357d62108d0c34d3d0d3e5b7e635fe5125ca38fbd444acc2eb3"
+  },
+  "profile": {
+    "argument": "--full-residuals",
+    "defaultEnabled": false,
+    "osdiMajor": 0,
+    "osdiMinor": 4
+  },
+  "build": {
+    "package": "openvaf-driver",
+    "binary": "openvaf-r",
+    "llvmFeature": "llvm22",
+    "mode": "release"
+  },
+  "regression": {
+    "package": "sim_back",
+    "testFilter": "topology::test::full_residuals_preserve_internal_small_signal_contributions",
+    "cliSmokeArgument": "--full-residuals"
+  },
+  "precision": {
+    "argument": "--precision-v1",
+    "semanticProfile": {
+      "path": "PrecisionSemantics.json",
+      "sha256": "a85f38191b22ccf3b084f0892ee0fa51752d37f0defa6b62dee929935be35104"
+    },
+    "programHeader": {
+      "path": "../../Sources/COSDI/include/OSDICompilerPrecision.h",
+      "sha256": "ece6c3690485f8fa103651f99522f8b6a512dc42142149a32356fcfcd54ad92d"
+    },
+    "regression": {
+      "package": "sim_back",
+      "testFilter": "precision::tests"
+    },
+    "analysisRegression": {
+      "package": "osdi",
+      "testFilter": "precision::tests::analysis_fact_preserves_integer_arithmetic_and_condition_consumers",
+      "features": "llvm22",
+      "libraryOnly": true
+    }
+  }
+}

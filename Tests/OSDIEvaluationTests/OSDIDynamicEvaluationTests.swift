@@ -12,7 +12,7 @@ struct OSDIDynamicEvaluationTests {
         return values
     }
 
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func explicitModesTimeNoiseAndFreshBoundsUseActualGeneratedCallbacks() async throws {
         let fixtures = try await EvaluationFixtureCache.shared.fixtures()
         let point = try fixtures.point("rc-linear")
@@ -69,15 +69,15 @@ struct OSDIDynamicEvaluationTests {
                 try OSDIEvaluationContext(mode: mode, timeSeconds: time, noiseFrequencyHz: frequency)
             }
         }
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
-        let options = try fixtures.point("rc-linear").input.options()
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
+        let limits = try EvaluationFixtureRequest.limits()
         let context = try OSDIEvaluationContext(mode: .noise, timeSeconds: 0, noiseFrequencyHz: 10)
         for name in ["nonfinite_noise"] {
             guard let fixture = fixtures.protocolLibraries[name] else { throw EvaluationFixtureError.invalidReference(name) }
             let library = try await EvaluationArtifact(fixture.path).load()
             var model = try OSDINativeModelPreparer().prepare(library: library, descriptorIndex: 0,
                 options: OSDIPreparationOptions(parameters: [], simulationParameters: [],
-                    temperatureKelvin: 300.15, connectedTerminalCount: 1, limits: options.limits))
+                    temperatureKelvin: 300.15, connectedTerminalCount: 1, limits: limits))
             let x = [1.0], previous = [2.0, 7.0]
             var called = false
             do {
@@ -95,9 +95,9 @@ struct OSDIDynamicEvaluationTests {
 
     @Test
     func signedWhiteNoiseUsesFixedBiasMagnitudeAndCanonicalZero() async throws {
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
         #expect(fixtures.protocolLibraries.count == 15)
-        let limits = try fixtures.point("rc-linear").input.options().limits
+        let limits = try EvaluationFixtureRequest.limits()
         let context = try OSDIEvaluationContext(mode: .noise, timeSeconds: 0, noiseFrequencyHz: 10)
         for (name, expected) in [("negative_noise", 1.0), ("negative_zero_noise", 0.0)] {
             let fixture = try #require(fixtures.protocolLibraries[name])
@@ -116,10 +116,10 @@ struct OSDIDynamicEvaluationTests {
 
     @Test
     func dynamicTrialsPreserveExplicitAcceptedNativeState() async throws {
-        let fixtures = try await EvaluationFixtureCache.shared.fixtures()
+        let fixtures = try await ProtocolFixtureCache.shared.fixtures()
         guard let fixture = fixtures.protocolLibraries["state"] else { throw EvaluationFixtureError.invalidReference("state") }
         let library = try await EvaluationArtifact(fixture.path).load()
-        let limits = try fixtures.point("rc-linear").input.options().limits
+        let limits = try EvaluationFixtureRequest.limits()
         var model = try OSDINativeModelPreparer().prepare(library: library, descriptorIndex: 0,
             options: OSDIPreparationOptions(parameters: [], simulationParameters: [], temperatureKelvin: 300.15,
                 connectedTerminalCount: 1, limits: limits))
@@ -135,7 +135,7 @@ struct OSDIDynamicEvaluationTests {
         #expect(candidate == [5, 7]); #expect(retry == candidate)
         model.close(); try library.close()
     }
-    @Test
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] == "1", "Requires explicit OSDI_MODEL_QUALIFICATION=1 and exact external compiler/model inputs"))
     func allAvailableFamilyPointsMatchABIWithExplicitNoiseAdmission() async throws {
         guard let path = ProcessInfo.processInfo.environment["OSDI_S4_FAMILIES_MANIFEST"] else {
             throw EvaluationFixtureError.requiredEnvironment("OSDI_S4_FAMILIES_MANIFEST")
@@ -146,13 +146,17 @@ struct OSDIDynamicEvaluationTests {
             .deletingLastPathComponent().appendingPathComponent("oracle")
         let families: Set<String> = ["bsim", "cmg", "img", "soi", "soi101"]
         let requiredFamilies = families.intersection(manifest.libraries.map(\.id))
-        try #require(Set(["bsim", "cmg", "img", "soi"]).isSubset(of: requiredFamilies))
+        try #require(Set(["bsim", "cmg", "img"]).isSubset(of: requiredFamilies))
+        try #require(requiredFamilies.contains("soi101") || requiredFamilies.contains("soi"))
         let points = manifest.cases.filter { $0.input.devices.contains { families.contains($0.library) } }
         #expect(Set(points.flatMap { $0.input.devices.map(\.library) }) == requiredFamilies)
         // These are exact-artifact regressions of the supplied manifest, including its SOI baseline.
         var derivativePoints: Set<String> = ["bsim-n-loaded", "bsim-p-loaded", "bsim-p-selfheat-loaded",
             "cmg-n-loaded", "cmg-p-loaded", "cmg-n-selfheat-series-loaded", "img-n-forward", "img-p-forward",
-            "img-n-thermal", "soi-n-forward", "soi-p-forward", "soi-n-series-thermal"]
+            "img-n-thermal"]
+        if requiredFamilies.contains("soi") {
+            derivativePoints.formUnion(["soi-n-forward", "soi-p-forward", "soi-n-series-thermal"])
+        }
         if requiredFamilies.contains("soi101") {
             for polarity in ["n", "p"] {
                 for configuration in ["pd-forward", "dd-forward", "dd-private-thermal-internal"] {
