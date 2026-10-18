@@ -238,3 +238,69 @@ used in alternating fresh-process rounds. Startup, first request and continuous
 steady requests are separate measurements. Heap and copy observations are scoped;
 no total zero-copy or full-circuit speed claim follows from a worker measurement.
 The parent must revalidate adopted exact revisions and affected circuit paths.
+
+## Causal Range Boundary
+
+The continued task is tracked by [PROGRESS.md](PROGRESS.md). The existing point and
+compensated-point contracts remain unchanged. A separate smooth-box operation
+consumes lower/upper normalized twofold coordinates, lower/upper twofold absolute
+times and one fixed analysis mode, with the same immutable program, typed setup,
+temperature and prepared topology. It encloses absolute F/Q and the same-source
+spatial G/C over the complete closed box. Native state remains explicitly
+unsupported. A smooth-box certificate is a local constitutive fact, never an
+entire-history, all-corner or circuit-flow certificate.
+
+```text
+official source + exact compiler program/setup/topology
+  -> bounded smooth-box interpreter and regularity checks
+  -> outward F/Q/G/C bounds over every point in the box
+  -> CoreSpice circuit reconstruction and Timing causal/history checker
+  -> actual same-candidate corner/functional-proof/persistence evidence
+```
+
+The first range profile must certify an open smooth neighborhood of the closed
+box for every demanded F/Q/G/C data/control dependency. Source-dependent switch
+faces, abs/min/max ties, floor/ceil/integer-conversion boundaries and elementary
+domain faces cannot inherit smoothness from compiler AD output. Such a demanded
+dependency produces an explicit nonsmooth/unsupported failure, without a partial
+view. Inactive pure computations retain the existing demand-validity rules. These
+refusals do not exclude histories from the parent requirement: branch-cover,
+continuity/generalized-derivative and continuation authority remain separate
+unfinished work before the original task can complete. Time-dependent sources
+must retain their complete time box; spatial G/C does not supply explicit time
+partials. The first causal consumer must refuse explicit-time-dependent source
+programs until that additional authority is implemented.
+
+The existing compiler program preserves same-source F/Q and local AD roots.
+No physical equation is reimplemented. The worker owns conservative regularity
+tracking from retained instructions/CFG; the compiler's point derivative output
+alone cannot establish it. Topology is rechecked before publication. Exact source,
+program, worker/profile, setup, coordinate/time box and numerical/resource policy
+must accompany the caller's retained evidence.
+
+The new operation uses local IPC version 2, independently of OSDI 0.4 and the
+unchanged version-1 point operation. Its immutable geometry has four input planes
+(lower high/low, upper high/low), four vector output planes (F lower/upper, Q
+lower/upper), and four row-major raw-node matrix planes (G lower/upper, C
+lower/upper). Outward binary64 endpoint projection replaces midpoint projection
+only in this operation. Cross-operation calls fail before a request or callback.
+The same exclusive noncopyable session, Mutex lifecycle, bounded process owner,
+fixed preadmitted storage and fallible cleanup are reused; borrowed result spans
+remain valid only during the synchronous callback. No point API reinterprets its
+inputs or outputs as a box.
+
+The [precision contract](Sources/OSDIContracts/PrecisionEvaluation/DESIGN.md),
+[runtime](Sources/OSDIRuntime/PrecisionExecution/DESIGN.md),
+[process](Sources/COSDI/PrecisionProcess/DESIGN.md) and
+[interpreter](Sources/COSDIPrecision/ProgramEvaluation/DESIGN.md) own their
+respective implementation details. Verification must include a floor-crossing
+counterexample, closed boxes touching switch/domain faces, nonlinear closed-form
+F/Q/G/C bounds, point-regression parity, invalid box geometry, work/storage limits,
+cancellation, atomic refusal and owner cleanup, then actual source programs.
+
+Latest BSIM-BULK qualification does not reinterpret foundry model cards. The
+retained Sky130 candidate's cards specify BSIM4.5; any future causal admission must
+bind those cards to a separately qualified external matching model through OSDI.
+It must not revive the superseded in-project physical reimplementation or relabel
+the cards as BSIM-BULK107.2.1 calibration. Missing exact model admission is a
+failure, not a substitute model or permission to narrow the original goal.
