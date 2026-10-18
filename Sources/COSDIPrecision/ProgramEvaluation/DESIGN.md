@@ -89,3 +89,61 @@ none of these rules and retains its arena admission and arithmetic work charges.
 Verification must falsify active-zero annihilation, stale x/c provenance,
 independent equal-valued x, nonpositive/active c, poison erasure and unbudgeted
 proof work, in addition to checking actual outward positive-sum bounds.
+
+## Internal Guarded Graph Extraction
+
+This lower operation extracts an immutable, lossless graph view of an already
+admitted version-1 program; it does not evaluate a branch or certify a smooth
+chart, physical source flow, reset, trajectory or history. It changes no program,
+wire or public Swift API. `GuardedGraph.h/.c` owns this internal operation.
+
+```text
+admitted exact program/setup + caller-owned bounded scratch
+ -> validate complete definition/phi/predecessor incidence
+ -> iterative reachability/DFS with both guarded edges and explicit cycles
+ -> monotone backward root/control dependency closure
+ -> immutable graph view or failure with no published view
+```
+
+The view borrows the original program, so comparisons retain their exact opcode
+(including strict/non-strict/equality), operands, source register identities,
+SELECT arms, simultaneous predecessor phi edges, stage/setup dependencies,
+root identities, constants, raw coordinates and explicit MODEL_STATUS effects.
+No binary64 value, midpoint, numerical equality or chosen branch collapses this
+graph. A MODEL_STATUS terminates its instruction path; extraction retains its
+exact immediate flags and the original instruction order. Reachability is
+structural, following both guarded branches; a structurally reachable path may
+have infeasible guard constraints and is never asserted to be a physical path.
+
+Every definition maps to its constant/input/instruction/phi owner. A root-mask
+closure conservatively includes all data dependencies, both SELECT/phi arms,
+prior-stage root bindings and all branch conditions. Source effects remain in
+the graph independently of whether their result is demanded by F/Q/G/C. Phi
+admission checks every incoming CFG edge and rejects missing or extraneous phi
+predecessors. Cycles are detected by iterative DFS and retained without any
+unrolling, iteration count or no-Zeno claim. A later chart consumer must prove
+finite unfolding/progress or explicitly handle cyclic source semantics.
+
+The caller reserves block and register scratch before entry; the operation makes
+no allocation or callback. Scratch capacities are checked before any writes and
+the output view is assigned only on success. An attempt invalidates prior views
+of the same scratch; scratch is not a published certificate. Program bytes and
+scratch must remain immutable and live while the view is consumed, under the
+existing exclusive program/session owner. No new shared state is introduced.
+
+All traversal, validation, scratch initialization and fixed-point propagation
+charge the existing `math` work owner without resetting its counter. Even cyclic
+dependency closure has finite monotone state and is bounded by the same work
+limit; exhaustion is terminal. Invalid geometry and failed incidence return
+typed existing input/program status, and no capacity or failure returns partial
+graph success. This internal cold operation has no independent cancellation or
+deadline owner: future transport must use the existing bounded worker/process
+boundary before exposing it publicly.
+
+Matching C tests exercise exact comparison relations and complementary guarded
+paths, SELECT/phi dependency closure, terminal effects, a retained loop,
+cross-stage roots, malformed predecessor/definition incidence, insufficient
+scratch and exact cumulative work exhaustion. A supplied real compiler
+program/setup path exercises the same production admission/extractor and checks
+that all admitted roots and source branch predicates survive extraction. These
+are graph facts, not constitutive ranges or physical flow evidence.
