@@ -1,13 +1,13 @@
 {
   "schema": "osdi.release-qualification-index.v1",
-  "releaseVersion": "1.0.0",
+  "releaseVersion": "1.0.1",
   "intendedSourceReleaseDate": "2026-10-18",
   "status": "scope-index-not-a-publication-or-success-receipt",
   "host": {"platform": "macOS", "minimumMajorVersion": 26, "architecture": "arm64", "swift": "6.4.0-release", "osdiABI": "0.4"},
   "lanes": [
     {"id": "ordinary", "entrypoint": "Tools/OSDIStandaloneVerification/run.py", "externalModels": false, "proofScope": "tracked native admission, lifecycle, API/CLI point and transport fixtures"},
     {"id": "deterministic-precision", "entrypoint": "Tools/OSDIStandaloneVerification/run.py --precision", "externalModels": false, "proofScope": "tracked source-program and smooth-range fixtures with actual numeric worker"},
-    {"id": "external-consumer", "entrypoint": "Tools/OSDIConsumerVerification/verify_consumer.py", "externalModels": false, "proofScope": "separate package public products, exact source/dependency revisions, persisted API/CLI comparison"},
+    {"id": "external-consumer", "entrypoint": "Tools/OSDIConsumerVerification/verify_consumer.py", "externalModels": false, "proofScope": "downstream stable exact-version package resolution, resolved commit bindings, public products and persisted API/CLI comparison"},
     {"id": "model-qualification", "entrypoint": "Tools/OSDIStandaloneVerification/run.py --model-qualification", "externalModels": true, "requiredEvidence": ["exact model/source/include/compiler bindings", "exact program/setup/worker/semantic/numeric profile bindings", "independent reference and successful per-case receipts"], "proofScope": "explicit selected finite points/programs/boxes only"}
   ],
   "precisionProfiles": [
@@ -17,9 +17,10 @@
   "retainedModelVersions": {"BSIM-BULK": "107.2.1", "BSIM-CMG": "112.1.0", "BSIM-IMG": "103.1.0", "BSIM-SOI": "101.0.0"},
   "consumerOwnedObligations": ["circuit assembly and solution", "integration and accepted history", "complete operating cover", "all-history and all-corner guarantees", "physical and foundry qualification"],
   "distribution": "source-only; no binary release assets",
+  "supersededRelease": {"version": "1.0.0", "status": "prerelease; immutable tag retained", "reason": "Revision-based dependency prevents downstream SwiftPM stable exact: 1.0.0 resolution", "replacement": "1.0.1"},
   "licenses": {
     "sdk": {"identifier": "GPL-3.0-only", "text": "LICENSE"},
-    "CircuiteFoundation": {"identifier": "MIT", "repository": "https://github.com/1amageek/CircuiteFoundation.git", "exactRevisionAuthority": "Package.swift", "notice": "Preserve the license and copyright at the exact dependency revision", "revision": "5f132c58209123433e0e479e1ea61096e46061ba", "text": "https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE"},
+    "CircuiteFoundation": {"identifier": "MIT", "repository": "https://github.com/1amageek/CircuiteFoundation.git", "notice": "Preserve the license and copyright at the exact dependency revision", "revision": "5f132c58209123433e0e479e1ea61096e46061ba", "text": "https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE", "exactVersion": "26.1018.0", "versionAuthority": "Package.swift", "resolvedCommitAuthority": "Package.resolved"},
     "compilerFixtureSupport": {"identifier": "OpenVAFSupport Attribution License 1.0", "text": "Tools/OpenVAFCompilerFixture/NOTICE", "attribution": "OpenVAFSupport — Copyright (c) 2026, 1amageek — https://github.com/1amageek/swift-openvaf", "upstreamDerivedPatch": "Retains upstream GPL terms as specified in NOTICE"}
   }
 }

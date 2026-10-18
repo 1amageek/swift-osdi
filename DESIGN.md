@@ -133,10 +133,15 @@ package source + exact public dependency revision + approved rights/notices
   -> reviewed source-only release candidate
 ```
 
-The release dependency graph must resolve every manifest URL and exact revision
-from its canonical public remote in a fresh environment without sibling checkouts,
+The release dependency graph must resolve every manifest URL and exact stable
+version, with its full commit bound by Package.resolved, from its canonical public
+remote in a fresh environment without sibling checkouts,
 workspace mirrors, edited dependencies or path overrides. The checked-out graph
-must match the declared and resolved identities. Historical local availability
+must match the declared and resolved identities. Stable-version products must not
+depend on branch or revision requirements: SwiftPM refuses that graph when a
+consumer selects a semantic version. The external-consumer gate therefore resolves
+a version requirement as well as checking the exact source/dependency commits.
+Historical local availability
 exceptions below do not satisfy this contract. The final dependency revision and
 license decisions are release admission inputs; this design does not assert that
 an unpublished revision or unresolved permission is publicly distributable.
@@ -161,7 +166,8 @@ or all-corner obligations below.
 
 ### Independent release dependency
 
-The release candidate pins the publicly retrievable CircuiteFoundation revision
+The release candidate requires exact stable CircuiteFoundation version
+`26.1018.0`, with Package.resolved binding its publicly retrievable commit
 `5f132c58209123433e0e479e1ea61096e46061ba`. It adds only an MIT license to
 `ae88104c556f5802819713ed741f5b2fffffc2d9`; all implementation, manifest and test
 bytes are unchanged. The prior separate SwiftPM consumer compiled, linked and

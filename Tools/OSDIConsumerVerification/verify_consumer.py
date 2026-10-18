@@ -98,7 +98,31 @@ def canonical_git_url(url):
                            path=parsed.path.rstrip('/').removesuffix('.git')).geturl()
 
 
-def manifest(source_url, source_revision, foundation_url, foundation_revision):
+def foundation_binding(source, expected_revision):
+    source_manifest = (source / 'Package.swift').read_text()
+    declarations = re.findall(
+        r'\.package\s*\(\s*url:\s*"([^"]*CircuiteFoundation(?:\.git)?)"\s*,\s*'
+        r'(revision:\s*"[0-9a-f]{40}"|exact:\s*"[0-9]+\.[0-9]+\.[0-9]+"|'
+        r'\.exact\s*\(\s*"[0-9]+\.[0-9]+\.[0-9]+"\s*\))\s*\)', source_manifest)
+    require(len(declarations) == 1, 'Expected one exact-version or revision-only Foundation declaration')
+    url, requirement = declarations[0]
+    value = re.search(r'"([^"]+)"', requirement).group(1)
+    version = None if requirement.startswith('revision:') else value
+    resolved = json.loads((source / 'Package.resolved').read_bytes())
+    pins = [pin for pin in resolved['pins'] if pin['identity'] == package_identity(url) and
+            canonical_git_url(pin['location']) == canonical_git_url(url)]
+    require(len(pins) == 1, 'Expected one tracked Foundation resolution matching its manifest URL')
+    state = pins[0]['state']
+    require(state['revision'] == expected_revision, 'Tracked Foundation commit differs from expected revision')
+    if version is not None:
+        require(state.get('version') == version, 'Tracked Foundation version differs from exact manifest version')
+    else:
+        require(value == expected_revision and state.get('version') is None,
+                'Revision-only Foundation declaration differs from tracked resolution')
+    return url, version
+
+
+def manifest(source_url, source_revision, source_version, foundation_url, foundation_revision, foundation_version):
     return '''// swift-tools-version: 6.4
 import PackageDescription
 
@@ -106,8 +130,8 @@ let package = Package(
     name: "OSDIConsumer",
     platforms: [.macOS(.v26)],
     dependencies: [
-        .package(url: SOURCE_URL, revision: SOURCE_REVISION),
-        .package(url: FOUNDATION_URL, revision: FOUNDATION_REVISION)
+        .package(url: SOURCE_URL, SOURCE_REQUIREMENT),
+        .package(url: FOUNDATION_URL, FOUNDATION_REQUIREMENT)
     ],
     targets: [.executableTarget(name: "OSDIConsumer", dependencies: [
         .product(name: "OSDIRuntime", package: SOURCE_IDENTITY),
@@ -120,8 +144,10 @@ let package = Package(
     swiftLanguageModes: [.v6]
 )
 '''.replace('SOURCE_IDENTITY', json.dumps(package_identity(source_url))).replace(
-        'SOURCE_URL', json.dumps(source_url)).replace('SOURCE_REVISION', json.dumps(source_revision)).replace(
-        'FOUNDATION_URL', json.dumps(foundation_url)).replace('FOUNDATION_REVISION', json.dumps(foundation_revision))
+        'SOURCE_URL', json.dumps(source_url)).replace('SOURCE_REQUIREMENT',
+            ('exact: ' + json.dumps(source_version)) if source_version else ('revision: ' + json.dumps(source_revision))).replace(
+        'FOUNDATION_URL', json.dumps(foundation_url)).replace('FOUNDATION_REQUIREMENT',
+            ('exact: ' + json.dumps(foundation_version)) if foundation_version else ('revision: ' + json.dumps(foundation_revision)))
 
 
 def request(library):
@@ -161,15 +187,20 @@ def verify(args, runner):
     require((exact_version or tagged_release) and 'DEVELOPMENT' not in swift_version and
             '-dev' not in swift_version, 'Select the fixed Swift 6.4.0 release toolchain')
     source = runner.checkout(args.source_url, args.source_revision, 'source')
-    foundation = runner.checkout(args.foundation_url, args.foundation_revision, 'foundation')
     source_manifest = (source / 'Package.swift').read_text()
+    foundation_original, foundation_version = foundation_binding(source, args.foundation_revision)
+    require(not args.source_version or foundation_version is not None,
+            'A stable source version cannot depend on a revision-only Foundation package; use an exact stable Foundation version')
+    if args.source_version:
+        tag_revision = runner.run(['/usr/bin/git', '-C', source, 'rev-parse', f'refs/tags/{args.source_version}^{{commit}}'])
+        require(tag_revision == args.source_revision, 'Source version tag differs from expected source commit')
+    foundation = runner.checkout(args.foundation_url, args.foundation_revision, 'foundation')
+    if foundation_version:
+        tag_revision = runner.run(['/usr/bin/git', '-C', foundation, 'rev-parse', f'refs/tags/{foundation_version}^{{commit}}'])
+        require(tag_revision == args.foundation_revision, 'Foundation version tag differs from expected Foundation commit')
     require(not re.search(r'\.package\s*\(\s*path\s*:', source_manifest) and
             not re.search(r'\.package\s*\(\s*path\s*:', (foundation / 'Package.swift').read_text()),
             'Source manifests must not contain local path dependencies')
-    pins = re.findall(r'\.package\(url:\s*"([^"]*CircuiteFoundation(?:\.git)?)",\s*revision:\s*"([0-9a-f]{40})"', source_manifest)
-    require(len(pins) == 1 and pins[0][1] == args.foundation_revision,
-            'Consumer Foundation revision must exactly match the runtime manifest pin')
-    foundation_original = pins[0][0]
     mirrors = []
     if canonical_git_url(foundation_original) != canonical_git_url(args.foundation_url):
         require(is_local_git_url(args.foundation_url),
@@ -183,8 +214,8 @@ def verify(args, runner):
     sources.mkdir(parents=True)
     for name in ('ConsumerEntry.swift', 'ConsumerSnapshot.swift', 'ConsumerFailure.swift'):
         shutil.copyfile(templates / name, sources / name)
-    (consumer / 'Package.swift').write_text(manifest(args.source_url, args.source_revision,
-                                                   foundation_original, args.foundation_revision))
+    (consumer / 'Package.swift').write_text(manifest(args.source_url, args.source_revision, args.source_version,
+                                                   foundation_original, args.foundation_revision, foundation_version))
     for package in (source, consumer):
         require(not any((package / relative).exists() for relative in (
             '.swiftpm/configuration/mirrors.json', '.swiftpm/config/mirrors.json')),
@@ -211,9 +242,16 @@ def verify(args, runner):
     require(all(item.get('state', {}).get('name') != 'edited' for item in workspace.get('dependencies', [])),
             'Consumer contains an edited dependency')
     resolved = json.loads((consumer / 'Package.resolved').read_bytes())
-    pins = {pin['identity']: pin['state']['revision'] for pin in resolved['pins']}
-    require(pins.get(package_identity(args.source_url)) == args.source_revision and
-            args.foundation_revision in pins.values(), 'Consumer resolved revisions differ')
+    pins = {pin['identity']: pin['state'] for pin in resolved['pins']}
+    source_state = pins.get(package_identity(args.source_url), {})
+    foundation_identity = package_identity(args.foundation_url if mirrors else foundation_original)
+    foundation_state = pins.get(foundation_identity, {})
+    require(source_state.get('revision') == args.source_revision and
+            foundation_state.get('revision') == args.foundation_revision, 'Consumer resolved revisions differ')
+    if args.source_version:
+        require(source_state.get('version') == args.source_version, 'Consumer did not resolve the exact SDK version')
+    if foundation_version:
+        require(foundation_state.get('version') == foundation_version, 'Consumer did not resolve the exact Foundation version')
     for path in (consumer / '.build' / 'checkouts').iterdir():
         require(path.resolve().is_relative_to(runner.scratch), 'Dependency source escapes scratch')
     staging = runner.scratch / 'staging'
@@ -246,8 +284,8 @@ def verify(args, runner):
     require(not list(staging.iterdir()), 'Public API staging was retained')
     require(not list((runner.scratch / 'tmp').glob('osdi-*')), 'CLI staging was retained')
     return {'status': 'passed', 'qualification': 'External public API/CLI integration and C ABI transport only',
-            'source': {'url': args.source_url, 'revision': args.source_revision},
-            'foundation': {'url': args.foundation_url, 'revision': args.foundation_revision},
+            'source': {'url': args.source_url, 'revision': args.source_revision, 'version': args.source_version},
+            'foundation': {'url': args.foundation_url, 'revision': args.foundation_revision, 'version': foundation_version},
             'dependencyResolution': {'mode': resolution_mode, 'foundationOriginalURL': foundation_original,
                                      'mirrors': mirrors, 'overrideCount': len(mirrors)},
             'swift': {'path': str(args.swift), 'sha256': sha(args.swift), 'version': swift_version},
@@ -264,6 +302,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('source-url', 'source-revision', 'foundation-url', 'foundation-revision'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--source-version', help='Exact stable SDK version whose tag must match --source-revision')
     parser.add_argument('--scratch', type=Path, required=True, help='New absolute directory outside the workspace')
     parser.add_argument('--swift', type=Path, required=True, help='Absolute Swift 6.4.0 release executable')
     parser.add_argument('--clang', type=Path, required=True, help='Absolute clang executable')
@@ -271,6 +310,9 @@ def main():
     args = parser.parse_args()
     for revision in (args.source_revision, args.foundation_revision):
         require(re.fullmatch('[0-9a-f]{40}', revision) is not None, 'Supply full lowercase Git revision IDs')
+    if args.source_version:
+        require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.source_version) is not None,
+                'Supply a stable source version with major.minor.patch components')
     require(1 <= args.timeout_seconds <= 3600, 'Invalid timeout bound')
     require(args.scratch.is_absolute() and not args.scratch.exists(), 'Scratch must be a new absolute directory')
     workspace = Path(__file__).resolve().parents[3]

@@ -25,7 +25,7 @@ ABI transport and consumer integration, not physical model qualification.
 ## Architecture
 
 ```text
-source URL/revision + Foundation URL/revision + new scratch + fixed tools
+source URL/revision [+ exact source version] + Foundation URL/revision + new scratch + fixed tools
   -> isolated HOME/environment and detached exact Git checkouts
   -> tracked header/protocol source -> bounded clang -> two native fixtures
   -> URL/revision-only generated consumer package -> build -> public API probe
@@ -38,8 +38,15 @@ source URL/revision + Foundation URL/revision + new scratch + fixed tools
 Require macOS 26 or later arm64 and the fixed Swift 6.4.0 release. Accept an
 explicit 6.4.0 version or a 6.4 version from a `swift-6.4.0-RELEASE` toolchain path,
 matching the standalone runner; development toolchains are refused.
-Both revisions are full Git object
-identities; the direct Foundation revision must equal the source manifest pin.
+Both revisions are full Git object identities. The runtime Foundation declaration,
+its tracked `Package.resolved` entry and the expected Foundation revision must
+agree. For an exact Foundation version, the resolved version and tag commit must
+also agree, and the generated consumer uses the same exact version. Legacy
+revision-only runtime manifests remain available only for revision-only source
+checks. `--source-version` selects an exact stable source version and verifies its
+tag and final resolved commit against `--source-revision`; a versioned source with
+a revision-only Foundation dependency is refused before dependency builds.
+
 The generated manifest uses the original Foundation URL. Canonically equal
 Foundation URLs create no mirror configuration. An explicitly supplied different
 local Git URL may create a Foundation availability mirror for local preflight
@@ -81,7 +88,12 @@ scratch logs rather than inherited terminal buffers.
 
 Run `verify_consumer.py --help` for inputs. Run against a committed release
 candidate (published URL or an explicitly supplied local Git URL/revision), with
-the exact Foundation pin and absolute Swift/clang paths. Inspect `receipt.json`,
+the expected Foundation commit and absolute Swift/clang paths. Add
+`--source-version` to exercise the stable-version graph; the receipt records
+source and Foundation versions alongside their exact commits. The ordinary CI
+consumer creates a local-only `0.0.0` tag at checkout HEAD and requests that exact
+version. It never publishes the tag. This regression must reject a stable SDK
+whose transitive Foundation requirement is revision-only. Inspect `receipt.json`,
 `consumer/Package.swift`, `consumer/Package.resolved`, command logs and persisted
 API/CLI reports. A build failure without client experimental flags is a consumer
 contract failure; adding flags requires an explicit public compatibility decision.

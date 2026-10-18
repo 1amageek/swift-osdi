@@ -64,10 +64,19 @@ SWIFT="$HOME/Library/Developer/Toolchains/swift-6.4.0-RELEASE.xctoolchain/usr/bi
 "$SWIFT" --version
 ```
 
-The package resolves its revision-pinned CircuiteFoundation dependency from its
-public Git URL. No sibling workspace checkout, SwiftPM mirror or local override
-is required. Release admission must verify the selected revision from a fresh
-checkout; see [RELEASING.md](RELEASING.md).
+The package requires CircuiteFoundation at exact stable version **26.1018.0**
+from its public Git URL. [Package.swift](Package.swift) owns that version
+requirement; [Package.resolved](Package.resolved) binds it to commit
+`5f132c58209123433e0e479e1ea61096e46061ba`. Release admission verifies both the
+published version tag and the resolved commit. No sibling workspace checkout,
+SwiftPM mirror or local override is required; see [RELEASING.md](RELEASING.md).
+
+The stable-release target is **1.0.1**. Version **1.0.0** is superseded and its
+immutable tag is retained as a prerelease: its revision-based dependency cannot
+be resolved when a downstream SwiftPM package requests stable `exact: "1.0.0"`.
+Version 1.0.1 corrects this with a stable exact-version dependency on the same
+Foundation implementation commit. Release admission must exercise downstream
+`exact: "1.0.1"` resolution, rather than only consuming an SDK Git revision.
 
 Python 3 and Apple Clang are required by the tracked verification tools. Ordinary
 runtime products do not link GMP or MPFR. Building all package products, or the
@@ -134,7 +143,7 @@ python3 Tools/OSDIStandaloneVerification/run.py \
 | Ordinary | Admission, lifecycle, point API/CLI and precision transport contracts using tracked C fixtures | Swift, SDK, Clang, Python; GMP/MPFR/pkg-config for the test build |
 | Optional deterministic precision | Actual numeric worker and tracked source-program/range fixtures | Ordinary prerequisites plus GMP/MPFR static archives and pkg-config |
 | Model qualification | Exact compiler/model/source/reference comparisons | Explicit retained model artifacts and qualification receipts |
-| External consumer | A separate package using only public products; exact persisted API/CLI comparison | Public source and dependency URL/revision bindings |
+| External consumer | A separate package using only public products; exact persisted API/CLI comparison | Public source/dependency versions and resolved commit bindings |
 
 An ordinary/deterministic pass is not a real-model qualification pass. The runner
 reports which lane ran; model-dependent Swift tests are explicitly disabled
@@ -143,7 +152,8 @@ all of its declared inputs and missing evidence fails setup. CI does not downloa
 proprietary models, use credentials or silently replace missing model evidence.
 
 The [external consumer tool](Tools/OSDIConsumerVerification/DESIGN.md) performs a
-fresh source/dependency resolution with explicit URL and revision inputs; its
+fresh source/dependency resolution with explicit public version and commit
+bindings; its
 `--help` documents the exact invocation. It requires no experimental Swift flags
 in the consuming package. The source and dependency licenses must permit that
 use.
@@ -319,8 +329,8 @@ receipts only apply while their bound source/profile assumptions remain valid.
 
 The SDK is licensed under **GPL-3.0-only**; see the root [LICENSE](LICENSE)
 and [NOTICE](NOTICE).
-CircuiteFoundation is a separate **MIT-licensed** dependency at the exact public
-revision pinned in [Package.swift](Package.swift),
+CircuiteFoundation is a separate **MIT-licensed** dependency at exact stable
+version **26.1018.0**, bound by [Package.resolved](Package.resolved) to
 [`5f132c58209123433e0e479e1ea61096e46061ba`](https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE).
 Preserve its copyright and license notice when redistributing its source. Upstream OSDI header license text,
 notices and exact provenance remain under
@@ -335,7 +345,7 @@ OpenVAFSupport — Copyright (c) 2026, 1amageek — originates from
 notice and its visible attribution requirements. Upstream-derived compiler patch
 material remains subject to its upstream GPL terms as that notice specifies.
 
-Version 1.0.0 is a **source-only** distribution. No compiled CLI, precision worker,
+Version 1.0.1 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
 model library or GMP/MPFR archive is included as a release asset. Local builds
 remain supported; binary redistribution requires reviewing the actual linked
 licenses and satisfying their corresponding-source/relinking obligations.

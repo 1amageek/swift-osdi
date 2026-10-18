@@ -96,19 +96,26 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import os
+          import json
           from pathlib import Path
           import re
           import subprocess
           import sys
           root = Path(os.environ['GITHUB_WORKSPACE'])
           manifest = (root / 'Package.swift').read_text()
-          bindings = re.findall(r'\.package\(url:\s*"([^"]*CircuiteFoundation[^"]*)",\s*revision:\s*"([0-9a-f]{40})"', manifest)
-          assert len(bindings) == 1, 'Expected one exact CircuiteFoundation URL/revision'
-          url, revision = bindings[0]
+          bindings = re.findall(r'\.package\s*\(\s*url:\s*"([^"]*CircuiteFoundation(?:\.git)?)"', manifest)
+          assert len(bindings) == 1, 'Expected one CircuiteFoundation URL'
+          url = bindings[0]
+          resolved = json.loads((root / 'Package.resolved').read_bytes())
+          pins = [pin for pin in resolved['pins'] if pin['identity'] == 'circuitefoundation' and pin['location'] == url]
+          assert len(pins) == 1 and pins[0]['state'].get('version'), 'Expected a stable Foundation resolution'
+          revision = pins[0]['state']['revision']
           source_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=30).strip()
-          # A detached external clone checks public products; remote release availability is a separate gate.
+          # The local-only tag exercises SwiftPM's stable-version dependency rules without publication.
+          subprocess.run(['git', 'tag', '0.0.0', source_revision], check=True, timeout=30)
           subprocess.run([sys.executable, 'Tools/OSDIConsumerVerification/verify_consumer.py',
                           '--source-url', root.as_uri(), '--source-revision', source_revision,
+                          '--source-version', '0.0.0',
                           '--foundation-url', url, '--foundation-revision', revision,
                           '--scratch', str(Path(os.environ['RUNNER_TEMP']) / 'osdi-consumer'),
                           '--swift', os.environ['OSDI_CI_SWIFT'], '--clang', '/usr/bin/clang',
