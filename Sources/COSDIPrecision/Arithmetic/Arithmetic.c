@@ -329,6 +329,54 @@ int cs_precision_regularity(cs_precision_math *m, uint32_t op,
   }
   return 0;
 }
+static int positive_sum_endpoint(cs_precision_math *m, mpfr_ptr out,
+                                 mpfr_srcptr x, mpfr_srcptr c,
+                                 mpfr_rnd_t direction) {
+  int negative = mpfr_sgn(x) < 0;
+  mpfr_rnd_t inner = negative
+                         ? (direction == MPFR_RNDD ? MPFR_RNDU : MPFR_RNDD)
+                         : direction;
+  mpfr_ptr square = m->temporary[0], sum = m->temporary[1],
+           root = m->temporary[2], denominator = m->temporary[3];
+  mpfr_mul(square, x, x, inner);
+  mpfr_add(sum, square, c, inner);
+  mpfr_sqrt(root, sum, inner);
+  if (negative) {
+    /* c/(sqrt(x*x+c)-x) is positive and decreases with its denominator. */
+    mpfr_sub(denominator, root, x, inner);
+    if (!mpfr_number_p(denominator) || mpfr_sgn(denominator) <= 0)
+      return 0;
+    mpfr_div(out, c, denominator, direction);
+  } else {
+    mpfr_add(out, x, root, direction);
+  }
+  return mpfr_number_p(out) && mpfr_sgn(out) >= 0;
+}
+int cs_precision_positive_sum_refine(cs_precision_math *m,
+                                    cs_precision_interval *result,
+                                    const cs_precision_interval *x,
+                                    const cs_precision_interval *c) {
+  if (!cs_precision_charge(m, 256))
+    return m->status;
+  if (!valid(result) || !valid(x) || !singleton(c) ||
+      !mpfr_number_p(c->low) || mpfr_sgn(c->low) <= 0 ||
+      !mpfr_number_p(x->low) || !mpfr_number_p(x->high))
+    return CS_OSDI_PRECISION_NUMERIC_INVARIANT;
+  mpfr_ptr lower = m->temporary[4], upper = m->temporary[5];
+  /* f(x,c)=x+sqrt(x*x+c) is increasing in x for fixed positive c. These
+     temporary-first writes also preserve input/output aliasing. Arithmetic
+     range limits merely leave the already valid ordinary enclosure intact. */
+  if (!positive_sum_endpoint(m, lower, x->low, c->low, MPFR_RNDD) ||
+      !positive_sum_endpoint(m, upper, x->high, c->low, MPFR_RNDU))
+    return 0;
+  mpfr_max(lower, lower, result->low, MPFR_RNDD);
+  mpfr_min(upper, upper, result->high, MPFR_RNDU);
+  if (mpfr_cmp(lower, upper) > 0)
+    return CS_OSDI_PRECISION_NUMERIC_INVARIANT;
+  mpfr_set(result->low, lower, MPFR_RNDD);
+  mpfr_set(result->high, upper, MPFR_RNDU);
+  return 0;
+}
 int cs_precision_apply(cs_precision_math *m, uint32_t op, cs_precision_value *d,
                        const cs_precision_value *a,
                        const cs_precision_value *b) {

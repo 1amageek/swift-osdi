@@ -63,3 +63,29 @@ bound over the complete box. The complete time interval participates in every
 stage; this local constitutive result does not certify a trajectory or history.
 All range work, metadata clearing and projection use the existing cumulative
 request budget; storage exhaustion and cancellation expose no partial success.
+
+### Local Source Proofs
+
+Version 2 may clear multiplication activity only after both operands and the
+ordinary arithmetic result have passed all existing failure checks, and only
+when one finite operand is an inactive exact singleton zero. An active singleton
+zero, including a prepared raw alias difference, is not this proof. Neither
+domain failures nor poisoned operands are discarded by multiplication by zero.
+
+Range-only arena metadata records a fresh dynamic source token and one of three
+narrow expression shapes: `x*x`, `x*x+c`, or `sqrt(x*x+c)`. The addition shape
+requires an inactive finite exact singleton `c>0`. Definite copies preserve the
+token and shape. A new computation receives a never-reused token; overflow is a
+numeric invariant failure. Tokens are independent of numerical identity and reset
+with the complete pipeline. A final `x+sqrt(x*x+c)` may request the arithmetic
+positive-sum refinement only when its x token matches and the recorded x/c
+registers still hold the recorded tokens. This rejects stale loop/phi values and
+independent equal-valued operands. Only successfully evaluated operations produce
+shape evidence; a shape never bypasses domain or poison propagation.
+
+All metadata is cold-allocated, bounded by existing value/root/phi capacities,
+and cleared/copied/created under the cumulative work budget. Version 1 executes
+none of these rules and retains its arena admission and arithmetic work charges.
+Verification must falsify active-zero annihilation, stale x/c provenance,
+independent equal-valued x, nonpositive/active c, poison erasure and unbudgeted
+proof work, in addition to checking actual outward positive-sum bounds.

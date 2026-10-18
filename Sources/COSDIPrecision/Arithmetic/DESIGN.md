@@ -53,3 +53,23 @@ Projection uses RNDD for the lower binary64 endpoint and RNDU for the upper endp
 and rejects nonfinite results. Tests must distinguish floor crossings and boundary
 touches from smooth interiors, independent equal-valued variables from identical
 operands, and outward bounds from midpoint approximations.
+
+### Shared Positive Sum
+
+After the interpreter proves the exact shared source shape and its successful
+ordinary evaluation, `x+sqrt(x*x+c)` with finite x and an inactive finite exact
+singleton `c>0` can tighten its existing enclosure. The real function is strictly
+positive and increases in x. At each endpoint with x nonnegative, directed
+square/add/sqrt/add gives a bound. At a negative endpoint, the equivalent form
+`c/(sqrt(x*x+c)-x)` avoids subtractive cancellation: an upward denominator and
+downward division give the lower bound; a downward denominator and upward
+division give the upper bound. The result is intersected with the ordinary
+enclosure. A contradictory intersection is a numeric invariant failure.
+
+All proof arithmetic is charged, uses existing fixed temporaries, and verifies
+finite positive denominators and finite bounds. If finite arithmetic cannot
+establish this refinement, the ordinary enclosure remains authoritative; no
+branch choice, epsilon, midpoint or domain/poison fallback is introduced. The
+helper does not infer source sharing from interval equality. Negative-x
+cancellation, mixed-sign x boxes and unequal-but-equal-valued inputs distinguish
+the proof from ordinary interval evaluation and unsound numeric matching.

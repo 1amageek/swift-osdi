@@ -504,9 +504,9 @@ int cs_precision_program_open(cs_precision_program *p, const void *bytes,
   cs_precision_identity_open(&p->identity, h->registers.count,
                              p->maximum_precision);
   if (p->range_mode) {
-    p->range_values_active = array(h->registers.count, 1);
-    p->range_roots_active = array(h->roots.count, 1);
-    p->range_stage_active = array(p->stage_capacity, 1);
+    p->range_values = array(h->registers.count, sizeof(*p->range_values));
+    p->range_roots = array(h->roots.count, sizeof(*p->range_roots));
+    p->range_stage = array(p->stage_capacity, sizeof(*p->range_stage));
     p->range_coordinates = array((size_t)p->active_count + 1,
                                   sizeof(*p->range_coordinates));
     unsigned char *range_limbs = array((size_t)p->active_count + 1, 2 * limb);
@@ -520,12 +520,12 @@ int cs_precision_program_open(cs_precision_program *p, const void *bytes,
 /* The fixed arena owns every region for the worker lifetime. Integer address
    ranges avoid subtracting pointers from independent allocations. No lookup
    accepts an interior/non-value address or lets metadata escape its owner. */
-static unsigned char *activity(cs_precision_program *p,
-                               const cs_precision_value *v) {
+static cs_precision_range_fact *range_fact(cs_precision_program *p,
+                                          const cs_precision_value *v) {
   uintptr_t address = (uintptr_t)v;
   const cs_precision_value *bases[] = {p->values, p->root_values, p->stage};
-  unsigned char *metadata[] = {p->range_values_active, p->range_roots_active,
-                              p->range_stage_active};
+  cs_precision_range_fact *metadata[] = {p->range_values, p->range_roots,
+                                        p->range_stage};
   size_t counts[] = {p->header->registers.count, p->header->roots.count,
                      p->stage_capacity};
   for (unsigned j = 0; j < 3; j++) {
@@ -536,6 +536,20 @@ static unsigned char *activity(cs_precision_program *p,
   }
   _Exit(CS_OSDI_PRECISION_EXIT_INVARIANT);
 }
+static unsigned char *activity(cs_precision_program *p,
+                               const cs_precision_value *v) {
+  return &range_fact(p, v)->active;
+}
+static int range_new_value(cs_precision_program *p, cs_precision_value *v) {
+  if (!cs_precision_charge(&p->math, 8))
+    return p->math.status;
+  if (p->range_next_token == UINT64_MAX)
+    return CS_OSDI_PRECISION_NUMERIC_INVARIANT;
+  cs_precision_range_fact *fact = range_fact(p, v);
+  memset(fact, 0, sizeof(*fact));
+  fact->token = ++p->range_next_token;
+  return 0;
+}
 static int copy_value(cs_precision_program *p, cs_precision_value *d,
                       const cs_precision_value *a) {
   if (!a->initialized)
@@ -545,7 +559,7 @@ static int copy_value(cs_precision_program *p, cs_precision_value *d,
   if (p->range_mode) {
     if (!cs_precision_charge(&p->math, 8))
       return p->math.status;
-    *activity(p, d) = *activity(p, a);
+    *range_fact(p, d) = *range_fact(p, a);
   }
   d->type = a->type;
   d->initialized = 1;
@@ -567,8 +581,6 @@ static int bits_value(cs_precision_program *p, cs_precision_value *v,
                       uint64_t bits, const unsigned char *strings) {
   if (!cs_precision_charge(&p->math, v->type == 1 ? 3 : 1))
     return p->math.status;
-  if (p->range_mode)
-    *activity(p, v) = 0;
   int status = 0;
   if (v->type == 1)
     status = cs_precision_real_bits(&v->real, bits);
@@ -577,6 +589,8 @@ static int bits_value(cs_precision_program *p, cs_precision_value *v,
     v->length = (uint32_t)(bits >> 32);
   } else
     v->integer = (uint32_t)bits;
+  if (!status && p->range_mode)
+    status = range_new_value(p, v);
   if (!status)
     v->initialized = 1;
   return status;
@@ -647,6 +661,9 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
     v->initialized = 1;
     if (!p->range_mode)
       return pair(p, &v->real, context->time_high, context->time_low);
+    int status = range_new_value(p, v);
+    if (status)
+      return status;
     if (!cs_precision_charge(&p->math, 2))
       return p->math.status;
     cs_precision_interval_copy(&v->real, &p->range_coordinates[p->active_count]);
@@ -686,6 +703,9 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
         }
         return status;
       }
+      int status = range_new_value(p, v);
+      if (status)
+        return status;
       if (!cs_precision_charge(&p->math, 6))
         return p->math.status;
       if (ai == NONE) {
@@ -720,8 +740,11 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
     mpfr_sub(v->real.high, a->high, b->low, MPFR_RNDU);
   }
   v->initialized = 1;
-  if (p->range_mode)
-    *activity(p, v) = 0;
+  if (p->range_mode) {
+    int status = range_new_value(p, v);
+    if (status)
+      return status;
+  }
   return 0;
 }
 static uint32_t representative(cs_precision_program *p, uint32_t node) {
@@ -772,8 +795,108 @@ static int poison(cs_precision_program *p, cs_precision_value *value,
   value->identity = 0;
   value->failure = failure;
   value->failure_detail = detail;
-  if (p->range_mode)
-    *activity(p, value) = 1;
+  if (p->range_mode) {
+    if (!cs_precision_charge(&p->math, 8))
+      return p->math.status;
+    cs_precision_range_fact *fact = range_fact(p, value);
+    memset(fact, 0, sizeof(*fact));
+    fact->active = 1;
+  }
+  return 0;
+}
+enum {
+  RANGE_SHAPE_NONE = 0,
+  RANGE_SHAPE_SQUARE = 1,
+  RANGE_SHAPE_SQUARE_PLUS_POSITIVE = 2,
+  RANGE_SHAPE_POSITIVE_ROOT = 3
+};
+static int finite_real(const cs_precision_value *v) {
+  return v->initialized && !v->failure && v->type == 1 &&
+         mpfr_number_p(v->real.low) && mpfr_number_p(v->real.high);
+}
+static int fixed_positive(const cs_precision_value *v,
+                           const cs_precision_range_fact *fact) {
+  return !fact->active && finite_real(v) &&
+         mpfr_equal_p(v->real.low, v->real.high) &&
+         mpfr_sgn(v->real.low) > 0;
+}
+static void copy_shape(cs_precision_range_fact *d,
+                       const cs_precision_range_fact *a) {
+  d->shape = a->shape;
+  d->x_token = a->x_token;
+  d->c_token = a->c_token;
+  d->x_register = a->x_register;
+  d->c_register = a->c_register;
+}
+static int current_token(cs_precision_program *p, uint32_t index,
+                          uint64_t token) {
+  return token && index < p->header->registers.count &&
+         finite_real(&p->values[index]) &&
+         range_fact(p, &p->values[index])->token == token;
+}
+static int range_prove(cs_precision_program *p,
+                        const CSOsdiPrecisionInstruction *i,
+                        const cs_precision_value *a,
+                        const cs_precision_value *b,
+                        const cs_precision_range_fact *af,
+                        const cs_precision_range_fact *bf) {
+  if (!cs_precision_charge(&p->math, 16))
+    return p->math.status;
+  cs_precision_value *destination = &p->values[i->destination];
+  cs_precision_range_fact *df = range_fact(p, destination);
+  if (i->opcode == 12) {
+    *df = *af;
+    return 0;
+  }
+  if (i->opcode == 46 && finite_real(a) && finite_real(b)) {
+    /* Only an inactive source zero annihilates dependence. Domain/poison and
+       nonfinite checks have already succeeded; active alias zeros do not qualify. */
+    if ((!af->active && mpfr_zero_p(a->real.low) && mpfr_zero_p(a->real.high)) ||
+        (!bf->active && mpfr_zero_p(b->real.low) && mpfr_zero_p(b->real.high)))
+      df->active = 0;
+    if (af->token && af->token == bf->token) {
+      df->shape = RANGE_SHAPE_SQUARE;
+      df->x_token = af->token;
+      df->x_register = i->a;
+    }
+  } else if (i->opcode == 13 &&
+             af->shape == RANGE_SHAPE_SQUARE_PLUS_POSITIVE) {
+    copy_shape(df, af);
+    df->shape = RANGE_SHAPE_POSITIVE_ROOT;
+  } else if (i->opcode == 44) {
+    const cs_precision_range_fact *square = NULL;
+    uint32_t constant = NONE;
+    if (af->shape == RANGE_SHAPE_SQUARE && fixed_positive(b, bf)) {
+      square = af;
+      constant = i->b;
+    } else if (bf->shape == RANGE_SHAPE_SQUARE && fixed_positive(a, af)) {
+      square = bf;
+      constant = i->a;
+    }
+    if (square) {
+      copy_shape(df, square);
+      df->shape = RANGE_SHAPE_SQUARE_PLUS_POSITIVE;
+      df->c_register = constant;
+      df->c_token = range_fact(p, &p->values[constant])->token;
+    }
+    const cs_precision_range_fact *root = NULL;
+    const cs_precision_value *x = NULL;
+    if (af->shape == RANGE_SHAPE_POSITIVE_ROOT && bf->token == af->x_token) {
+      root = af;
+      x = b;
+    } else if (bf->shape == RANGE_SHAPE_POSITIVE_ROOT &&
+               af->token == bf->x_token) {
+      root = bf;
+      x = a;
+    }
+    if (root && current_token(p, root->x_register, root->x_token) &&
+        current_token(p, root->c_register, root->c_token)) {
+      const cs_precision_value *c = &p->values[root->c_register];
+      if (fixed_positive(c, range_fact(p, c)))
+        return cs_precision_positive_sum_refine(&p->math, &destination->real,
+                                                &x->real, &c->real);
+    }
+  }
   return 0;
 }
 /* Return one only after proving every path reaches join. Scratch is bounded by
@@ -1010,11 +1133,19 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
                second = operand_b ? operand_b->identity : 0;
       int same = operand_b && first && first == second;
       int active_a = 0, active_b = 0;
+      cs_precision_range_fact af, bf;
       if (p->range_mode) {
-        active_a = *activity(p, a);
-        active_b = operand_b && *activity(p, operand_b);
+        af = *range_fact(p, a);
+        memset(&bf, 0, sizeof(bf));
+        if (operand_b)
+          bf = *range_fact(p, operand_b);
+        active_a = af.active;
+        active_b = bf.active;
         if (active_a || active_b)
           same = operand_b && i->a == i->b;
+        int status = range_new_value(p, destination);
+        if (status)
+          return status;
         *activity(p, destination) = active_a || active_b;
       }
       /* The identity authority is endpoint-local and independent of enclosure
@@ -1050,6 +1181,11 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       }
       if (status)
         return status;
+      if (p->range_mode) {
+        status = range_prove(p, i, a, operand_b, &af, &bf);
+        if (status)
+          return status;
+      }
       if (same && i->opcode == 45 && mpfr_number_p(a->real.low) &&
           mpfr_number_p(a->real.high)) {
         if (!cs_precision_charge(&p->math, 2))
@@ -1115,11 +1251,15 @@ static int pipeline(cs_precision_program *p, const double *high,
   if (p->range_mode) {
     uint64_t count = (uint64_t)p->header->registers.count +
                      p->header->roots.count + p->stage_capacity;
-    if (!cs_precision_charge(&p->math, count))
+    if (!cs_precision_charge(&p->math, count * 8))
       return p->math.status;
-    memset(p->range_values_active, 0, p->header->registers.count);
-    memset(p->range_roots_active, 0, p->header->roots.count);
-    memset(p->range_stage_active, 0, p->stage_capacity);
+    memset(p->range_values, 0,
+           p->header->registers.count * sizeof(*p->range_values));
+    memset(p->range_roots, 0,
+           p->header->roots.count * sizeof(*p->range_roots));
+    memset(p->range_stage, 0,
+           p->stage_capacity * sizeof(*p->range_stage));
+    p->range_next_token = 0;
   }
   for (uint32_t j = 0; j < p->header->registers.count; j++) {
     p->values[j].initialized = 0;

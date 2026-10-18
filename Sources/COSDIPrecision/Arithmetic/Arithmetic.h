@@ -45,5 +45,9 @@ int cs_precision_regularity(cs_precision_math *math, uint32_t opcode,
                             const cs_precision_value *a,
                             const cs_precision_value *b,
                             int active_a, int active_b, int same_source);
+int cs_precision_positive_sum_refine(cs_precision_math *math,
+                                    cs_precision_interval *result,
+                                    const cs_precision_interval *x,
+                                    const cs_precision_interval *constant);
 int cs_precision_supported(uint32_t opcode);
 #endif

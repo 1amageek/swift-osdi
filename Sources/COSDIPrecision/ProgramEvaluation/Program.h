@@ -6,6 +6,11 @@ typedef struct {
   uint32_t block, phase;
 } cs_precision_control_frame;
 typedef struct {
+  uint64_t token, x_token, c_token;
+  uint32_t x_register, c_register;
+  unsigned char active, shape;
+} cs_precision_range_fact;
+typedef struct {
   const CSOsdiPrecisionProgramHeader *header;
   const CSOsdiPrecisionSetupHeader *setup;
   const CSOsdiPrecisionRegister *registers;
@@ -27,8 +32,9 @@ typedef struct {
       *topology, *dense;
   cs_precision_interval *candidate_q;
   /* Version-2-only arena storage; no range allocation changes point admission. */
-  unsigned char *range_values_active, *range_roots_active, *range_stage_active;
+  cs_precision_range_fact *range_values, *range_roots, *range_stage;
   cs_precision_interval *range_coordinates;
+  uint64_t range_next_token;
   uint32_t *predecessors, *control_colors, *control_nodes;
   cs_precision_control_frame *control_stack;
   cs_precision_math math;

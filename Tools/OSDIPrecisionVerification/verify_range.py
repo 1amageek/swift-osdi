@@ -101,7 +101,9 @@ class RangeWorker(Worker):
             control.regions[3] = Region(control.regions[2].offset, control.regions[2].count)
         copies = [fcntl.fcntl(fd, fcntl.F_DUPFD_CLOEXEC, 10) for fd in (self.file.fileno(), self.inRead, self.outWrite)]
         actions = [(os.POSIX_SPAWN_DUP2, fd, slot) for fd, slot in zip(copies, (3, 4, 5))]
-        self.pid = os.posix_spawn(str(path), [str(path)], {'PATH': '/usr/bin:/bin'}, file_actions=actions)
+        environment = {'PATH': '/usr/bin:/bin'}
+        environment.update({key: os.environ[key] for key in ('ASAN_OPTIONS', 'UBSAN_OPTIONS') if key in os.environ})
+        self.pid = os.posix_spawn(str(path), [str(path)], environment, file_actions=actions)
         for fd in copies:os.close(fd)
         os.close(self.inRead);os.close(self.outWrite)
         self.exit = None;self.statsRead = None;self.allocationSamples = []
@@ -181,6 +183,184 @@ def verify(worker):
         assert child.start() in (None, 1)
         checks.append({'id': 'overlapping-wire-inputs', 'expectedStatus': 'startup-refused'})
     finally:child.close()
+    return checks
+
+
+def proof_program(variant):
+    """Build source instructions, including dynamic phi overwrites, not output fixtures."""
+    types, constants, inputs, instructions, phis = [], [], [], [], []
+    def register(kind=1):
+        index = len(types);types.append(kind);return index
+    def constant(value, kind=1):
+        index = register(kind)
+        constants.append((index, kind, real(value) if kind == 1 else int(value)))
+        return index
+    def operation(op, a, b=NONE, aux=NONE, kind=1):
+        index = register(kind);instructions.append((op, index, a, b, aux, 0));return index
+    zero, one = constant(0.), constant(1.)
+    false, true = constant(False, 3), constant(True, 3)
+    x = register();inputs.append((2, x, 10, 0, NONE, 0))
+    independent = variant in ('active_zero', 'independent_box', 'independent_equalpoint', 'active_c', 'loop_stale')
+    raw = 2 if independent or variant == 'alias_zero' else 1
+    if independent:
+        y = register();inputs.append((2, y, 10, 1, NONE, 0))
+    blocks = [(i, 0, 0, 0, 0, 0, NONE, NONE, NONE, 0) for i in range(2)]
+    g = zero
+    if variant in ('zero', 'zero_invalid', 'zero_nonfinite', 'active_zero', 'alias_zero'):
+        factor, operand = zero, x
+        if variant == 'zero_invalid':operand = operation(16, constant(-1.))
+        if variant == 'zero_nonfinite':operand = operation(14, constant(1e308))
+        if variant == 'active_zero':factor = operation(45, x, y)
+        if variant == 'alias_zero':
+            factor = register();inputs.append((2, factor, 10, 0, 1, 0))
+        product = operation(46, factor, operand)
+        predicate = operation(58, product, zero, kind=3)
+        f = operation(11, predicate)
+        blocks.append((2, 0, len(instructions), 0, 0, 0, NONE, NONE, NONE, 0))
+    else:
+        source, final_x, c = x, x, one
+        if variant == 'copy':source = operation(12, x)
+        if variant == 'definite_select':source = operation(74, true, x, zero)
+        if variant in ('independent_box', 'independent_equalpoint'):final_x = y
+        if variant == 'active_c':c = y
+        if variant == 'zero_c':c = zero
+        if variant == 'negative_c':c = constant(-.5)
+        if variant == 'phi':
+            source = register();phis.append((source, 2, x, 0))
+        if variant == 'loop_stale':
+            source, iteration, retained = register(), register(3), register()
+            final_x = source
+        square = operation(46, source, source)
+        shifted = operation(44, square, c)
+        root = operation(13, shifted)
+        final_root = retained if variant == 'loop_stale' else root
+        sum_start = len(instructions)
+        total = operation(44, final_x, final_root)
+        predicate = operation(54, total, zero, kind=3)
+        f = operation(74, predicate, total, zero)
+        # The successful lane returns the actual spatial derivative, independently bounded below.
+        g = operation(44, one, operation(47, final_x, final_root))
+        if variant == 'phi':
+            blocks += [(2, 0, 0, 0, 0, 1, NONE, 3, NONE, 0),
+                       (2, 0, len(instructions), 0, 1, 0, NONE, NONE, NONE, 0)]
+        elif variant == 'loop_stale':
+            phis = [(source, 2, x, 0), (source, 4, y, 0),
+                    (iteration, 2, false, 0), (iteration, 4, true, 0),
+                    (retained, 2, zero, 0), (retained, 4, root, 0)]
+            blocks += [(2, 0, 0, 0, 0, 1, NONE, 3, NONE, 0),
+                       (2, 0, 0, 0, len(phis), 2, iteration, 5, 4, 0),
+                       (2, 0, sum_start, 0, 0, 1, NONE, 3, NONE, 0),
+                       (2, sum_start, len(instructions)-sum_start, 0, 0, 0, NONE, NONE, NONE, 0)]
+        else:blocks.append((2, 0, len(instructions), 0, 0, 0, NONE, NONE, NONE, 0))
+    roots = [(2, kind, value, 0, NONE if kind < 3 else 0, 0)
+             for kind, value in enumerate((f, zero, g, zero), 1)]
+    sections = [(8, records('II', [(kind, 0) for kind in types])),
+                (16, records('IIQ', constants)), (24, records('IIIIII', inputs)),
+                (24, records('IIIIII', [(1, 0, 0, 1, 0, 0), (2, 1, 1, 1, 0, 0),
+                                       (3, 2, 2, len(blocks)-2, 0, 0)])),
+                (40, records('IIIIIIIIII', blocks)), (24, records('IIIIII', instructions)),
+                (16, records('IIII', phis)), (24, records('IIIIII', roots)), (32, b''),
+                (16, records('IIII', [(i, i, 1, 0) for i in range(raw)])), (1, b'xy'[:raw])]
+    data, descriptors = blob(248, sections)
+    struct.pack_into('<8sIIQIIII32s', data, 0, b'OSDIPR1\0', 1, 248, len(data), 1, 0, raw, 0, bytes(32))
+    for index, section in enumerate(descriptors):struct.pack_into('<QII', data, 72+16*index, *section)
+    return bytes(data)
+
+
+def verify_proofs(worker, selected=None, baseline_worker=None):
+    """Retain observed failures in the receipt so a frozen-worker red is reviewable."""
+    cases = [('zero', [-1.], [2.], 0), ('positive', [-2.], [-1.], 0),
+             ('copy', [-2.], [-1.], 0), ('definite_select', [-2.], [-1.], 0),
+             ('phi', [-2.], [-1.], 0), ('positive_mixed', [-.5], [1.], 0),
+             ('zero_invalid', [-1.], [2.], 4), ('zero_nonfinite', [-1.], [2.], 8),
+             ('active_zero', [1., 1.], [1., 1.], 10), ('alias_zero', [1.], [1.], 10),
+             ('independent_box', [-2., -2.], [-1., -1.], 10),
+             ('independent_equalpoint', [-2.**400, -2.**400], [-2.**400, -2.**400], 10),
+             ('active_c', [-2., 1.], [-1., 1.], 10), ('zero_c', [-2.], [-1.], 10),
+             ('negative_c', [-2.], [-1.], 10), ('loop_stale', [-2., -2.], [-1., -1.], 10),
+             ('proof_budget', [-2.], [-1.], 7)]
+    if selected:
+        assert set(selected) <= {case[0] for case in cases}, selected
+        cases = [case for case in cases if case[0] in selected]
+    checks = []
+    for name, lower, upper, expected in cases:
+        variant = 'positive' if name in ('positive_mixed', 'proof_budget') else name
+        tape = proof_program(variant);mapping = [0, 0] if name == 'alias_zero' else None
+        raw = struct.unpack_from('<I', tape, 32)[0];state = setup(raw, mapping=mapping)
+        check = {'id': name, 'expectedStatus': expected, 'lowerHigh': lower, 'upperHigh': upper,
+                 'lowerLow': [0.]*len(lower), 'upperLow': [0.]*len(upper),
+                 'programSHA256': sha(tape), 'setupSHA256': sha(state),
+                 'programHex': tape.hex(), 'setupHex': state.hex(), 'passed': False}
+        child = RangeWorker(worker, tape, setup_bytes=state, work=1000 if name == 'proof_budget' else 100000)
+        try:
+            startup = child.start();check['startupStatus'] = startup
+            result = child.box(lower, upper) if startup == 0 else startup
+            actual = 0 if isinstance(result, list) else result
+            check.update(observedStatus=actual, actualBounds=result if isinstance(result, list) else None,
+                         completedWork=child.control.work, usedBits=child.control.usedBits,
+                         detailInstruction=child.control.detail, maximumWork=child.control.maxWork)
+            assert actual == expected, (name, 'status', actual, expected)
+            if name == 'proof_budget':
+                # The bounded prefix probe must reach the final shared-sum FADD (instruction 3).
+                # Retry exactly once with all but one of its 256 refinement units available.
+                # An omitted charge advances to later instructions and fails these assertions.
+                prefix = child.control.work
+                assert startup == 0 and child.control.detail == 3, check
+                check['prefixProbe'] = {'maximumWork': 1000, 'completedWork': prefix, 'detailInstruction': 3}
+                bounded = RangeWorker(worker, tape, setup_bytes=state, work=prefix+255)
+                try:
+                    assert bounded.start() == 0
+                    refusal = bounded.box(lower, upper)
+                    check['proofChargeProbe'] = {'maximumWork': prefix+255, 'observedStatus': refusal,
+                        'completedWork': bounded.control.work, 'detailInstruction': bounded.control.detail}
+                    assert refusal == 7 and bounded.control.detail == 3 and bounded.control.work == prefix, check
+                finally:bounded.close()
+            if expected == 0:
+                if name == 'zero':
+                    assert result[0][0] == result[1][0] == 1., result
+                    assert all(value == 0 for plane in result[2:] for value in plane), result
+                else:
+                    with decimal.localcontext() as context:
+                        context.prec = 400;D = decimal.Decimal;one = D(1)
+                        def exact(x):
+                            x = D.from_float(x);r = (x*x+one).sqrt()
+                            return (one/(r-x), one/(r*(r-x))) if x < 0 else (x+r, one+x/r)
+                        endpoints = [exact(lower[0]), exact(upper[0])]
+                        bounds = [(endpoints[0][0], endpoints[1][0]), (endpoints[0][1], endpoints[1][1])]
+                        check['independentDecimalBounds'] = [[str(lo), str(hi)] for lo, hi in bounds]
+                        for plane, (lo, hi) in zip((0, 4), bounds):
+                            assert D.from_float(result[plane][0]) <= lo <= hi <= D.from_float(result[plane+1][0]), (name, plane, result, bounds)
+                        assert result[0][0] > 0, (name, result)
+                        # Tightening is observable through the exact directed binary64 F endpoints.
+                        directed = []
+                        for index, value in enumerate(bounds[0]):
+                            rounded = float(value)
+                            if (index == 0 and D.from_float(rounded) > value) or (index == 1 and D.from_float(rounded) < value):
+                                rounded = math.nextafter(rounded, -math.inf if index == 0 else math.inf)
+                            directed.append(rounded)
+                        assert [result[0][0], result[1][0]] == directed, (name, result[:2], directed)
+                        assert all(value == 0 for plane in (2, 3, 6, 7) for value in result[plane]), result
+            check['passed'] = True
+        except AssertionError as error:
+            check['failure'] = str(error)
+        finally:
+            check['childExitCode'] = child.close()
+        checks.append(check)
+    if baseline_worker:
+        # v1 must retain the existing point output bits and charged work exactly.
+        for name in ('zero', 'positive'):
+            observations = []
+            for image in (baseline_worker, worker):
+                child = Worker(image, proof_program(name))
+                try:
+                    assert child.start() == 0
+                    result = child.evaluate_vectors([[-2.], [0.], [-2.], [0.]])
+                    observations.append({'status': 0 if isinstance(result, list) else result,
+                        'outputBits': [[CLI.bits(value) for value in plane] for plane in result] if isinstance(result, list) else None,
+                        'completedWork': child.control.work, 'usedBits': child.control.usedBits})
+                finally:child.close()
+            checks.append({'id': 'v1-'+name, 'baseline': observations[0], 'current': observations[1],
+                           'passed': observations[0] == observations[1]})
     return checks
 
 
@@ -288,17 +468,28 @@ if __name__ == '__main__':
     parser.add_argument('--semantic-profile', type=Path)
     parser.add_argument('--numeric-profile', type=Path)
     parser.add_argument('--cli-output', type=Path)
+    parser.add_argument('--proof-only', action='store_true', help='Run only the independent R2.1 structural proof cases.')
+    parser.add_argument('--proof-cases', help='Comma-separated proof case IDs; zero,positive is the minimal red.')
+    parser.add_argument('--baseline-worker', type=Path, help='Frozen worker for exact v1 output/work comparison.')
     arguments = parser.parse_args()
     if arguments.emit_fixtures:
         emit_fixtures(arguments.emit_fixtures.resolve())
         print(json.dumps({'fixtures': str(arguments.emit_fixtures.resolve()/'manifest.json')}))
     if arguments.worker and (arguments.output is not None or arguments.executable is None):
         assert arguments.output is not None
-        checks = verify(arguments.worker.resolve(strict=True))
+        assert not arguments.proof_cases or arguments.proof_only
+        checks = (verify_proofs(arguments.worker.resolve(strict=True),
+                               arguments.proof_cases.split(',') if arguments.proof_cases else None,
+                               arguments.baseline_worker.resolve(strict=True) if arguments.baseline_worker else None)
+                  if arguments.proof_only else verify(arguments.worker.resolve(strict=True)))
+        passed = all(check.get('passed', True) for check in checks)
         receipt = {'schema': 'osdi.range-verification.v1', 'workerSHA256': sha(arguments.worker.read_bytes()),
-                   'toolSHA256': sha(Path(__file__).read_bytes()), 'checks': checks, 'status': 'passed'}
+                   'toolSHA256': sha(Path(__file__).read_bytes()), 'checks': checks, 'status': 'passed' if passed else 'failed'}
+        receipt['sanitizerControls'] = {key: os.environ[key] for key in ('ASAN_OPTIONS', 'UBSAN_OPTIONS') if key in os.environ}
+        if arguments.baseline_worker:receipt['baselineWorkerSHA256'] = sha(arguments.baseline_worker.read_bytes())
         with arguments.output.open('x') as stream:json.dump(receipt, stream, indent=2);stream.write('\n')
-        print(json.dumps({'status': 'passed', 'cases': len(checks), 'receipt': str(arguments.output)}))
+        print(json.dumps({'status': receipt['status'], 'cases': len(checks), 'receipt': str(arguments.output)}))
+        if not passed:raise SystemExit(1)
 
     if arguments.executable:
         verify_cli_range(arguments)

@@ -100,6 +100,11 @@ range correctness. Every child and verification command has a deadline. The
 range suite supplements unchanged point tests and makes no physical-model or
 all-history claim.
 
+Direct range children receive a fixed PATH and, when explicitly set by the
+verification command, only `ASAN_OPTIONS` and `UBSAN_OPTIONS` from the parent
+environment. Sanitized evidence records those controls; a successful unsanitized
+run does not establish sanitizer behavior or imply inherited fail-fast options.
+
 The numeric build profile retains `wireVersion: 1` for compensated point requests
 and separately declares `rangeWireVersion: 2` and
 `rangeSemantics: source-program-smooth-box-v2`. Range CLI verification binds that
@@ -110,3 +115,29 @@ compiler's compound-default model. Positive, zero-straddling and sub-ULP boxes
 check absolute F/Q and spatial G/C; malformed/mixed inputs, time/coordinate order,
 bit tampering and explicit resource exhaustion must produce no partial result.
 The point CLI helper and schema remain unchanged.
+
+## Range Structural Proof Falsifiers
+
+The R2.1 proof-only lane retains all R1 expectations and tests two narrowly
+admitted generic facts. Inactive exact-zero multiplication may remove source
+activity only after operand poison, ordinary arithmetic/domain and finite-result
+checks succeed. Independent active zero and prepared raw-alias zero cannot supply
+that authority; undefined and nonfinite operands remain failures.
+
+For the retained instruction structure `x*x`, then addition of an inactive finite
+exact positive constant, then square root, then addition of the same fresh `x`
+value token, whole-box F is compared with independent high-precision Decimal
+`c / (sqrt(x*x+c)-x)` for negative x and spatial J with
+`c / (sqrt(x*x+c)*(sqrt(x*x+c)-x))`. Numeric singleton equality does not prove source
+identity. Copy, definite SELECT and phi must retain the valid token; a loop that
+redefines the source register while retaining an earlier square-root value must
+not reuse stale structure. Active/nonpositive constants and distinct inputs are
+falsifiers of accidental pattern application. Ordinary poison and nonsmooth/domain
+refusals remain observable. Receipts retain program/setup digests, source tool,
+actual endpoint slabs, exact box inputs and expected/observed status. Optional
+same-input v1 comparison checks output bits and work against the frozen worker;
+it is distinct from v2 proof admission. The work falsifier uses exactly two
+bounded children: a prefix budget must stop at the final shared-sum instruction,
+then a budget allowing only 255 of its 256 refinement units must stop at the same
+instruction with unchanged completed work. Omitting the new proof charge cannot
+pass by exhausting an unrelated earlier operation. All execution remains root-owned.
