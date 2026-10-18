@@ -1,4 +1,5 @@
 #include "Program.h"
+#include "Chart.h"
 #include "../Arena/Arena.h"
 #include <limits.h>
 #include <math.h>
@@ -6,6 +7,12 @@
 #include <string.h>
 #define NONE CS_OSDI_PRECISION_NONE
 #define BAD CS_OSDI_PRECISION_INVALID_PROGRAM
+struct cs_precision_chart_execution {
+  const cs_precision_chart_request *request;
+  const cs_precision_chart_scratch *scratch;
+  size_t guard_count;
+  uint64_t steps;
+};
 #define REQUIRE(test)                                                          \
   do {                                                                         \
     if (!(test))                                                               \
@@ -1025,6 +1032,77 @@ static int defer_control(cs_precision_program *p, uint32_t function_index,
   p->detail = condition->failure_detail;
   return condition->failure;
 }
+static int chart_step(cs_precision_program *p) {
+  if (!p->chart) return 0;
+  if (p->chart->steps >= p->chart->request->maximum_steps)
+    return CS_PRECISION_CHART_STEP_LIMIT;
+  p->chart->steps++;
+  return 0;
+}
+static int chart_predicate(uint32_t op) {
+  return (op >= 49 && op <= 64) || op == CS_OSDI_PRECISION_OP_FBCAST;
+}
+static void chart_operand(const cs_precision_value *v, uint32_t *type,
+                          uint32_t *integer, double *lower, double *upper) {
+  if (!v) return;
+  *type = v->type;
+  if (v->type == 1) {
+    *lower = mpfr_get_d(v->real.low, MPFR_RNDD);
+    *upper = mpfr_get_d(v->real.high, MPFR_RNDU);
+  } else if (v->type == 2 || v->type == 3) *integer = v->integer;
+}
+static int chart_closure_possible(cs_precision_program *p, uint32_t opcode,
+                                 uint32_t ar, uint32_t br, uint32_t choice) {
+  const cs_precision_value *a = &p->values[ar], *b = br == NONE ? NULL : &p->values[br];
+  if (opcode == CS_OSDI_PRECISION_OP_FBCAST)
+    return choice || (mpfr_cmp_ui(a->real.low, 0) <= 0 && mpfr_cmp_ui(a->real.high, 0) >= 0);
+  if (!b || a->type != 1 || b->type != 1) return 0;
+  if (opcode == 53 || opcode == 56)
+    return choice ? mpfr_cmp(a->real.low, b->real.high) <= 0 : mpfr_cmp(a->real.high, b->real.low) >= 0;
+  if (opcode == 54 || opcode == 55)
+    return choice ? mpfr_cmp(a->real.high, b->real.low) >= 0 : mpfr_cmp(a->real.low, b->real.high) <= 0;
+  if ((opcode == 58 && !choice) || (opcode == 62 && choice)) return 1;
+  if (opcode == 58 || opcode == 62)
+    return mpfr_cmp(a->real.low, b->real.high) <= 0 && mpfr_cmp(a->real.high, b->real.low) >= 0;
+  return 0;
+}
+static int chart_guard(cs_precision_program *p, uint32_t stage, uint32_t block,
+                       uint32_t instruction, uint32_t kind, uint32_t opcode,
+                       uint32_t a, uint32_t b, int known, uint32_t *choice) {
+  struct cs_precision_chart_execution *chart = p->chart;
+  if (!chart) return 0;
+  if (!cs_precision_charge(&p->math, 16)) return p->math.status;
+  if (chart->guard_count >= chart->scratch->guard_capacity)
+    return CS_PRECISION_CHART_CAPACITY;
+  cs_precision_chart_decision decision = {stage, block, instruction, kind, *choice, chart->guard_count};
+  uint32_t boundary_extension = 0;
+  if (chart->request->mode == CS_PRECISION_CHART_RECORD) {
+    if (!known) return CS_OSDI_PRECISION_UNRESOLVED_BRANCH;
+  } else {
+    if (chart->guard_count >= chart->request->tape_count)
+      return CS_PRECISION_CHART_TAPE_MISMATCH;
+    const cs_precision_chart_decision *candidate = &chart->request->tape[chart->guard_count];
+    if (candidate->stage != stage || candidate->block != block || candidate->instruction != instruction ||
+        candidate->kind != kind || candidate->ordinal != chart->guard_count || candidate->choice > 1)
+      return CS_PRECISION_CHART_TAPE_MISMATCH;
+    if (known && candidate->choice != *choice) {
+      if (chart->request->mode != CS_PRECISION_CHART_FORMULA_CLOSURE ||
+          kind != CS_PRECISION_CHART_PREDICATE || !chart_closure_possible(p, opcode, a, b, candidate->choice))
+        return CS_PRECISION_CHART_TAPE_MISMATCH;
+      boundary_extension = 1;
+    }
+    decision.choice = *choice = candidate->choice;
+  }
+  cs_precision_chart_guard guard = {0};
+  guard.decision = decision; guard.opcode = opcode; guard.a = a; guard.b = b;
+  guard.formula_truth_known = (uint32_t)known;
+  guard.boundary_extension = boundary_extension;
+  chart_operand(&p->values[a], &guard.a_type, &guard.a_integer, &guard.a_lower, &guard.a_upper);
+  if (b != NONE)
+    chart_operand(&p->values[b], &guard.b_type, &guard.b_integer, &guard.b_lower, &guard.b_upper);
+  chart->scratch->guards[chart->guard_count++] = guard;
+  return 0;
+}
 static int function(cs_precision_program *p, uint32_t index, const double *high,
                     const double *low,
                     const cs_osdi_precision_context_v1 *context) {
@@ -1047,6 +1125,8 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
     }
   uint32_t block = f->entry_block, previous = NONE, poisoned_join = NONE;
   for (;;) {
+    int chart_status = chart_step(p);
+    if (chart_status) return chart_status;
     const CSOsdiPrecisionBlock *b = &p->blocks[block];
     if (!cs_precision_charge(&p->math, 1))
       return p->math.status;
@@ -1089,6 +1169,8 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       }
     }
     for (uint32_t j = 0; j < b->instruction_count; j++) {
+      chart_status = chart_step(p);
+      if (chart_status) return chart_status;
       if (p->range_mode && !cs_precision_charge(&p->math, 8))
         return p->math.status;
       p->detail = b->first_instruction + j;
@@ -1106,9 +1188,14 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
         if (condition->failure)
           status = poison(p, destination, condition->failure,
                           condition->failure_detail);
-        else
+        else {
+          uint32_t choice = condition->integer;
+          status = chart_guard(p, index + 1, block, p->detail, CS_PRECISION_CHART_SELECT,
+                               i->opcode, i->a, NONE, 1, &choice);
+          if (status) return status;
           status = copy_value(p, destination,
                               &p->values[condition->integer ? i->b : i->aux]);
+        }
         if (status)
           return status;
         continue;
@@ -1158,7 +1245,7 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       destination->failure = 0;
       destination->failure_detail = NONE;
       destination->initialized = 0;
-      int status = p->range_mode
+      int status = p->range_mode && !(p->chart && chart_predicate(i->opcode))
                        ? cs_precision_regularity(&p->math, i->opcode, a,
                                                   comparison_b, active_a,
                                                   active_b, same)
@@ -1166,6 +1253,15 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       if (!status)
         status = cs_precision_apply(&p->math, i->opcode, destination, a,
                                      comparison_b);
+      if (p->chart && chart_predicate(i->opcode) &&
+          (!status || status == CS_OSDI_PRECISION_UNRESOLVED_BRANCH)) {
+        int known = status == 0;
+        uint32_t choice = known ? destination->integer : 0;
+        status = chart_guard(p, index + 1, block, p->detail, CS_PRECISION_CHART_PREDICATE,
+                             i->opcode, i->a, i->b, known, &choice);
+        if (status) return status;
+        destination->integer = choice; destination->initialized = 1;
+      }
       if (!status && destination->type == 1 && i->opcode != 12 &&
           (!mpfr_number_p(destination->real.low) ||
            !mpfr_number_p(destination->real.high)))
@@ -1222,6 +1318,12 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       previous = block;
       block = poisoned_join;
       continue;
+    }
+    if (p->chart && b->terminator == CS_OSDI_PRECISION_BRANCH) {
+      uint32_t choice = p->values[b->condition].integer;
+      int status = chart_guard(p, index + 1, block, NONE, CS_PRECISION_CHART_BRANCH,
+                               CS_OSDI_PRECISION_BRANCH, b->condition, NONE, 1, &choice);
+      if (status) return status;
     }
     previous = block;
     block = b->terminator == 1 || p->values[b->condition].integer
@@ -1317,8 +1419,8 @@ static int evaluate_range(cs_precision_program *p,
                           const double *lh, const double *ll,
                           const double *uh, const double *ul,
                           double *outputs[8]) {
-  p->math.work = 0;
-  p->math.status = 0;
+  if (!p->chart) { p->math.work = 0; p->math.status = 0; }
+  else if (p->math.status) return p->math.status;
   p->precision = 0;
   p->detail = NONE;
   p->flags = 0;
@@ -1414,6 +1516,51 @@ static int evaluate_range(cs_precision_program *p,
     if (status)
       return status;
   }
+  return 0;
+}
+static int chart_product(size_t a, size_t b, size_t *product) {
+  if (b && a > SIZE_MAX / b) return 0;
+  *product = a * b;
+  return 1;
+}
+int cs_precision_program_evaluate_chart(
+    cs_precision_program *p, cs_osdi_precision_control_v1 *control,
+    const double *lh, const double *ll, const double *uh, const double *ul,
+    const cs_precision_chart_request *request, const cs_precision_chart_scratch *scratch,
+    cs_precision_chart_result *result) {
+  if (!p || !p->header || !control || !request || !scratch || !result ||
+      !p->range_mode || p->chart || request->mode < CS_PRECISION_CHART_RECORD ||
+      request->mode > CS_PRECISION_CHART_FORMULA_CLOSURE || !request->maximum_steps ||
+      (request->tape_count && !request->tape) ||
+      (request->mode == CS_PRECISION_CHART_RECORD && request->tape_count) ||
+      (scratch->guard_capacity && !scratch->guards) ||
+      (p->active_count && (!lh || !ll || !uh || !ul)) || p->math.work > p->math.limit)
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  size_t matrix, bytes;
+  size_t n = p->header->raw_node_count;
+  if (!chart_product(n, n, &matrix) || !chart_product(matrix, sizeof(double), &bytes))
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  if (!chart_product(scratch->guard_capacity, sizeof(cs_precision_chart_guard), &bytes) ||
+      !chart_product(request->tape_count, sizeof(cs_precision_chart_decision), &bytes))
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  for (unsigned j = 0; j < 8; j++)
+    if (!scratch->planes[j] || scratch->plane_capacities[j] < (j < 4 ? n : matrix))
+      return CS_PRECISION_CHART_CAPACITY;
+  double *planes[8];
+  for (unsigned j = 0; j < 8; j++) planes[j] = scratch->planes[j];
+  struct cs_precision_chart_execution execution = {request, scratch, 0, 0};
+  p->chart = &execution;
+  int status = evaluate_range(p, control, lh, ll, uh, ul, planes);
+  p->chart = NULL;
+  if (status) return status;
+  if (request->mode != CS_PRECISION_CHART_RECORD && execution.guard_count != request->tape_count)
+    return CS_PRECISION_CHART_TAPE_MISMATCH;
+  cs_precision_chart_result completed = {0};
+  completed.program = p; completed.guards = scratch->guards;
+  completed.guard_count = execution.guard_count; completed.completed_steps = execution.steps;
+  completed.semantics = request->mode;
+  for (unsigned j = 0; j < 8; j++) completed.planes[j] = scratch->planes[j];
+  *result = completed;
   return 0;
 }
 int cs_precision_program_evaluate(cs_precision_program *p,

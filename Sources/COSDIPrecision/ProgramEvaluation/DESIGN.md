@@ -147,3 +147,76 @@ scratch and exact cumulative work exhaustion. A supplied real compiler
 program/setup path exercises the same production admission/extractor and checks
 that all admitted roots and source branch predicates survive extraction. These
 are graph facts, not constitutive ranges or physical flow evidence.
+
+## Internal Conditional Chart Formula Evaluation
+
+`Chart.h` defines an internal operation on the same exclusively owned range
+program. The existing interpreter, setup/defaults, source order, simultaneous
+phi transfers, raw-coordinate derivatives and topology check remain authoritative.
+It introduces no public Swift/wire operation or source equation implementation.
+
+```text
+exact program + closed coordinate/time box + finite source decision tape
+ -> source-order comparison/cast guards, branch and SELECT occurrences
+ -> same three-stage interpreter with conditional predicate choices
+ -> outward selected-formula F/Q/G/C + complete guard conjunction
+ -> conditional exact-graph or finite formula-closure view, or refusal
+```
+
+The tape matches every evaluated comparison/real-to-Boolean cast and every
+consumed branch/SELECT by stage, block, instruction, event kind and global
+occurrence ordinal. Strict/non-strict/equality relations retain their exact
+opcode and Boolean choice. A comparison with valid operands but unresolved
+interval truth may consume its proposed choice; exact-graph mode rejects a
+definite incompatible choice. Formula-closure mode may retain an incompatible
+real predicate only if its weak closure is not excluded by the operand bounds;
+the guard explicitly records this boundary extension. This is not an existence
+proof for that boundary or for a one-sided approach. Discrete parameter predicates
+cannot use this extension. Branch/SELECT choices must agree with their already evaluated
+Boolean. No invalid/domain-failed operand or guard is overridden. Existing
+inactive poison remains poison until source-observable demand or a selected
+consumer discards it. Unsupported primitive guards and singular formulas retain
+their existing explicit refusal.
+
+Each guard record snapshots its operand types, integer facts and outward real
+endpoints, together with source register/site identity and dynamic ordinal.
+The immutable program and complete tape prefix define the exact expression even
+through source loops; overlapping interval bounds never prove guard truth.
+All recorded guard conditions are conjoined. A successful conditional formula
+does not assert this conjunction is nonempty, that a supplied family of tapes is
+exhaustive, or that any physical source continuation exists.
+
+The record mode proposes a tape only when every demanded guard is definite; it
+never guesses a branch. Record output is separate from a checked conditional
+tape. The exact-graph mode conditions the bounds on actual source guards. The
+formula-closure mode is separately tagged: it bounds any finite one-sided limits
+of this same branch formula along points satisfying those guards and approaching
+the closed box. It does not replace exact equality-branch values or prove that
+such approaching points exist. Non-comparison arithmetic retains the original
+smooth-neighborhood checks on the whole box, so the selected formula has a finite
+continuous extension there. Division by zero, sqrt/domain boundaries and
+removable AD 0/0 without a checked source identity lemma still refuse. A closure
+of several guard constraints is not asserted to equal the intersection of their
+individual closures.
+
+G/C are bounds on the retained source AD-root formulas under the same tape;
+they do not prove differentiability of the complete piecewise graph at a seam,
+quotient derivatives for aliased raw coordinates, or physical reconstruction.
+Those upper consistency obligations remain separate from enclosing the roots.
+
+The caller preadmits tape, guard and eight endpoint-plane capacities. These
+buffers are exclusive scratch and may change on failure; only the final result
+view grants access on success. Any attempt invalidates previous views of the same
+scratch. All input/program/tape bytes and scratch remain live and immutable while
+the successful borrowed view is consumed. No per-call allocation, callback or
+new shared owner is introduced. A run-local chart pointer is installed only for
+the synchronous call and cleared on every normal return, including errors.
+
+Every source block/instruction consumes the explicit finite step limit and the
+existing cumulative work budget; no counter is reset by this operation. Missing,
+extra or wrong-site tape entries, bounded scratch exhaustion and step exhaustion
+have distinct internal statuses. Existing process/session ownership supplies the
+outer cancellation/deadline boundary; this internal call creates no alternate
+timeout or cancellation authority. Future public transport must preserve that
+same boundary before publication. Graph extraction and formula bounds alone
+grant no reset/root-existence, source-flow, entire-history, tube or event facts.
