@@ -1,5 +1,6 @@
 #include "Program.h"
 #include "Chart.h"
+#include "Frontier.h"
 #include "../Arena/Arena.h"
 #include <limits.h>
 #include <math.h>
@@ -13,6 +14,15 @@ struct cs_precision_chart_execution {
   size_t guard_count;
   uint64_t steps;
 };
+struct cs_precision_frontier_execution {
+  const cs_precision_frontier_request *request;
+  const cs_precision_frontier_scratch *scratch;
+  size_t count;
+};
+static int source_frontier_event(cs_precision_program *, uint32_t, uint32_t,
+    uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t *);
+static int source_cell_operation(cs_precision_program *, uint32_t, uint32_t,
+    uint32_t, const CSOsdiPrecisionInstruction *, cs_precision_value *);
 #define REQUIRE(test)                                                          \
   do {                                                                         \
     if (!(test))                                                               \
@@ -1081,6 +1091,8 @@ static int chart_guard(cs_precision_program *p, uint32_t stage, uint32_t block,
                        uint32_t a, uint32_t b, int known, uint32_t *choice) {
   struct cs_precision_chart_execution *chart = p->chart;
   if (!chart) return 0;
+  if (p->frontier)
+    return source_frontier_event(p, stage, block, instruction, kind, opcode, a, b, choice);
   if (!cs_precision_charge(&p->math, 16)) return p->math.status;
   if (chart->guard_count >= chart->scratch->guard_capacity)
     return CS_PRECISION_CHART_CAPACITY;
@@ -1112,6 +1124,174 @@ static int chart_guard(cs_precision_program *p, uint32_t stage, uint32_t block,
     chart_operand(p, &p->values[b], &guard.b_type, &guard.b_integer, &guard.b_lower, &guard.b_upper);
   chart->scratch->guards[chart->guard_count++] = guard;
   return 0;
+}
+int cs_precision_cell_valid(const cs_precision_cell_integer *v, uint32_t bits) {
+  if (!v || !bits || bits > CS_PRECISION_CELL_BITS || v->negative > 1 || v->count > CS_PRECISION_CELL_LIMBS) return 0;
+  if ((!v->count && v->negative) || (v->count && !v->limbs[v->count - 1])) return 0;
+  for (uint32_t i = v->count; i < CS_PRECISION_CELL_LIMBS; ++i) if (v->limbs[i]) return 0;
+  return !v->count || 64u * (v->count - 1) + 64u - (uint32_t)__builtin_clzll(v->limbs[v->count - 1]) <= bits;
+}
+int cs_precision_cell_compare(const cs_precision_cell_integer *a, const cs_precision_cell_integer *b) {
+  if (a->negative != b->negative) return a->negative ? -1 : 1;
+  int result = a->count < b->count ? -1 : a->count > b->count ? 1 : 0;
+  for (uint32_t i = a->count; !result && i; --i)
+    result = a->limbs[i-1] < b->limbs[i-1] ? -1 : a->limbs[i-1] > b->limbs[i-1] ? 1 : 0;
+  return a->negative ? -result : result;
+}
+static void source_cell_import(mpz_t out, const cs_precision_cell_integer *value) {
+  mpz_import(out, value->count, -1, sizeof(uint64_t), 0, 0, value->limbs);
+  if (value->negative) mpz_neg(out, out);
+}
+static void source_cell_export(cs_precision_cell_integer *out, const mpz_t value) {
+  memset(out, 0, sizeof(*out)); size_t count = 0;
+  out->negative = mpz_sgn(value) < 0;
+  mpz_export(out->limbs, &count, -1, sizeof(uint64_t), 0, 0, value);
+  out->count = (uint32_t)count;
+}
+static int source_site_equal(const cs_precision_source_decision *a,
+                             const cs_precision_source_decision *b) {
+  return a->site.stage == b->site.stage && a->site.block == b->site.block &&
+    a->site.instruction == b->site.instruction && a->site.kind == b->site.kind &&
+    a->site.ordinal == b->site.ordinal && a->opcode == b->opcode;
+}
+static int source_event_accept(cs_precision_program *p, cs_precision_source_event *event) {
+  struct cs_precision_frontier_execution *f = p->frontier;
+  if (!cs_precision_charge(&p->math, sizeof(*event))) return p->math.status;
+  if (f->count >= f->scratch->event_capacity) return CS_PRECISION_FRONTIER_CAPACITY;
+  event->decision.site.ordinal = f->count;
+  int status = 0;
+  if (f->count < f->request->prefix_count) {
+    const cs_precision_source_decision *given = &f->request->prefix[f->count];
+    if (!source_site_equal(given, &event->decision) ||
+        !cs_precision_cell_valid(&given->cell, f->request->maximum_integer_bits))
+      return CS_PRECISION_PREFIX_MALFORMED;
+    if (event->decision.site.kind == CS_PRECISION_SOURCE_CELL) {
+      if (given->site.choice) return CS_PRECISION_PREFIX_MALFORMED;
+      event->decision.cell = given->cell;
+      if (cs_precision_cell_compare(&given->cell, &event->first_cell) < 0 ||
+          cs_precision_cell_compare(&given->cell, &event->last_cell) > 0) status = CS_PRECISION_PREFIX_EXCLUDED;
+    } else {
+      if (given->cell.count || given->cell.negative || given->site.choice > 3 ||
+          ((event->decision.site.kind == CS_PRECISION_SOURCE_RELATION ||
+            event->decision.site.kind == CS_PRECISION_SOURCE_SIGN) && !given->site.choice) ||
+          (event->decision.site.kind <= CS_PRECISION_CHART_SELECT && given->site.choice > 1))
+        return CS_PRECISION_PREFIX_MALFORMED;
+      event->decision.site.choice = given->site.choice;
+      if (!(event->allowed_mask & (1u << given->site.choice))) status = CS_PRECISION_PREFIX_EXCLUDED;
+    }
+  } else if (event->decision.site.kind == CS_PRECISION_SOURCE_CELL) {
+    if (event->cell_count == 1) event->decision.cell = event->first_cell;
+    else status = CS_PRECISION_FRONTIER_STOP;
+  } else if (event->allowed_mask && !(event->allowed_mask & (event->allowed_mask - 1))) {
+    event->decision.site.choice = (uint32_t)__builtin_ctz(event->allowed_mask);
+  } else status = CS_PRECISION_FRONTIER_STOP;
+  if (status == CS_PRECISION_FRONTIER_STOP) {
+    event->decision.site.choice = 0;
+    memset(&event->decision.cell, 0, sizeof(event->decision.cell));
+  }
+  event->operands.decision = event->decision.site;
+  f->scratch->events[f->count++] = *event;
+  return status;
+}
+static int source_frontier_event(cs_precision_program *p, uint32_t stage, uint32_t block,
+    uint32_t instruction, uint32_t kind, uint32_t opcode, uint32_t ar, uint32_t br, uint32_t *choice) {
+  cs_precision_source_event event = {0};
+  event.decision.site = (cs_precision_chart_decision){stage, block, instruction, kind, *choice, 0};
+  event.decision.opcode = opcode;
+  event.operands.opcode = opcode; event.operands.a = ar; event.operands.b = br;
+  const cs_precision_value *a = &p->values[ar], *b = br == NONE ? NULL : &p->values[br];
+  chart_operand(p, a, &event.operands.a_type, &event.operands.a_integer, &event.operands.a_lower, &event.operands.a_upper);
+  chart_operand(p, b, &event.operands.b_type, &event.operands.b_integer, &event.operands.b_lower, &event.operands.b_upper);
+  if ((event.operands.a_type == 1 && (!isfinite(event.operands.a_lower) || !isfinite(event.operands.a_upper))) ||
+      (event.operands.b_type == 1 && (!isfinite(event.operands.b_lower) || !isfinite(event.operands.b_upper))))
+    return CS_OSDI_PRECISION_NONFINITE_PROJECTION;
+  if (kind == CS_PRECISION_CHART_PREDICATE && b && a->type == 1 && b->type == 1) {
+    event.decision.site.kind = CS_PRECISION_SOURCE_RELATION;
+    int same = a == b || (a->identity && a->identity == b->identity) ||
+      (range_fact(p, a)->token && range_fact(p, a)->token == range_fact(p, b)->token);
+    if (same) event.allowed_mask = 1u << CS_PRECISION_SOURCE_EQUAL;
+    else {
+      if (mpfr_cmp(a->real.low, b->real.high) < 0) event.allowed_mask |= 1u << CS_PRECISION_SOURCE_LESS;
+      if (mpfr_cmp(a->real.low, b->real.high) <= 0 && mpfr_cmp(a->real.high, b->real.low) >= 0)
+        event.allowed_mask |= 1u << CS_PRECISION_SOURCE_EQUAL;
+      if (mpfr_cmp(a->real.high, b->real.low) > 0) event.allowed_mask |= 1u << CS_PRECISION_SOURCE_GREATER;
+    }
+  } else if (kind == CS_PRECISION_CHART_PREDICATE && opcode == CS_OSDI_PRECISION_OP_FBCAST) {
+    event.decision.site.kind = CS_PRECISION_SOURCE_SIGN;
+    if (mpfr_cmp_ui(a->real.low, 0) < 0) event.allowed_mask |= 1u << CS_PRECISION_SOURCE_LESS;
+    if (mpfr_cmp_ui(a->real.low, 0) <= 0 && mpfr_cmp_ui(a->real.high, 0) >= 0)
+      event.allowed_mask |= 1u << CS_PRECISION_SOURCE_EQUAL;
+    if (mpfr_cmp_ui(a->real.high, 0) > 0) event.allowed_mask |= 1u << CS_PRECISION_SOURCE_GREATER;
+  } else event.allowed_mask = 1u << *choice;
+  if (!event.allowed_mask) return CS_OSDI_PRECISION_NUMERIC_INVARIANT;
+  int status = source_event_accept(p, &event);
+  if (status) return status;
+  uint32_t selected = event.decision.site.choice;
+  if (event.decision.site.kind == CS_PRECISION_SOURCE_SIGN) *choice = selected != CS_PRECISION_SOURCE_EQUAL;
+  else if (event.decision.site.kind == CS_PRECISION_SOURCE_RELATION) {
+    switch (opcode) {
+    case 53: *choice = selected == CS_PRECISION_SOURCE_LESS; break;
+    case 54: *choice = selected == CS_PRECISION_SOURCE_GREATER; break;
+    case 55: *choice = selected != CS_PRECISION_SOURCE_LESS; break;
+    case 56: *choice = selected != CS_PRECISION_SOURCE_GREATER; break;
+    case 58: *choice = selected == CS_PRECISION_SOURCE_EQUAL; break;
+    case 62: *choice = selected != CS_PRECISION_SOURCE_EQUAL; break;
+    default: return CS_OSDI_PRECISION_NUMERIC_INVARIANT;
+    }
+  } else *choice = selected;
+  return 0;
+}
+static int source_cell_operation(cs_precision_program *p, uint32_t stage, uint32_t block,
+    uint32_t instruction, const CSOsdiPrecisionInstruction *op, cs_precision_value *destination) {
+  const cs_precision_interval *a = &p->values[op->a].real;
+  const cs_precision_frontier_request *request = p->frontier->request;
+  if (!mpfr_number_p(a->low) || !mpfr_number_p(a->high)) return CS_OSDI_PRECISION_DOMAIN;
+  if ((!mpfr_zero_p(a->low) && mpfr_get_exp(a->low) > (mpfr_exp_t)request->maximum_integer_bits) ||
+      (!mpfr_zero_p(a->high) && mpfr_get_exp(a->high) > (mpfr_exp_t)request->maximum_integer_bits))
+    return CS_PRECISION_CELL_PRECISION;
+  if (!cs_precision_charge(&p->math, 2048 + 16 * (uint64_t)request->maximum_integer_bits)) return p->math.status;
+  mpz_t first, last, count, chosen;
+  mpz_inits(first, last, count, chosen, NULL);
+  if (op->opcode == 20) {
+    mpfr_get_z(first, a->low, MPFR_RNDD); mpfr_get_z(last, a->high, MPFR_RNDD);
+  } else if (op->opcode == 21) {
+    mpfr_get_z(first, a->low, MPFR_RNDU); mpfr_get_z(last, a->high, MPFR_RNDU);
+  } else {
+    if (op->opcode == 5) {
+      mpfr_round(p->math.temporary[8], a->low); mpfr_round(p->math.temporary[9], a->high);
+    } else {
+      mpfr_trunc(p->math.temporary[8], a->low); mpfr_trunc(p->math.temporary[9], a->high);
+    }
+    mpfr_get_z(first, p->math.temporary[8], MPFR_RNDN); mpfr_get_z(last, p->math.temporary[9], MPFR_RNDN);
+  }
+  int status = 0;
+  if (mpz_sizeinbase(first, 2) > request->maximum_integer_bits || mpz_sizeinbase(last, 2) > request->maximum_integer_bits)
+    status = CS_PRECISION_CELL_PRECISION;
+  else if ((op->opcode == 5 || op->opcode == 6) &&
+      (mpz_cmp_si(first, INT32_MIN) < 0 || mpz_cmp_si(last, INT32_MAX) > 0)) status = CS_OSDI_PRECISION_DOMAIN;
+  mpz_sub(count, last, first); mpz_add_ui(count, count, 1);
+  if (!status && (!mpz_fits_ulong_p(count) || mpz_cmp_ui(count, request->maximum_cells) > 0)) status = CS_PRECISION_FRONTIER_CAPACITY;
+  cs_precision_source_event event = {0};
+  if (!status) {
+    event.decision.site = (cs_precision_chart_decision){stage, block, instruction, CS_PRECISION_SOURCE_CELL, 0, 0};
+    event.decision.opcode = op->opcode; event.cell_count = mpz_get_ui(count);
+    source_cell_export(&event.first_cell, first); source_cell_export(&event.last_cell, last);
+    event.operands.opcode = op->opcode; event.operands.a = op->a; event.operands.b = NONE;
+    chart_operand(p, &p->values[op->a], &event.operands.a_type, &event.operands.a_integer, &event.operands.a_lower, &event.operands.a_upper);
+    if (!isfinite(event.operands.a_lower) || !isfinite(event.operands.a_upper)) status = CS_OSDI_PRECISION_NONFINITE_PROJECTION;
+    if (!status) status = source_event_accept(p, &event);
+    if (!status) {
+      source_cell_import(chosen, &event.decision.cell);
+      if (destination->type == 2) destination->integer = (uint32_t)mpz_get_si(chosen);
+      else {
+        mpfr_set_z(destination->real.low, chosen, MPFR_RNDD);
+        mpfr_set_z(destination->real.high, chosen, MPFR_RNDU);
+      }
+      destination->initialized = 1;
+    }
+  }
+  mpz_clears(first, last, count, chosen, NULL);
+  return status;
 }
 static int function(cs_precision_program *p, uint32_t index, const double *high,
                     const double *low,
@@ -1255,12 +1435,16 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       destination->failure = 0;
       destination->failure_detail = NONE;
       destination->initialized = 0;
-      int status = p->range_mode && !(p->chart && chart_predicate(i->opcode))
+      int cell = p->frontier && (i->opcode == 5 || i->opcode == 6 || i->opcode == 20 || i->opcode == 21);
+      int status = cell ? source_cell_operation(p, index + 1, block, p->detail, i, destination) : 0;
+      if (cell && status && status != CS_OSDI_PRECISION_DOMAIN &&
+          status != CS_OSDI_PRECISION_NONSMOOTH && status != CS_OSDI_PRECISION_NONFINITE_PROJECTION) return status;
+      if (!cell) status = p->range_mode && !(p->chart && chart_predicate(i->opcode))
                        ? cs_precision_regularity(&p->math, i->opcode, a,
                                                   comparison_b, active_a,
                                                   active_b, same)
                        : 0;
-      if (!status)
+      if (!status && !cell)
         status = cs_precision_apply(&p->math, i->opcode, destination, a,
                                      comparison_b);
       if (p->chart && chart_predicate(i->opcode) &&
@@ -1575,6 +1759,48 @@ int cs_precision_program_evaluate_chart(
   for (unsigned j = 0; j < 8; j++) completed.planes[j] = scratch->planes[j];
   *result = completed;
   return 0;
+}
+int cs_precision_program_explore_frontier(cs_precision_program *p,
+    cs_osdi_precision_control_v1 *control, const double *lh, const double *ll,
+    const double *uh, const double *ul, const cs_precision_frontier_request *request,
+    const cs_precision_frontier_scratch *scratch, cs_precision_frontier_result *result) {
+  if (!p || !p->header || !control || !request || !scratch || !result || !p->range_mode ||
+      p->chart || p->frontier || !request->maximum_steps || !request->maximum_cells ||
+      request->maximum_cells > ULONG_MAX || !request->maximum_integer_bits ||
+      request->maximum_integer_bits > CS_PRECISION_CELL_BITS ||
+      (request->prefix_count && !request->prefix) ||
+      (scratch->event_capacity && !scratch->events) || request->prefix_count > scratch->event_capacity ||
+      (p->active_count && (!lh || !ll || !uh || !ul)) || p->math.work > p->math.limit)
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  size_t matrix, bytes, n = p->header->raw_node_count;
+  if (!chart_product(n, n, &matrix) || !chart_product(matrix, sizeof(double), &bytes) ||
+      !chart_product(scratch->event_capacity, sizeof(*scratch->events), &bytes) ||
+      !chart_product(request->prefix_count, sizeof(*request->prefix), &bytes))
+    return CS_OSDI_PRECISION_INVALID_INPUT;
+  double *planes[8];
+  for (unsigned i = 0; i < 8; ++i) {
+    if (!scratch->formulas.planes[i] || scratch->formulas.plane_capacities[i] < (i < 4 ? n : matrix))
+      return CS_PRECISION_FRONTIER_CAPACITY;
+    planes[i] = scratch->formulas.planes[i];
+  }
+  cs_precision_chart_request chart_request = {CS_PRECISION_CHART_RECORD, NULL, 0, request->maximum_steps};
+  struct cs_precision_chart_execution chart = {&chart_request, &scratch->formulas, 0, 0};
+  struct cs_precision_frontier_execution frontier = {request, scratch, 0};
+  p->chart = &chart; p->frontier = &frontier;
+  int status = evaluate_range(p, control, lh, ll, uh, ul, planes);
+  p->frontier = NULL; p->chart = NULL;
+  if (scratch->usage) *scratch->usage = (cs_precision_frontier_usage){chart.steps, frontier.count};
+  if ((!status && frontier.count < request->prefix_count) ||
+      (status == CS_PRECISION_PREFIX_EXCLUDED && frontier.count != request->prefix_count))
+    return CS_PRECISION_PREFIX_MALFORMED;
+  if (status && status != CS_PRECISION_FRONTIER_STOP && status != CS_PRECISION_PREFIX_EXCLUDED) return status;
+  cs_precision_frontier_result completed = {0};
+  completed.program = p; completed.events = scratch->events; completed.event_count = frontier.count;
+  completed.completed_steps = chart.steps;
+  completed.state = status == CS_PRECISION_FRONTIER_STOP ? CS_PRECISION_FRONTIER :
+                    status == CS_PRECISION_PREFIX_EXCLUDED ? CS_PRECISION_EXCLUDED : CS_PRECISION_TERMINAL;
+  if (!status) for (unsigned i = 0; i < 8; ++i) completed.planes[i] = planes[i];
+  *result = completed; return 0;
 }
 int cs_precision_program_evaluate(cs_precision_program *p,
                                   cs_osdi_precision_control_v1 *control,

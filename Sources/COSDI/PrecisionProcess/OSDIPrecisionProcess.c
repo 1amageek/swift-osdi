@@ -1,4 +1,5 @@
 #include "../include/OSDIPrecisionProcess.h"
+#include "DecisionCover/Projection.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <float.h>
@@ -35,6 +36,9 @@ struct cs_osdi_precision_session {
     uint64_t sequence;
     uint32_t program_has_time_input;
     cs_osdi_chart_control_v3 chart_geometry;
+    cs_osdi_cover_control_v4 cover_geometry;
+    uint32_t *cover_node_visits,*cover_leaf_visits;
+    uint64_t completed_guard_records,completed_copied_bytes;
     uint64_t completed_work, completed_steps;
     const unsigned char *chart_constants;
     uint32_t chart_constant_count;
@@ -118,7 +122,9 @@ static int wait_response(cs_osdi_precision_session *s, uint64_t expected, uint64
             uint32_t status = s->control->response_status;
             int chart_status = s->geometry.protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION &&
                 status >= CS_OSDI_CHART_TAPE_MISMATCH && status <= CS_OSDI_CHART_STEP_LIMIT;
-            if (status > maximum_status && !chart_status)
+            int cover_status = s->geometry.protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION &&
+                (status == CS_OSDI_CHART_STEP_LIMIT || (status >= CS_OSDI_COVER_PREFIX_MALFORMED && status <= CS_OSDI_COVER_CAPACITY));
+            if (status > maximum_status && !chart_status && !cover_status)
                 return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
             if (s->control->response_status != CS_OSDI_PRECISION_SUCCESS) {
                 if (issue) { issue->worker_status = s->control->response_status; issue->instruction = s->control->response_detail; }
@@ -147,6 +153,10 @@ static int add_region(cs_osdi_precision_control_v1 *header, unsigned region,
     return add_descriptor(&header->regions[region], count, stride, bytes);
 }
 static int chart_geometry_matches(const cs_osdi_precision_session *s) {
+    if (s->geometry.protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION) {
+        const unsigned char *actual=s->mapping,*fixed=(const void *)&s->cover_geometry;
+        return !memcmp(actual+sizeof(s->geometry),fixed+sizeof(s->geometry),offsetof(cs_osdi_cover_control_v4,node_count)-sizeof(s->geometry));
+    }
     if (s->geometry.protocol_version != CS_OSDI_CHART_PROTOCOL_VERSION) return 1;
     const unsigned char *actual = s->mapping, *fixed = (const void *)&s->chart_geometry;
     return !memcmp(actual + sizeof(s->geometry), fixed + sizeof(s->geometry),
@@ -164,7 +174,7 @@ static int retain_time_input_fact(cs_osdi_precision_session *s) {
     CSOsdiPrecisionSection inputs = header.inputs;
     if (inputs.stride != sizeof(CSOsdiPrecisionInput) || inputs.offset > bytes
         || inputs.count > (bytes - inputs.offset) / inputs.stride) return 0;
-    if (s->geometry.protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION) {
+    if (s->geometry.protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION || s->geometry.protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION) {
         CSOsdiPrecisionSection constants = header.constants;
         if (constants.stride != sizeof(CSOsdiPrecisionConstant) || constants.offset > bytes ||
             constants.count > (bytes - constants.offset) / constants.stride) return 0;
@@ -241,11 +251,13 @@ int32_t cs_osdi_precision_process_close(cs_osdi_precision_session **owner,
     if (s->request_fd >= 0) close(s->request_fd);
     if (s->response_fd >= 0) close(s->response_fd);
     if (s->mapping && s->mapping != MAP_FAILED) munmap(s->mapping, s->mapping_bytes);
+    free(s->cover_node_visits); free(s->cover_leaf_visits);
     free(s); *owner = NULL;
     return CS_OSDI_PRECISION_PROCESS_SUCCESS;
 }
 
-static int32_t process_create(uint32_t operation, const cs_osdi_chart_limits_v3 *chart_limits, const char *worker_path,
+static int32_t process_create(uint32_t operation, const cs_osdi_chart_limits_v3 *chart_limits,
+    const cs_osdi_cover_limits_v4 *cover_limits, const char *worker_path,
     const unsigned char *program, uint64_t program_bytes,
     const unsigned char *setup, uint64_t setup_bytes,
     uint32_t descriptor_index, uint32_t active_count, uint32_t raw_node_count,
@@ -256,6 +268,12 @@ static int32_t process_create(uint32_t operation, const cs_osdi_chart_limits_v3 
     if (operation == CS_OSDI_CHART_PROTOCOL_VERSION && (!chart_limits ||
         !chart_limits->maximum_steps || !chart_limits->maximum_tape_entries ||
         !chart_limits->maximum_guard_records))
+        return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
+    if (operation == CS_OSDI_COVER_PROTOCOL_VERSION && (!cover_limits || cover_limits->reserved ||
+        !cover_limits->maximum_steps || !cover_limits->maximum_guard_records || !cover_limits->maximum_copied_bytes ||
+        !cover_limits->maximum_cells || !cover_limits->maximum_nodes || cover_limits->maximum_nodes==UINT32_MAX ||
+        !cover_limits->maximum_leaves || !cover_limits->maximum_pending || !cover_limits->maximum_depth ||
+        !cover_limits->maximum_integer_bits || cover_limits->maximum_integer_bits>CS_OSDI_COVER_CELL_BITS))
         return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_INVALID, 0);
     if (!out || !options || !worker_path || !*worker_path || !program || !program_bytes || !setup || !setup_bytes
         || !raw_node_count || active_count > raw_node_count || !options->maximum_mapping_bytes
@@ -269,8 +287,9 @@ static int32_t process_create(uint32_t operation, const cs_osdi_chart_limits_v3 
 #else
     cs_osdi_precision_control_v1 header = {0};
     cs_osdi_chart_control_v3 chart_header = {0};
+    cs_osdi_cover_control_v4 cover_header = {0};
     header.magic = CS_OSDI_PRECISION_MAGIC; header.protocol_version = operation;
-    header.header_bytes = operation == CS_OSDI_CHART_PROTOCOL_VERSION ? sizeof(chart_header) : sizeof(header); header.byte_order = CS_OSDI_PRECISION_BYTE_ORDER;
+    header.header_bytes = operation == CS_OSDI_COVER_PROTOCOL_VERSION ? sizeof(cover_header) : operation == CS_OSDI_CHART_PROTOCOL_VERSION ? sizeof(chart_header) : sizeof(header); header.byte_order = CS_OSDI_PRECISION_BYTE_ORDER;
     header.descriptor_index = descriptor_index; header.active_count = active_count; header.raw_node_count = raw_node_count;
     header.arena_bytes = options->arena_bytes; header.minimum_precision_bits = options->minimum_precision_bits;
     header.maximum_precision_bits = options->maximum_precision_bits; header.maximum_work_units = options->maximum_work_units;
@@ -293,6 +312,16 @@ static int32_t process_create(uint32_t operation, const cs_osdi_chart_limits_v3 
                 sizeof(cs_osdi_chart_guard_v3), &bytes))
             return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
     }
+    if(operation==CS_OSDI_COVER_PROTOCOL_VERSION){
+        uint64_t vector=4*(uint64_t)raw_node_count;
+        if(matrix>(UINT64_MAX-vector)/4)return fail(NULL,issue,CS_OSDI_PRECISION_PROCESS_RESOURCE,0);
+        uint64_t stride=vector+4*matrix;
+        if(cover_limits->maximum_leaves>UINT64_MAX/stride)return fail(NULL,issue,CS_OSDI_PRECISION_PROCESS_RESOURCE,0);
+        cover_header.limits=*cover_limits;
+        if(!add_descriptor(&cover_header.tree_region,cover_limits->maximum_nodes,sizeof(cs_osdi_cover_node_v4),&bytes) ||
+            !add_descriptor(&cover_header.leaf_region,stride*cover_limits->maximum_leaves,sizeof(double),&bytes))
+            return fail(NULL,issue,CS_OSDI_PRECISION_PROCESS_RESOURCE,0);
+    }
     /* Darwin POSIX shared memory rounds its object size to the host page size. */
     long page = sysconf(_SC_PAGESIZE);
     if (page <= 0 || bytes > UINT64_MAX - ((uint64_t)page - 1))
@@ -300,21 +329,29 @@ static int32_t process_create(uint32_t operation, const cs_osdi_chart_limits_v3 
     bytes = ((bytes + (uint64_t)page - 1) / (uint64_t)page) * (uint64_t)page;
     if (bytes > options->maximum_mapping_bytes || bytes > SIZE_MAX || bytes > INT64_MAX)
         return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, 0);
-    header.mapping_bytes = bytes; chart_header.base = header;
+    header.mapping_bytes = bytes; chart_header.base = header; cover_header.base = header;
     cs_osdi_precision_session *s = calloc(1, sizeof(*s));
     if (!s) return fail(NULL, issue, CS_OSDI_PRECISION_PROCESS_RESOURCE, errno);
-    s->pid = -1; s->request_fd = -1; s->response_fd = -1; s->options = *options; s->geometry = header; s->mapping_bytes = (size_t)bytes; s->chart_geometry = chart_header;
+    s->pid = -1; s->request_fd = -1; s->response_fd = -1; s->options = *options; s->geometry = header; s->mapping_bytes = (size_t)bytes; s->chart_geometry = chart_header; s->cover_geometry=cover_header;
     int shared = -1, request[2] = {-1,-1}, response[2] = {-1,-1}, spawnfds[3] = {-1,-1,-1};
     int error = 0, result = CS_OSDI_PRECISION_PROCESS_IO;
     posix_spawn_file_actions_t actions; posix_spawnattr_t attributes;
     int have_actions = 0, have_attributes = 0;
+    if(operation==CS_OSDI_COVER_PROTOCOL_VERSION){
+        /* The admitted tree/leaf mapping products dominate these smaller visit
+         * arrays; calloc still receives explicit checked byte counts. */
+        uint64_t nb=(uint64_t)cover_limits->maximum_nodes*sizeof(uint32_t),lb=(uint64_t)cover_limits->maximum_leaves*sizeof(uint32_t);
+        if(nb>SIZE_MAX || lb>SIZE_MAX){result=CS_OSDI_PRECISION_PROCESS_RESOURCE;goto failed;}
+        s->cover_node_visits=calloc(1,(size_t)nb);s->cover_leaf_visits=calloc(1,(size_t)lb);
+        if(!s->cover_node_visits || !s->cover_leaf_visits){result=CS_OSDI_PRECISION_PROCESS_RESOURCE;goto failed;}
+    }
     shared = create_mapping_fd();
     if (shared < 0 || ftruncate(shared, (off_t)bytes)) goto failed;
     s->mapping = mmap(NULL, (size_t)bytes, PROT_READ | PROT_WRITE, MAP_SHARED, shared, 0);
     if (s->mapping == MAP_FAILED) goto failed;
     s->control = s->mapping;
     if (!__atomic_is_lock_free(sizeof(uint64_t), &s->control->response_sequence)) { result = CS_OSDI_PRECISION_PROCESS_UNSUPPORTED; goto failed; }
-    memset(s->mapping, 0, (size_t)bytes); memcpy(s->control, operation == CS_OSDI_CHART_PROTOCOL_VERSION ? (const void *)&chart_header : (const void *)&header, header.header_bytes);
+    memset(s->mapping, 0, (size_t)bytes); memcpy(s->control, operation == CS_OSDI_COVER_PROTOCOL_VERSION ? (const void *)&cover_header : operation == CS_OSDI_CHART_PROTOCOL_VERSION ? (const void *)&chart_header : (const void *)&header, header.header_bytes);
     memcpy(region(s, 0), program, (size_t)program_bytes); memcpy(region(s, 1), setup, (size_t)setup_bytes);
     if (make_pipe(request) || make_pipe(response)) goto failed;
     if (fcntl(request[1], F_SETNOSIGPIPE, 1)) goto failed;
@@ -369,7 +406,7 @@ int32_t cs_osdi_precision_process_create(const char *worker_path,
     const cs_osdi_precision_process_options *options,
     cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
     cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue) {
-    return process_create(CS_OSDI_PRECISION_PROTOCOL_VERSION, NULL, worker_path, program, program_bytes,
+    return process_create(CS_OSDI_PRECISION_PROTOCOL_VERSION, NULL, NULL, worker_path, program, program_bytes,
         setup, setup_bytes, descriptor_index, active_count, raw_node_count, options,
         cancelled, cancel_context, out, issue);
 }
@@ -381,7 +418,7 @@ int32_t cs_osdi_range_process_create(const char *worker_path,
     const cs_osdi_precision_process_options *options,
     cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
     cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue) {
-    return process_create(CS_OSDI_RANGE_PROTOCOL_VERSION, NULL, worker_path, program, program_bytes,
+    return process_create(CS_OSDI_RANGE_PROTOCOL_VERSION, NULL, NULL, worker_path, program, program_bytes,
         setup, setup_bytes, descriptor_index, active_count, raw_node_count, options,
         cancelled, cancel_context, out, issue);
 }
@@ -393,9 +430,31 @@ int32_t cs_osdi_chart_process_create(const char *worker_path,
     const cs_osdi_precision_process_options *options, const cs_osdi_chart_limits_v3 *limits,
     cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
     cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue) {
-    return process_create(CS_OSDI_CHART_PROTOCOL_VERSION, limits, worker_path, program, program_bytes,
+    return process_create(CS_OSDI_CHART_PROTOCOL_VERSION, limits, NULL, worker_path, program, program_bytes,
         setup, setup_bytes, descriptor_index, active_count, raw_node_count, options,
         cancelled, cancel_context, out, issue);
+}
+
+static int cover_span_disjoint(const void *a,size_t an,const void *b,size_t bn){
+    if((an && !a) || (bn && !b) || an>UINTPTR_MAX-(uintptr_t)a || bn>UINTPTR_MAX-(uintptr_t)b)return 0;
+    return !an || !bn || (uintptr_t)a+an<=(uintptr_t)b || (uintptr_t)b+bn<=(uintptr_t)a;
+}
+int32_t cs_osdi_cover_process_create(const char *worker_path,
+    const unsigned char *program,uint64_t program_bytes,const unsigned char *setup,uint64_t setup_bytes,
+    uint32_t descriptor_index,uint32_t active_count,uint32_t raw_node_count,
+    const cs_osdi_precision_process_options *options,const cs_osdi_cover_limits_v4 *limits,
+    cs_osdi_precision_cancel_probe cancelled,void *cancel_context,cs_osdi_precision_session **out,cs_osdi_precision_process_issue *issue){
+    if(program_bytes>SIZE_MAX || setup_bytes>SIZE_MAX)return fail(NULL,NULL,CS_OSDI_PRECISION_PROCESS_INVALID,0);
+    const void *metadata[]={out,issue};size_t lengths[]={out?sizeof(*out):0,issue?sizeof(*issue):0};
+    const void *inputs[]={program,setup,options,limits,worker_path};
+    size_t input_bytes[]={(size_t)program_bytes,(size_t)setup_bytes,options?sizeof(*options):0,limits?sizeof(*limits):0,worker_path?strlen(worker_path)+1:0};
+    if((out && (uintptr_t)out%_Alignof(cs_osdi_precision_session *)) ||
+        (issue && (uintptr_t)issue%_Alignof(cs_osdi_precision_process_issue)) ||
+        !cover_span_disjoint(out,lengths[0],issue,lengths[1]))return fail(NULL,NULL,CS_OSDI_PRECISION_PROCESS_INVALID,0);
+    for(unsigned i=0;i<2;++i)for(unsigned j=0;j<5;++j)
+        if(!cover_span_disjoint(metadata[i],lengths[i],inputs[j],input_bytes[j]))return fail(NULL,NULL,CS_OSDI_PRECISION_PROCESS_INVALID,0);
+    return process_create(CS_OSDI_COVER_PROTOCOL_VERSION,NULL,limits,worker_path,program,program_bytes,setup,setup_bytes,
+        descriptor_index,active_count,raw_node_count,options,cancelled,cancel_context,out,issue);
 }
 
 static int normalized(double high, double low) { return isfinite(high) && isfinite(low) && high + low == high; }
@@ -407,6 +466,30 @@ static int valid_context(const cs_osdi_precision_context_v1 *context) {
     if (context->mode == CS_OSDI_PRECISION_TRANSIENT_INITIALIZATION) return context->time_high == 0 && context->time_low == 0;
     return context->mode == CS_OSDI_PRECISION_TRANSIENT && context->time_high >= 0 && !(context->time_high == 0 && context->time_low < 0);
 }
+static int cover_metadata_valid(cs_osdi_precision_session *s,void *out,cs_osdi_precision_process_issue *issue,
+    const double *const inputs[4],uint64_t count,const cs_osdi_precision_context_v1 *lower,const cs_osdi_precision_context_v1 *upper){
+    if(!out || (uintptr_t)out%_Alignof(cs_osdi_cover_result_view) ||
+        (issue && (uintptr_t)issue%_Alignof(cs_osdi_precision_process_issue)) || count>SIZE_MAX/sizeof(double))return 0;
+    const void *metadata[]={out,issue};size_t lengths[]={sizeof(cs_osdi_cover_result_view),issue?sizeof(*issue):0};
+    if(!cover_span_disjoint(out,lengths[0],issue,lengths[1]))return 0;
+    for(unsigned j=0;j<2;++j){
+        if(!cover_span_disjoint(metadata[j],lengths[j],s,s?sizeof(*s):0) ||
+            !cover_span_disjoint(metadata[j],lengths[j],s?s->mapping:NULL,s?s->mapping_bytes:0) ||
+            !cover_span_disjoint(metadata[j],lengths[j],lower,lower?sizeof(*lower):0) ||
+            !cover_span_disjoint(metadata[j],lengths[j],upper,upper?sizeof(*upper):0))return 0;
+        for(unsigned i=0;i<4;++i)if(!cover_span_disjoint(metadata[j],lengths[j],inputs[i],(size_t)count*sizeof(double)))return 0;
+    }
+    if(s && s->geometry.protocol_version==CS_OSDI_COVER_PROTOCOL_VERSION){
+        const void *pools[]={s->cover_node_visits,s->cover_leaf_visits};
+        size_t pool_bytes[]={(size_t)s->cover_geometry.limits.maximum_nodes*sizeof(uint32_t),(size_t)s->cover_geometry.limits.maximum_leaves*sizeof(uint32_t)};
+        for(unsigned j=0;j<2;++j){
+            for(unsigned k=0;k<2;++k)if(!cover_span_disjoint(metadata[k],lengths[k],pools[j],pool_bytes[j]))return 0;
+            for(unsigned i=0;i<4;++i)if(!cover_span_disjoint(inputs[i],(size_t)count*sizeof(double),pools[j],pool_bytes[j]))return 0;
+        }
+    }
+    for(unsigned i=0;i<4;++i)if(!cover_span_disjoint(inputs[i],(size_t)count*sizeof(double),s?s->mapping:NULL,s?s->mapping_bytes:0))return 0;
+    return 1;
+}
 static int32_t process_evaluate(uint32_t operation, uint32_t chart_mode,
     const cs_osdi_chart_decision_v3 *tape, uint64_t tape_count, cs_osdi_precision_session *s,
     const double *candidate_high, const double *candidate_low,
@@ -414,8 +497,11 @@ static int32_t process_evaluate(uint32_t operation, uint32_t chart_mode,
     const cs_osdi_precision_context_v1 *candidate, const cs_osdi_precision_context_v1 *reference,
     uint32_t precision_bits, cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
     void *out, cs_osdi_precision_process_issue *issue) {
+    const double *original_inputs[]={candidate_high,candidate_low,reference_high,reference_low};
+    if(operation==CS_OSDI_COVER_PROTOCOL_VERSION && !cover_metadata_valid(s,out,issue,original_inputs,active_count,candidate,reference))
+        return fail(s,NULL,CS_OSDI_PRECISION_PROCESS_INVALID,0);
     clear_issue(issue);
-    if (out) memset(out, 0, operation == CS_OSDI_CHART_PROTOCOL_VERSION ? sizeof(cs_osdi_chart_result_view) :
+    if (out) memset(out, 0, operation == CS_OSDI_COVER_PROTOCOL_VERSION ? sizeof(cs_osdi_cover_result_view) : operation == CS_OSDI_CHART_PROTOCOL_VERSION ? sizeof(cs_osdi_chart_result_view) :
         operation == CS_OSDI_RANGE_PROTOCOL_VERSION ? sizeof(cs_osdi_range_result_view) : sizeof(cs_osdi_precision_result_view));
     if (!s || s->invalid) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CLOSED, 0);
     if (s->geometry.protocol_version != operation)
@@ -446,6 +532,7 @@ static int32_t process_evaluate(uint32_t operation, uint32_t chart_mode,
             tape, (size_t)tape_count * sizeof(*tape));
         chart->chart_mode = chart_mode; chart->reserved = 0; chart->tape_count = tape_count;
     }
+    uint64_t cover_until=operation==CS_OSDI_COVER_PROTOCOL_VERSION?deadline(s->options.evaluation_timeout_nanoseconds):0;
     const double *inputs[] = {candidate_high,candidate_low,reference_high,reference_low};
     for (unsigned i = 0; i < 4; ++i) if (active_count) memcpy(region(s, i + 2), inputs[i], (size_t)active_count * sizeof(double));
     s->control->candidate = *candidate; s->control->reference = *reference;
@@ -474,7 +561,7 @@ static int32_t process_evaluate(uint32_t operation, uint32_t chart_mode,
         || (h->has_maximum_timestep && (!isfinite(h->maximum_timestep) || h->maximum_timestep <= 0)))
         return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
     uint64_t nodes = h->raw_node_count;
-    for (unsigned i = 6; i < 14; ++i) {
+    for (unsigned i = 6; operation != CS_OSDI_COVER_PROTOCOL_VERSION && i < 14; ++i) {
         const double *values = region(s, i);
         unsigned matrix_start = operation != CS_OSDI_PRECISION_PROTOCOL_VERSION ? 10 : 12;
         uint64_t n = i < matrix_start ? nodes : nodes * nodes;
@@ -483,14 +570,14 @@ static int32_t process_evaluate(uint32_t operation, uint32_t chart_mode,
                 && (i == 8 || i == 11) && values[j] < 0))
                 return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
     }
-    if (operation != CS_OSDI_PRECISION_PROTOCOL_VERSION) {
+    if (operation != CS_OSDI_PRECISION_PROTOCOL_VERSION && operation != CS_OSDI_COVER_PROTOCOL_VERSION) {
         for (unsigned i = 6; i < 14; i += 2) {
             const double *lower = region(s, i), *upper = region(s, i + 1);
             uint64_t count = i < 10 ? nodes : nodes * nodes;
             for (uint64_t j = 0; j < count; ++j)
                 if (lower[j] > upper[j]) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
         }
-    } else {
+    } else if(operation == CS_OSDI_PRECISION_PROTOCOL_VERSION) {
         for (uint64_t j = 0; j < nodes; ++j)
             if (!normalized(((double *)region(s, 6))[j], ((double *)region(s, 7))[j])
                 || !normalized(((double *)region(s, 9))[j], ((double *)region(s, 10))[j]))
@@ -522,6 +609,32 @@ static int32_t process_evaluate(uint32_t operation, uint32_t chart_mode,
                 return fail(s, issue, CS_OSDI_PRECISION_PROCESS_PROTOCOL, 0);
         }
         s->completed_steps = chart->completed_steps; s->completed_work = h->completed_work_units;
+    }
+    if(operation==CS_OSDI_COVER_PROTOCOL_VERSION){
+        const cs_osdi_cover_control_v4 *cover=s->mapping;const cs_osdi_cover_limits_v4 *limits=&s->cover_geometry.limits;
+        if(h->has_maximum_timestep || h->completed_work_units<s->completed_work ||
+            cover->completed_steps<=s->completed_steps || cover->completed_steps>limits->maximum_steps ||
+            cover->completed_guard_records<s->completed_guard_records || cover->completed_guard_records>limits->maximum_guard_records ||
+            cover->completed_copied_bytes<=s->completed_copied_bytes || cover->completed_copied_bytes>limits->maximum_copied_bytes ||
+            h->completed_work_units-s->completed_work<cover->completed_copied_bytes-s->completed_copied_bytes)
+            return fail(s,issue,CS_OSDI_PRECISION_PROCESS_PROTOCOL,0);
+        for(unsigned i=0;i<4;++i)if(active_count && memcmp(region(s,i+2),inputs[i],(size_t)active_count*sizeof(double)))
+            return fail(s,issue,CS_OSDI_PRECISION_PROCESS_PROTOCOL,0);
+        const cs_osdi_cover_node_v4 *tree=(const void *)((unsigned char *)s->mapping+s->cover_geometry.tree_region.byte_offset);
+        const double *leaves=(const void *)((unsigned char *)s->mapping+s->cover_geometry.leaf_region.byte_offset);
+        int checked=cs_osdi_cover_wire_check(cover,region(s,0),s->geometry.regions[0].element_count,tree,leaves,
+            s->cover_node_visits,s->cover_leaf_visits,s->completed_guard_records,s->completed_copied_bytes,cover_until,cancelled,cancel_context);
+        if(checked)return fail(s,issue,checked,0);
+        s->completed_steps=cover->completed_steps;s->completed_work=h->completed_work_units;
+        s->completed_guard_records=cover->completed_guard_records;s->completed_copied_bytes=cover->completed_copied_bytes;
+        cs_osdi_cover_result_view *view=out;
+        *view=(cs_osdi_cover_result_view){.raw_node_count=nodes,.active_count=active_count,.plane_stride=4*nodes+4*nodes*nodes,
+            .nodes=tree,.leaf_planes=leaves,.lower_high=region(s,2),.lower_low=region(s,3),.upper_high=region(s,4),.upper_low=region(s,5),
+            .node_count=cover->node_count,.leaf_count=cover->leaf_count,.used_precision_bits=h->used_precision_bits,
+            .program_has_time_input=s->program_has_time_input,.lower_context=*candidate,.upper_context=*reference,
+            .completed_work_units=h->completed_work_units,.completed_steps=cover->completed_steps,
+            .completed_guard_records=cover->completed_guard_records,.completed_copied_bytes=cover->completed_copied_bytes,.request_sequence=s->sequence};
+        return 0;
     }
     if (cancelled && cancelled(cancel_context)) return fail(s, issue, CS_OSDI_PRECISION_PROCESS_CANCELLED, 0);
     if (operation != CS_OSDI_PRECISION_PROTOCOL_VERSION) {
@@ -578,6 +691,13 @@ int32_t cs_osdi_chart_process_evaluate(cs_osdi_precision_session *s,
     return process_evaluate(CS_OSDI_CHART_PROTOCOL_VERSION, chart_mode, tape, tape_count, s,
         lower_high, lower_low, upper_high, upper_low, active_count, lower_context, upper_context,
         precision_bits, cancelled, cancel_context, out, issue);
+}
+
+int32_t cs_osdi_cover_process_evaluate(cs_osdi_precision_session *s,
+    const double *lh,const double *ll,const double *uh,const double *ul,uint64_t count,
+    const cs_osdi_precision_context_v1 *lower,const cs_osdi_precision_context_v1 *upper,uint32_t bits,
+    cs_osdi_precision_cancel_probe cancelled,void *context,cs_osdi_cover_result_view *out,cs_osdi_precision_process_issue *issue){
+    return process_evaluate(CS_OSDI_COVER_PROTOCOL_VERSION,0,NULL,0,s,lh,ll,uh,ul,count,lower,upper,bits,cancelled,context,out,issue);
 }
 
 int32_t cs_osdi_precision_process_identifier(const cs_osdi_precision_session *session) {

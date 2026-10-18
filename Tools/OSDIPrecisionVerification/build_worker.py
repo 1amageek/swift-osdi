@@ -61,7 +61,10 @@ def main():
     gmp_version = '.'.join(re.search(r'#define __GNU_MP_VERSION' + suffix + r'\s+(\d+)', gmp_header).group(1) for suffix in ['', '_MINOR', '_PATCHLEVEL'])
     profile = {'schema': 1, 'numericVersion': 'directed-mpfr-stateless-v1', 'wireVersion': 1, 'rangeWireVersion': 2, 'rangeSemantics': 'source-program-smooth-box-v2',
         'chartWireVersion': 3, 'chartSemantics': 'source-program-conditional-formula-v3',
-        'chartWorkPolicy': 'session-cumulative-work-and-source-steps', 'programVersion': 1,
+        'chartWorkPolicy': 'session-cumulative-work-and-source-steps',
+        'coverWireVersion': 4, 'coverSemantics': 'source-program-complete-decision-cover-v4',
+        'coverWorkPolicy': 'session-cumulative-work-steps-guard-records-and-explicit-cover-transport-copied-bytes',
+        'coverAuthority': 'independent-source-replay-checked-finite-decision-partitions-and-terminal-formulas-only', 'programVersion': 1,
         'targetABI': subprocess.check_output([str(compiler), '-dumpmachine'], text=True, timeout=10).strip(),
         'compiler': {'sha256': digest(compiler), 'version': '\n'.join(line for line in receipt['compiler']['version'].splitlines() if not line.startswith('InstalledDir:'))},
         'semanticFlags': ['-std=c11', '-O2', '-fno-fast-math', '-ffp-contract=off'],

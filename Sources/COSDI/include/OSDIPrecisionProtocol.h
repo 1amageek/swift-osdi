@@ -178,7 +178,59 @@ typedef struct cs_osdi_chart_control_v3 {
     uint64_t tape_count, guard_count, completed_steps;
 } cs_osdi_chart_control_v3;
 
+/* Protocol 4 publishes only independently checked complete source decision
+ * covers. Existing versions and compiler program ABI 1 are unchanged. */
+#define CS_OSDI_COVER_PROTOCOL_VERSION UINT32_C(4)
+#define CS_OSDI_COVER_CELL_LIMBS 17u
+#define CS_OSDI_COVER_CELL_BITS 1025u
+enum cs_osdi_cover_node_kind {
+    CS_OSDI_COVER_DECISION = 1, CS_OSDI_COVER_TERMINAL = 2
+};
+enum cs_osdi_cover_source_kind {
+    CS_OSDI_COVER_RELATION = 4, CS_OSDI_COVER_SIGN = 5, CS_OSDI_COVER_CELL = 6
+};
+enum cs_osdi_cover_status {
+    CS_OSDI_COVER_PREFIX_MALFORMED = 112, CS_OSDI_COVER_FRONTIER_CAPACITY = 113,
+    CS_OSDI_COVER_CELL_PRECISION = 114, CS_OSDI_COVER_INVALID = 115,
+    CS_OSDI_COVER_CAPACITY = 116
+};
+typedef struct cs_osdi_cover_integer_v4 {
+    uint32_t negative, count;
+    uint64_t limbs[CS_OSDI_COVER_CELL_LIMBS];
+} cs_osdi_cover_integer_v4;
+typedef struct cs_osdi_cover_decision_v4 {
+    cs_osdi_chart_decision_v3 site;
+    uint32_t opcode, reserved;
+    cs_osdi_cover_integer_v4 cell;
+} cs_osdi_cover_decision_v4;
+typedef struct cs_osdi_cover_event_v4 {
+    cs_osdi_cover_decision_v4 decision;
+    cs_osdi_chart_guard_v3 operands;
+    uint32_t allowed_mask, reserved;
+    uint64_t cell_count;
+    cs_osdi_cover_integer_v4 first_cell, last_cell;
+} cs_osdi_cover_event_v4;
+typedef struct cs_osdi_cover_node_v4 {
+    uint32_t parent, depth, kind, first_child, child_count, leaf;
+    cs_osdi_cover_decision_v4 incoming;
+    cs_osdi_cover_event_v4 event;
+} cs_osdi_cover_node_v4;
+typedef struct cs_osdi_cover_limits_v4 {
+    uint64_t maximum_steps, maximum_guard_records, maximum_copied_bytes, maximum_cells;
+    uint32_t maximum_nodes, maximum_leaves, maximum_pending, maximum_depth, maximum_integer_bits, reserved;
+} cs_osdi_cover_limits_v4;
+typedef struct cs_osdi_cover_control_v4 {
+    cs_osdi_precision_control_v1 base;
+    cs_osdi_precision_region_v1 tree_region, leaf_region;
+    cs_osdi_cover_limits_v4 limits;
+    uint32_t node_count, leaf_count;
+    uint64_t completed_steps, completed_guard_records, completed_copied_bytes;
+} cs_osdi_cover_control_v4;
+
 #if defined(__cplusplus)
+static_assert(sizeof(cs_osdi_cover_integer_v4) == 144 && sizeof(cs_osdi_cover_decision_v4) == 184, "Invalid cover cell/decision layout");
+static_assert(sizeof(cs_osdi_cover_event_v4) == 592 && sizeof(cs_osdi_cover_node_v4) == 800, "Invalid cover event/node layout");
+static_assert(sizeof(cs_osdi_cover_control_v4) == 584 && offsetof(cs_osdi_cover_control_v4, node_count) == 552, "Invalid cover header layout");
 static_assert(sizeof(cs_osdi_chart_decision_v3) == 32 && offsetof(cs_osdi_chart_decision_v3, ordinal) == 24, "Invalid chart decision layout");
 static_assert(sizeof(cs_osdi_chart_guard_v3) == 104 && offsetof(cs_osdi_chart_guard_v3, a_lower) == 72, "Invalid chart guard layout");
 static_assert(sizeof(cs_osdi_chart_control_v3) == 552 && offsetof(cs_osdi_chart_control_v3, chart_mode) == 520, "Invalid chart control layout");
@@ -189,6 +241,9 @@ static_assert(sizeof(cs_osdi_precision_control_v1) == 464, "Invalid precision co
 static_assert(offsetof(cs_osdi_precision_control_v1, request_sequence) % 8 == 0,
               "Precision sequence must be aligned");
 #else
+_Static_assert(sizeof(cs_osdi_cover_integer_v4) == 144 && sizeof(cs_osdi_cover_decision_v4) == 184, "Invalid cover cell/decision layout");
+_Static_assert(sizeof(cs_osdi_cover_event_v4) == 592 && sizeof(cs_osdi_cover_node_v4) == 800, "Invalid cover event/node layout");
+_Static_assert(sizeof(cs_osdi_cover_control_v4) == 584 && offsetof(cs_osdi_cover_control_v4, node_count) == 552, "Invalid cover header layout");
 _Static_assert(sizeof(cs_osdi_chart_decision_v3) == 32 && offsetof(cs_osdi_chart_decision_v3, ordinal) == 24, "Invalid chart decision layout");
 _Static_assert(sizeof(cs_osdi_chart_guard_v3) == 104 && offsetof(cs_osdi_chart_guard_v3, a_lower) == 72, "Invalid chart guard layout");
 _Static_assert(sizeof(cs_osdi_chart_control_v3) == 552 && offsetof(cs_osdi_chart_control_v3, chart_mode) == 520, "Invalid chart control layout");

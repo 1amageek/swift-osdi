@@ -7,6 +7,8 @@ resources and local IPC for the separate precision session. This component does
 not evaluate model arithmetic or own solver/history state. One immutable operation
 selects compensated-point protocol 1 or smooth-box protocol 2 at cold creation.
 
+Child: [DecisionCover](DecisionCover/DESIGN.md) owns protocol-4 record projection and complete-response checking.
+
 ## Responsibilities and Boundaries
 
 Admit exact worker/program/setup identities, create one isolated persistent helper,

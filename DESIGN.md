@@ -400,3 +400,7 @@ exact source program/setup/topology + bounded source decision tape
 ```
 
 A chart succeeds only at its local conditional formula contract. It does not establish guard nonemptiness, complete chart coverage, equality/one-sided agreement, root existence, charge continuity, a reset, physical flow or a bounded entire history. A formula closure is tagged separately from actual source equality values. The original physical proof remains required. Existing calibration/source admission requirements above remain unchanged.
+
+## Complete Source Decision Cover Boundary
+
+[DecisionCover](Sources/COSDIPrecision/DecisionCover/DESIGN.md) owns finite exhaustive construction plus independent source replay checking. The separate [public runtime](Sources/OSDIRuntime/DecisionCover/DESIGN.md) exposes only checked complete trees/all terminal formula leaves over the original exact box, through protocol 4 and the existing exclusive session. Program ABI 1 and protocols 1–3 retain their exact contracts. Complete decision coverage does not establish feasible charts, circuit roots, continuity/resets, physical flow, entire history or model calibration; those upper obligations and the original source admission remain unchanged.

@@ -141,6 +141,31 @@ int32_t cs_osdi_chart_process_create(const char *worker_path,
     const cs_osdi_chart_limits_v3 *limits,
     cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
     cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue);
+/* Complete-only source cover. All pointers expire at the next attempt/close;
+ * no root, nonempty-chart, aggregate timestep, flow or history fact is implied. */
+typedef struct cs_osdi_cover_result_view {
+    uint64_t raw_node_count, active_count, plane_stride;
+    const cs_osdi_cover_node_v4 *nodes;
+    const double *leaf_planes;
+    const double *lower_high, *lower_low, *upper_high, *upper_low;
+    uint32_t node_count, leaf_count, used_precision_bits, program_has_time_input;
+    cs_osdi_precision_context_v1 lower_context, upper_context;
+    uint64_t completed_work_units, completed_steps, completed_guard_records, completed_copied_bytes, request_sequence;
+} cs_osdi_cover_result_view;
+int32_t cs_osdi_cover_process_create(const char *worker_path,
+    const unsigned char *program, uint64_t program_bytes,
+    const unsigned char *setup, uint64_t setup_bytes,
+    uint32_t descriptor_index, uint32_t active_count, uint32_t raw_node_count,
+    const cs_osdi_precision_process_options *options, const cs_osdi_cover_limits_v4 *limits,
+    cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_precision_session **out, cs_osdi_precision_process_issue *issue);
+int32_t cs_osdi_cover_process_evaluate(cs_osdi_precision_session *session,
+    const double *lower_high, const double *lower_low, const double *upper_high, const double *upper_low,
+    uint64_t active_count, const cs_osdi_precision_context_v1 *lower_context,
+    const cs_osdi_precision_context_v1 *upper_context, uint32_t precision_bits,
+    cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
+    cs_osdi_cover_result_view *out, cs_osdi_precision_process_issue *issue);
+
 /* Tape may alias a preceding result's decisions only through an explicit caller
  * copy: guard records and decision records have distinct strides. */
 int32_t cs_osdi_chart_process_evaluate(cs_osdi_precision_session *session,

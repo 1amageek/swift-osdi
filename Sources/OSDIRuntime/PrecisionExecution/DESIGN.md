@@ -215,3 +215,7 @@ prepareChart(program, worker, profile, options, limits)
 Verification owns API binding/operation/shape refusal before transport, exact record/replay on actual worker, closure tags, cumulative quotas, no callback on failures/cancel, source lease closure, stable borrowed regions and exactly-once explicit/failed cleanup. Lower arithmetic and upper physical obligations retain their owners.
 
 Guard view indexing preserves the explicit signed primitive-infinity kind and constant index after native O(1) provenance validation. Runtime never coerces an ordinary nonfinite REAL into this kind. The existing borrowed storage, tape binding and error cleanup contracts remain unchanged.
+
+## Complete Cover Composition
+
+[Runtime DecisionCover](../DecisionCover/DESIGN.md) owns the complete-only public protocols and views. This component composes its immutable decision-cover operation into the same session, cold staging and retained cleanup owner. New typed cover failures retain the full primary and cleanup causes; no existing operation/lifetime/synchronization contract changes.

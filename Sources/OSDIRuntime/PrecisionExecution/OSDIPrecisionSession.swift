@@ -6,7 +6,7 @@ import Synchronization
 
 /// Exclusive helper owner. No child wait, client callback or file I/O occurs under Mutex.
 public struct OSDIPrecisionSession: ~Copyable, Sendable {
-    internal enum Operation: Sendable { case point, range, chart }
+    internal enum Operation: Sendable { case point, range, chart, decisionCover }
     internal struct State { var handle: OpaquePointer? }
     private let state: Mutex<State>
     private let stagingDirectory: URL?
@@ -16,12 +16,14 @@ public struct OSDIPrecisionSession: ~Copyable, Sendable {
     public let numericProfile: ContentDigest
     public let options: OSDIPrecisionOptions
     public let chartLimits: OSDIPrecisionChartLimits?
+    public let decisionCoverLimits: OSDIPrecisionDecisionCoverLimits?
     public var chartBinding: OSDIPrecisionChartBinding { OSDIPrecisionChartBinding(program: program) }
     internal init(handle: sending OpaquePointer, stagingDirectory: URL?, program: OSDIPrecisionProgram,
                   workerReference: CircuiteFoundation.ArtifactReference, numericProfile: ContentDigest,
-                  options: OSDIPrecisionOptions, operation: Operation = .point, chartLimits: OSDIPrecisionChartLimits? = nil) {
+                  options: OSDIPrecisionOptions, operation: Operation = .point, chartLimits: OSDIPrecisionChartLimits? = nil,
+                  decisionCoverLimits: OSDIPrecisionDecisionCoverLimits? = nil) {
         state = Mutex(State(handle: handle)); self.stagingDirectory = stagingDirectory
-        self.operation = operation; self.chartLimits = chartLimits
+        self.operation = operation; self.chartLimits = chartLimits; self.decisionCoverLimits = decisionCoverLimits
         self.program = program; self.workerReference = workerReference; self.numericProfile = numericProfile; self.options = options
     }
     public mutating func close() throws(OSDIError) {
@@ -203,4 +205,63 @@ public struct OSDIPrecisionSession: ~Copyable, Sendable {
             completedSteps: native.completed_steps, requestSequence: formulas.request_sequence,
             programHasTimeInput: formulas.program_has_time_input != 0))
     }
+    internal mutating func constructDecisionCover<Result>(lowerHigh: borrowing Span<Double>, lowerLow: borrowing Span<Double>,
+        upperHigh: borrowing Span<Double>, upperLow: borrowing Span<Double>,
+        lowerContext: OSDIPrecisionContext, upperContext: OSDIPrecisionContext,
+        precisionBits: UInt32, _ body: (OSDIPrecisionDecisionCoverEvaluationView) -> Result) throws(OSDIPrecisionDecisionCoverError) -> Result {
+        guard let handle = state.withLock({ $0.handle }) else { throw .runtime(.closed) }
+        guard operation == .decisionCover, let limits = decisionCoverLimits else { throw .runtime(.invalidRange) }
+        let count = program.topology.activeUnknownCount
+        guard lowerHigh.count == count, lowerLow.count == count, upperHigh.count == count,
+              upperLow.count == count, lowerContext.mode == upperContext.mode else { throw .runtime(.invalidRange) }
+        var lower = cs_osdi_precision_context_v1(mode: lowerContext.mode.rawValue, reserved: 0,
+            time_high: lowerContext.timeHigh, time_low: lowerContext.timeLow)
+        var upper = cs_osdi_precision_context_v1(mode: upperContext.mode.rawValue, reserved: 0,
+            time_high: upperContext.timeHigh, time_low: upperContext.timeLow)
+        var native = cs_osdi_cover_result_view(), issue = cs_osdi_precision_process_issue()
+        let status = lowerHigh.withUnsafeBufferPointer { lh in lowerLow.withUnsafeBufferPointer { ll in
+            upperHigh.withUnsafeBufferPointer { uh in upperLow.withUnsafeBufferPointer { ul in
+                cs_osdi_cover_process_evaluate(handle, lh.baseAddress, ll.baseAddress, uh.baseAddress, ul.baseAddress,
+                    UInt64(count), &lower, &upper, precisionBits, cs_osdi_precision_swift_task_cancelled, nil, &native, &issue)
+            }}
+        }}
+        guard status == 0 else {
+            let primary = OSDIPrecisionDecisionCoverError.native(OSDIPrecisionNativeBridge.issue(issue))
+            do { try close() }
+            catch { throw .cleanup(primary: primary, secondary: error) }
+            throw primary
+        }
+        let nodes = program.topology.nodes.count
+        let (matrix, matrixOverflow) = nodes.multipliedReportingOverflow(by: nodes)
+        let (vector, vectorOverflow) = nodes.multipliedReportingOverflow(by: 4)
+        let (matrixPlanes, planesOverflow) = matrix.multipliedReportingOverflow(by: 4)
+        let (stride, strideOverflow) = vector.addingReportingOverflow(matrixPlanes)
+        let (allPlanes, leafOverflow) = stride.multipliedReportingOverflow(by: Int(native.leaf_count))
+        guard !matrixOverflow, !vectorOverflow, !planesOverflow, !strideOverflow, !leafOverflow,
+              native.raw_node_count == nodes, native.active_count == count, native.plane_stride == stride,
+              native.node_count > 0, native.node_count <= limits.maximumNodes, native.leaf_count <= limits.maximumLeaves,
+              native.nodes != nil, allPlanes == 0 || native.leaf_planes != nil,
+              native.completed_steps <= limits.maximumSteps, native.completed_guard_records <= limits.maximumGuardRecords,
+              native.completed_copied_bytes <= limits.maximumCopiedBytes, native.program_has_time_input <= 1,
+              count == 0 || (native.lower_high != nil && native.lower_low != nil && native.upper_high != nil && native.upper_low != nil) else {
+            do { try close() }
+            catch { throw .cleanup(primary: .runtime(.identityMismatch), secondary: error) }
+            throw .runtime(.identityMismatch)
+        }
+        // C validates the original box, complete immutable geometry, all source
+        // records and every terminal plane before this exclusive lexical borrow.
+        let tree = OSDIPrecisionDecisionCoverNodeCollectionView(storage: Span(_unsafeStart: native.nodes!, count: Int(native.node_count)))
+        return body(OSDIPrecisionDecisionCoverEvaluationView(nodes: tree, leafCount: Int(native.leaf_count), binding: chartBinding,
+            lowerHigh: count == 0 ? Span() : Span(_unsafeStart: native.lower_high!, count: count),
+            lowerLow: count == 0 ? Span() : Span(_unsafeStart: native.lower_low!, count: count),
+            upperHigh: count == 0 ? Span() : Span(_unsafeStart: native.upper_high!, count: count),
+            upperLow: count == 0 ? Span() : Span(_unsafeStart: native.upper_low!, count: count),
+            lowerContext: lowerContext, upperContext: upperContext,
+            leaves: allPlanes == 0 ? Span() : Span(_unsafeStart: native.leaf_planes!, count: allPlanes), rawNodes: nodes, stride: stride,
+            usedPrecisionBits: native.used_precision_bits, completedWorkUnits: native.completed_work_units,
+            completedSteps: native.completed_steps, completedGuardRecords: native.completed_guard_records,
+            completedCopiedBytes: native.completed_copied_bytes, requestSequence: native.request_sequence,
+            programHasTimeInput: native.program_has_time_input != 0))
+    }
+
 }

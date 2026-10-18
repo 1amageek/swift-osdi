@@ -73,3 +73,7 @@ branch choice, epsilon, midpoint or domain/poison fallback is introduced. The
 helper does not infer source sharing from interval equality. Negative-x
 cancellation, mixed-sign x boxes and unequal-but-equal-valued inputs distinguish
 the proof from ordinary interval evaluation and unsound numeric matching.
+
+## Decision Cell Contract
+
+[DecisionCover](../DecisionCover/DESIGN.md) uses source-faithful comparison trichotomies and exact FIcast/FItrunc/floor/ceil integer cells in its separate interpreter mode. Cell endpoint inclusion follows the original primitive, including ties away from zero and the truncation zero cell. Candidate envelopes are outward and every required cell is retained. Exact boundaries, cell counts, integer bits, numeric precision and copying must fit preadmitted cumulative limits. Failure to represent or enclose all cells refuses the complete cover. Domain/regularity/undefined failures for other primitives remain explicit refusals; no equality facet or singular formula is removed. Ordinary arithmetic and operations 1–3 remain unchanged.

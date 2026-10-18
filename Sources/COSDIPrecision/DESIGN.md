@@ -4,7 +4,7 @@
 
 Parent: [swift-osdi](../../DESIGN.md). Children: [Arena](Arena/DESIGN.md),
 [Arithmetic](Arithmetic/DESIGN.md), [ProgramEvaluation](ProgramEvaluation/DESIGN.md),
-[WorkerProtocol](WorkerProtocol/DESIGN.md). This native C worker evaluates the optional,
+[WorkerProtocol](WorkerProtocol/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md). This native C worker evaluates the optional,
 versioned compiler-owned precision program for model setup, F, Q and model-owned
 charge differences. CoreSpice retains circuit equations, MNA assembly, Newton,
 time integration, acceptance and accepted-state ownership in its Swift process.

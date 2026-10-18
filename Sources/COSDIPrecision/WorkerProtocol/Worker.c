@@ -1,6 +1,7 @@
 #include "../Arena/Arena.h"
 #include "../ProgramEvaluation/Program.h"
 #include "../ProgramEvaluation/Chart.h"
+#include "DecisionCover/Transport.h"
 #include <COSDIPrecision.h>
 #include <OSDIPrecisionProtocol.h>
 #include <errno.h>
@@ -20,15 +21,19 @@ static int notification(int fd, int writing) {
   } while (n < 0 && errno == EINTR);
   return n == 1 ? 1 : n == 0 ? 0 : -1;
 }
+static int native_bytes(uint64_t count,size_t stride,size_t *out){
+  if(stride && count>SIZE_MAX/stride)return 0;*out=(size_t)count*stride;return 1;
+}
 static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
   int chart = c->protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION;
-  size_t header_bytes = chart ? sizeof(cs_osdi_chart_control_v3) : sizeof(*c);
+  int cover = c->protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION;
+  size_t header_bytes = cover ? sizeof(cs_osdi_cover_control_v4) : chart ? sizeof(cs_osdi_chart_control_v3) : sizeof(*c);
   uint16_t endian = 1;
   if (*(unsigned char *)&endian != 1 || DBL_MANT_DIG != 53 ||
       DBL_MAX_EXP != 1024 || !__atomic_always_lock_free(8, 0) ||
       c->magic != CS_OSDI_PRECISION_MAGIC ||
       (c->protocol_version != CS_OSDI_PRECISION_PROTOCOL_VERSION &&
-       c->protocol_version != CS_OSDI_RANGE_PROTOCOL_VERSION && !chart) ||
+       c->protocol_version != CS_OSDI_RANGE_PROTOCOL_VERSION && !chart && !cover) ||
       c->header_bytes != header_bytes || size < header_bytes || c->mapping_bytes != size ||
       c->byte_order != CS_OSDI_PRECISION_BYTE_ORDER || !c->raw_node_count ||
       c->raw_node_count > UINT32_MAX - 1 ||
@@ -52,10 +57,27 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
     if (regions[14].element_count != h->limits.maximum_tape_entries ||
         regions[15].element_count != h->limits.maximum_guard_records) return 0;
   }
+  if (cover) {
+    const cs_osdi_cover_control_v4 *h=(const void *)c;const cs_osdi_cover_limits_v4 *l=&h->limits;
+    uint64_t n=c->raw_node_count,matrix=n*n,vector=4*n;
+    if(!l->maximum_steps || !l->maximum_guard_records || !l->maximum_copied_bytes || !l->maximum_cells ||
+        !l->maximum_nodes || l->maximum_nodes==UINT32_MAX || !l->maximum_leaves || !l->maximum_pending ||
+        !l->maximum_depth || !l->maximum_integer_bits || l->maximum_integer_bits>CS_OSDI_COVER_CELL_BITS || l->reserved ||
+        matrix>(UINT64_MAX-vector)/4)return 0;
+    uint64_t stride=vector+4*matrix;size_t native_size;
+    if(l->maximum_leaves>UINT64_MAX/stride ||
+        h->tree_region.element_count!=l->maximum_nodes || h->leaf_region.element_count!=stride*l->maximum_leaves ||
+        !native_bytes(l->maximum_nodes,sizeof(cs_precision_cover_node),&native_size) ||
+        !native_bytes(l->maximum_depth,sizeof(cs_precision_source_event),&native_size) ||
+        !native_bytes(l->maximum_depth,sizeof(cs_precision_source_decision),&native_size) ||
+        !native_bytes(l->maximum_pending,sizeof(uint32_t),&native_size) ||
+        !native_bytes(l->maximum_leaves,sizeof(uint32_t),&native_size) || c->active_count>SIZE_MAX/4/sizeof(double))return 0;
+    regions[14]=h->tree_region;regions[15]=h->leaf_region;total=16;
+  }
   for (unsigned i = 0; i < total; i++) {
     const cs_osdi_precision_region_v1 *r = &regions[i];
-    uint64_t stride = i < 2 ? 1 : i == 14 ? sizeof(cs_osdi_chart_decision_v3) :
-                      i == 15 ? sizeof(cs_osdi_chart_guard_v3) : 8;
+    uint64_t stride = i < 2 ? 1 : i == 14 ? (cover ? sizeof(cs_osdi_cover_node_v4) : sizeof(cs_osdi_chart_decision_v3)) :
+                      i == 15 && chart ? sizeof(cs_osdi_chart_guard_v3) : 8;
     unsigned matrix_start = c->protocol_version == CS_OSDI_PRECISION_PROTOCOL_VERSION ? 12u : 10u;
     uint64_t count = i < 2 || i >= 14 ? r->element_count :
                      i < 6 ? c->active_count : i < matrix_start ? c->raw_node_count :
@@ -65,7 +87,7 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
         r->element_count > (size - r->byte_offset) / stride)
       return 0;
     for (unsigned j = 0; j < i; j++) {
-      uint64_t other_stride = j < 2 ? 1 : j == 14 ? sizeof(cs_osdi_chart_decision_v3) : 8;
+      uint64_t other_stride = j < 2 ? 1 : j == 14 ? (cover ? sizeof(cs_osdi_cover_node_v4) : sizeof(cs_osdi_chart_decision_v3)) : 8;
       uint64_t as = r->byte_offset, an = r->element_count * stride;
       uint64_t bs = regions[j].byte_offset, bn = regions[j].element_count * other_stride;
       if (an && bn && as < bs + bn && bs < as + an) return 0;
@@ -97,12 +119,15 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
   if (mapping == MAP_FAILED)
     return CS_OSDI_PRECISION_EXIT_PROTOCOL;
   cs_osdi_precision_control_v1 *c = mapping;
-  cs_osdi_chart_control_v3 admitted_chart = {0};
+  union {cs_osdi_precision_control_v1 base;cs_osdi_chart_control_v3 chart;cs_osdi_cover_control_v4 cover;} snapshot={0};
   if (!geometry(c, size)) { munmap(mapping, size); return CS_OSDI_PRECISION_EXIT_PROTOCOL; }
-  memcpy(&admitted_chart, c, c->header_bytes);
-  cs_osdi_precision_control_v1 admitted = admitted_chart.base;
+  memcpy(&snapshot, c, c->header_bytes);
+  cs_osdi_chart_control_v3 admitted_chart=snapshot.chart;
+  cs_osdi_cover_control_v4 admitted_cover=snapshot.cover;
+  cs_osdi_precision_control_v1 admitted = snapshot.base;
   int is_chart = admitted.protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION;
-  if (!geometry(&admitted_chart.base, size) ||
+  int is_cover = admitted.protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION;
+  if (!geometry(&snapshot.base, size) ||
       __atomic_load_n(&c->request_sequence, __ATOMIC_ACQUIRE) != 0 ||
       __atomic_load_n(&c->response_sequence, __ATOMIC_ACQUIRE) !=
           CS_OSDI_PRECISION_INITIAL_RESPONSE) {
@@ -118,7 +143,7 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
   /* Only after full v3 geometry admission, adapt a private interpreter view.
    * Public protocol 3 never enters the smooth-box process operation. */
   cs_osdi_precision_control_v1 interpreter_control = admitted;
-  if (is_chart) interpreter_control.protocol_version = CS_OSDI_RANGE_PROTOCOL_VERSION;
+  if (is_chart || is_cover) interpreter_control.protocol_version = CS_OSDI_RANGE_PROTOCOL_VERSION;
   cs_precision_program p;
   int status = cs_precision_program_open(
       &p, base + admitted.regions[0].byte_offset,
@@ -131,6 +156,9 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
     tape = cs_precision_arena_allocate((size_t)admitted_chart.limits.maximum_tape_entries * sizeof(*tape));
     guards = cs_precision_arena_allocate((size_t)admitted_chart.limits.maximum_guard_records * sizeof(*guards));
   }
+  cs_precision_cover_transport cover_transport={0};
+  if(!status && is_cover){double *planes[8];for(unsigned i=0;i<8;++i)planes[i]=(void *)(base+admitted.regions[i+6].byte_offset);
+    status=cs_precision_cover_transport_open(&cover_transport,&admitted_cover,planes);}
   uint64_t completed_steps = 0;
   publish(c, 0, status, &p);
   int sent = notification(response_write_fd, 1);
@@ -150,14 +178,18 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
         c->maximum_work_units != admitted.maximum_work_units ||
         (is_chart && memcmp((unsigned char *)c + sizeof(*c),
           (unsigned char *)&admitted_chart + sizeof(*c),
-          offsetof(cs_osdi_chart_control_v3, chart_mode) - sizeof(*c)))) {
+          offsetof(cs_osdi_chart_control_v3, chart_mode) - sizeof(*c))) ||
+        (is_cover && memcmp((unsigned char *)c+sizeof(*c),(unsigned char *)&admitted_cover+sizeof(*c),
+          offsetof(cs_osdi_cover_control_v4,node_count)-sizeof(*c)))) {
       status = CS_OSDI_PRECISION_EXIT_PROTOCOL;
       break;
     }
     double *output[8];
     for (unsigned i = 0; i < 8; i++)
       output[i] = (void *)(base + admitted.regions[i + 6].byte_offset);
-    if (is_chart) {
+    if(is_cover){
+      status=cs_precision_cover_transport_evaluate(&cover_transport,&p,(void *)c,&admitted_cover,base);
+    } else if (is_chart) {
       cs_osdi_chart_control_v3 *chart = (void *)c;
       chart->guard_count = 0; chart->completed_steps = completed_steps;
       if (chart->reserved || chart->chart_mode < CS_OSDI_CHART_RECORD ||

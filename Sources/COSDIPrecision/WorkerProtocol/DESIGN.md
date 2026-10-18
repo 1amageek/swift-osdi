@@ -1,7 +1,7 @@
 # WorkerProtocol
 
 ## Purpose and Scope
-Own child-side shared geometry, request sequencing and publication. Parent: [COSDIPrecision](../DESIGN.md). No children.
+Own child-side shared geometry, request sequencing and publication. Parent: [COSDIPrecision](../DESIGN.md). Child: [DecisionCover](DecisionCover/DESIGN.md).
 
 ## Responsibilities and Boundaries
 One outstanding request uses acquire/release counters and pipe notifications. A result is published only after complete success; no model callback or solver runs here.
@@ -48,3 +48,7 @@ The [process owner](../../COSDI/PrecisionProcess/DESIGN.md#conditional-chart-pro
 The worker explicitly admits a local version-2 control view after protocol-3 geometry validation to initialize range tracking and invoke the conditional chart interpreter. This private adaptation does not invoke the public range operation or change result authority. Three source stages, exact setup/defaults and topology are unchanged. Work and source steps remain session-cumulative, including record/replay. Complete planes, all guards, semantics and cumulative counters precede release publication. Every failure publishes only status; subsequent work terminates through the existing owner.
 
 Worker projects exact source primitive infinity comparands only through dedicated operand kinds and immutable constant indices established by interpreter metadata. Finite MPFR-to-binary64 overflow and unsupported nonfinite operands remain status 8. F/Q/G/C planes always remain finite. Tagged infinities do not permit closure choices across sentinel comparisons.
+
+## Complete Decision Cover Transport
+
+[DecisionCover](../DecisionCover/DESIGN.md) owns finite tree and independent checking. The separate [protocol-4 transport](DecisionCover/DESIGN.md) publishes only independently checked complete trees, their exact original box/context/program binding and terminal facts. All geometry and capacities are preadmitted, all counters are cumulative, and pending exploration never authorizes a complete result. Point/range/chart versions 1–3 remain unchanged. Existing cancellation, sequence publication, fixed arena, invalidation and cleanup remain the sole lifecycle.

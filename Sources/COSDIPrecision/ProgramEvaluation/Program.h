@@ -48,6 +48,7 @@ typedef struct {
   double bound;
   /* Exclusive synchronous chart call only; never retained after its return. */
   struct cs_precision_chart_execution *chart;
+  struct cs_precision_frontier_execution *frontier;
 } cs_precision_program;
 int cs_precision_program_open(cs_precision_program *program, const void *bytes,
                               size_t length, const void *setup,
