@@ -2,6 +2,7 @@
 #include "../../Sources/COSDIPrecision/Arena/Arena.h"
 #include <assert.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -173,6 +174,27 @@ static uint64_t number(const char *text) {
   char *end; uint64_t value = strtoull(text, &end, 10);
   assert(value && end != text && !*end); return value;
 }
+static void diagnose_guard_projection(const model *m) {
+  size_t extended = 0;
+  for (size_t i = 0; i < m->result.guard_count; ++i) {
+    const cs_precision_chart_guard *g = &m->result.guards[i];
+    const uint32_t registers[] = {g->a, g->b}, types[] = {g->a_type, g->b_type};
+    const double lower[] = {g->a_lower, g->b_lower}, upper[] = {g->a_upper, g->b_upper};
+    for (unsigned side = 0; side < 2; ++side) {
+      if (types[side] != 1 || (isfinite(lower[side]) && isfinite(upper[side]))) continue;
+      uint64_t bits = 0; int constant = 0;
+      for (uint32_t j = 0; j < m->p.header->constants.count; ++j)
+        if (m->p.constants[j].destination == registers[side]) { bits = m->p.constants[j].bits; constant = 1; break; }
+      double leaf; memcpy(&leaf, &bits, sizeof(leaf));
+      if (extended < 32)
+        fprintf(stderr, "guard-projection ordinal=%zu stage=%u block=%u instruction=%u kind=%u opcode=%u side=%c register=%u lower=%a upper=%a constant=%d constantBits=%016" PRIx64 " constantIsInfinity=%d\n",
+          i, g->decision.stage, g->decision.block, g->decision.instruction, g->decision.kind, g->opcode,
+          side ? 'b' : 'a', registers[side], lower[side], upper[side], constant, bits, constant && isinf(leaf));
+      extended++;
+    }
+  }
+  fprintf(stderr, "guard-projection extended-operand-count=%zu guards=%zu\n", extended, m->result.guard_count);
+}
 static void actual(char **argv) {
   size_t size; void *data = read_file(argv[4], &size);
   assert(size >= sizeof(cs_osdi_precision_control_v1));
@@ -189,6 +211,7 @@ static void actual(char **argv) {
   cs_precision_chart_request request = {CS_PRECISION_CHART_RECORD, NULL, 0, number(argv[7])};
   assert(!cs_precision_program_evaluate_chart(&m.p, &m.control, v, v+n, v, v+n, &request, &m.scratch, &m.result));
   assert(m.result.guard_count > 0 && !m.p.chart);
+  diagnose_guard_projection(&m);
   size_t count = m.result.guard_count;
   cs_precision_chart_decision *copy = tape(&m);
   double *expected[8];

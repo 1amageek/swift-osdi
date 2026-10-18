@@ -182,3 +182,9 @@ family manifest accepts current SOI 101 without a legacy SOI artifact, while eve
 supplied legacy case still runs. The original legacy four-family precision receipt
 regression has its own explicit selector; its CoreSpice-prefixed evidence schemas
 are external receipt formats, not a package/runtime dependency.
+
+`OSDIPrecisionChartTests` uses the qualified real worker and the explicit `OSDI_CHART_FIXTURES` manifest to test protocol-3 borrowed views and decision tapes. Tests distinguish actual equality values from finite formula closure, reject wrong setup binding/shape/operation before submission, enforce session-cumulative work and steps, and verify tape/capacity/undefined-formula/cancel failure atomicity. A deliberate staging-directory removal tests preservation and retry of the complete chart-primary/cleanup error chain. Existing point/range suites retain their original regression ownership.
+
+Exact-infinity falsifiers cover both primitive signs, an OPTBARRIER copy, explicit primitive constant indices, replay at another finite point and refusal of an incompatible closure tape. A finite `DBL_MAX*DBL_MAX` guard operand must fail binary64 projection while its selected F/Q/G/C remain finite. `ChartForgeryWorker.c` is an invalid-response generator only: finite-kind infinity, NaN masquerading as a primitive, out-of-range/wrong-sign/finite-leaf provenance and nonfinite output planes must all fail parent protocol validation. It never supplies numerical qualification evidence.
+
+The old-worker no-fallback test requires refusal before chart callback publication. A legacy point-only transport oracle may send ready without checking its protocol; that path must receive a real chart request and fail complete chart response validation. A version-checking old worker must fail at startup. Neither path may publish a chart result. Actual worker unknown-version startup refusal remains owned by `ChartWireTests`.

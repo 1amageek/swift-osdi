@@ -196,3 +196,22 @@ context/dimension/operation mismatch, failure-before-callback and cleanup. Exist
 point tests own version 1 regression. The process/interpreter tests own numeric
 enclosure and regularity correctness; upper consumers must separately prove any
 causal/history/flow claim.
+
+## Conditional Chart Execution
+
+The [chart contract](../../OSDIContracts/PrecisionEvaluation/DESIGN.md#conditional-chart-contract) supplies semantics; Runtime composes the same noncopyable session with immutable `.chart` operation and caller limits. `prepareChart` stages the exact worker and copies the same program/setup once. The chart binding contains model reference, descriptor, complete topology and program/setup/semantic digests. `evaluateChart` rejects a mismatched tape binding before publication. External circuit projection is not inferred here.
+
+```text
+prepareChart(program, worker, profile, options, limits)
+ -> existing Mutex handle + immutable binding/limits
+ -> validate scoped input box + optional exact-bound tape
+ -> protocol 3 outside lock -> validated chart result
+ -> synchronous borrowed planes + guard collection
+ -> same close/retained cleanup owner
+```
+
+`OSDIPrecisionChartEvaluationView` and its guard collection are nonescapable and expire at callback return. The callback receives binding and explicit result semantics; it may explicitly copy individual decisions into its own tape. Mapping pointers cannot escape. No guard array is automatically materialized. Native/WASM/Embedded use the identical existing Mutex/Sendable storage and cleanup matrix; unsupported process platforms have no alternate state path. The public chart error preserves primary and all nested cleanup errors without changing old error enums. Only chart requests use session-cumulative work and step counters; old point/range per-request policy remains unchanged.
+
+Verification owns API binding/operation/shape refusal before transport, exact record/replay on actual worker, closure tags, cumulative quotas, no callback on failures/cancel, source lease closure, stable borrowed regions and exactly-once explicit/failed cleanup. Lower arithmetic and upper physical obligations retain their owners.
+
+Guard view indexing preserves the explicit signed primitive-infinity kind and constant index after native O(1) provenance validation. Runtime never coerces an ordinary nonfinite REAL into this kind. The existing borrowed storage, tape binding and error cleanup contracts remain unchanged.

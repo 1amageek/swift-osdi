@@ -1042,18 +1042,28 @@ static int chart_step(cs_precision_program *p) {
 static int chart_predicate(uint32_t op) {
   return (op >= 49 && op <= 64) || op == CS_OSDI_PRECISION_OP_FBCAST;
 }
-static void chart_operand(const cs_precision_value *v, uint32_t *type,
+static void chart_operand(cs_precision_program *p, const cs_precision_value *v, uint32_t *type,
                           uint32_t *integer, double *lower, double *upper) {
   if (!v) return;
   *type = v->type;
   if (v->type == 1) {
     *lower = mpfr_get_d(v->real.low, MPFR_RNDD);
     *upper = mpfr_get_d(v->real.high, MPFR_RNDU);
+    uint32_t source = range_fact(p, v)->primitive_infinity;
+    if (source && mpfr_inf_p(v->real.low) && mpfr_inf_p(v->real.high) &&
+        mpfr_sgn(v->real.low) == mpfr_sgn(v->real.high)) {
+      *type = mpfr_sgn(v->real.low) < 0 ? CS_OSDI_CHART_NEGATIVE_PRIMITIVE_INFINITY :
+                                       CS_OSDI_CHART_POSITIVE_PRIMITIVE_INFINITY;
+      *integer = source - 1;
+    }
   } else if (v->type == 2 || v->type == 3) *integer = v->integer;
 }
 static int chart_closure_possible(cs_precision_program *p, uint32_t opcode,
                                  uint32_t ar, uint32_t br, uint32_t choice) {
   const cs_precision_value *a = &p->values[ar], *b = br == NONE ? NULL : &p->values[br];
+  /* Infinity sentinels are fixed source primitives, not finite faces that a
+     neighboring chart can approach by changing the coordinate box. */
+  if ((a->type == 1 && !finite_real(a)) || (b && b->type == 1 && !finite_real(b))) return 0;
   if (opcode == CS_OSDI_PRECISION_OP_FBCAST)
     return choice || (mpfr_cmp_ui(a->real.low, 0) <= 0 && mpfr_cmp_ui(a->real.high, 0) >= 0);
   if (!b || a->type != 1 || b->type != 1) return 0;
@@ -1097,9 +1107,9 @@ static int chart_guard(cs_precision_program *p, uint32_t stage, uint32_t block,
   guard.decision = decision; guard.opcode = opcode; guard.a = a; guard.b = b;
   guard.formula_truth_known = (uint32_t)known;
   guard.boundary_extension = boundary_extension;
-  chart_operand(&p->values[a], &guard.a_type, &guard.a_integer, &guard.a_lower, &guard.a_upper);
+  chart_operand(p, &p->values[a], &guard.a_type, &guard.a_integer, &guard.a_lower, &guard.a_upper);
   if (b != NONE)
-    chart_operand(&p->values[b], &guard.b_type, &guard.b_integer, &guard.b_lower, &guard.b_upper);
+    chart_operand(p, &p->values[b], &guard.b_type, &guard.b_integer, &guard.b_lower, &guard.b_upper);
   chart->scratch->guards[chart->guard_count++] = guard;
   return 0;
 }
@@ -1375,6 +1385,9 @@ static int pipeline(cs_precision_program *p, const double *high,
     const CSOsdiPrecisionConstant *c = &p->constants[j];
     cs_precision_value *v = &p->values[c->destination];
     int status = bits_value(p, v, c->bits, p->strings);
+    if (!status && p->range_mode && c->type == 1 &&
+        (c->bits == UINT64_C(0x7ff0000000000000) || c->bits == UINT64_C(0xfff0000000000000)))
+      range_fact(p, v)->primitive_infinity = j + 1;
     if (!status)
       status = cs_precision_identify(&p->identity, &p->math, v, 0, 0, 0);
     if (status)

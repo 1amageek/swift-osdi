@@ -220,3 +220,11 @@ outer cancellation/deadline boundary; this internal call creates no alternate
 timeout or cancellation authority. Future public transport must preserve that
 same boundary before publication. Graph extraction and formula bounds alone
 grant no reset/root-existence, source-flow, entire-history, tube or event facts.
+
+### Chart Transport Composition
+
+[WorkerProtocol](../WorkerProtocol/DESIGN.md#version-3-conditional-charts) now exposes the existing internal chart through separate protocol 3. Internal chart records remain native-only; fixed-width wire projection and session-cumulative step aggregation belong to WorkerProtocol. The interpreter's per-call finite step cap is the remaining session quota. Its work owner is never reset by this adaptation. No public smooth-box certificate is fabricated from a chart result.
+
+### Exact Primitive Infinity Comparands
+
+The admitted compiler ABI permits signed-infinity REAL constants for source parameter-bound predicates. Range metadata records the immutable constant-record index when that primitive is initialized in the existing constant pass. Successful copy, phi, SELECT and OPTBARRIER preserve that fact; a fresh arithmetic value or poison clears it. No whole-program scan or dynamic allocation occurs per guard. A guard may tag an exact primitive negative/positive infinity only when both MPFR endpoints have that sign and the retained source primitive matches. The constant index binds provenance to this exact program, including copied comparands. Finite MPFR values that project beyond binary64 remain numerical projection failures; NaN and unsupported infinite expressions do not gain primitive authority. Formula closure cannot override an incompatible comparison involving an exact infinity sentinel.

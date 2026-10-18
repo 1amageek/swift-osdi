@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Emit explicit source-program fixtures for the internal chart checker."""
 import argparse
+import hashlib
+import json
 from pathlib import Path
 import struct
 from verify_worker import blob, records, real, setup, phi_program, inactive_program, NONE
@@ -35,6 +37,18 @@ def program(variant):
             q = operation(44, base, operation(74, predicate, delta, zero))
             g = zero
         c = derivative
+    elif variant == 'sentinels':
+        positive, negative = constant(float('inf')), constant(float('-inf'))
+        copied = operation(12, positive)
+        lower = operation(53, negative, x, kind=3)
+        upper = operation(53, x, copied, kind=3)
+        f = operation(74, lower, x, zero); q = operation(74, upper, x, zero)
+        g = c = one
+    elif variant == 'overflow':
+        largest = constant(float.fromhex('0x1.fffffffffffffp+1023'))
+        huge = operation(46, largest, largest)
+        condition = operation(54, huge, zero, kind=3)
+        f = operation(74, condition, x, zero); q = x; g = c = one
     elif variant == 'sqrt':
         f = operation(13, x); q = x; g = operation(47, half, f); c = one
     elif variant == 'removable':
@@ -64,11 +78,18 @@ def main():
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
-    programs = {name: program(name) for name in ('nonlinear', 'jump', 'sqrt', 'removable')}
+    programs = {name: program(name) for name in ('nonlinear', 'jump', 'sqrt', 'removable', 'sentinels', 'overflow')}
     programs.update(loop=phi_program(), inactive=inactive_program(False), live_invalid=inactive_program(True))
     for name, data in programs.items():
         (args.output / (name + '.program')).write_bytes(data)
         (args.output / (name + '.setup')).write_bytes(setup())
+    manifest = {"fixtures": [{"id": name,
+        "programPath": str((args.output / (name + '.program')).resolve()),
+        "setupPath": str((args.output / (name + '.setup')).resolve()),
+        "programSHA256": hashlib.sha256(data).hexdigest(),
+        "setupSHA256": hashlib.sha256(setup()).hexdigest()}
+        for name, data in programs.items()]}
+    (args.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Independent compiler input for optional same-formula producer verification.
     (args.output / 'nonlinear.va').write_text('''`include "disciplines.vams"
 module guarded_nonlinear(inout x);

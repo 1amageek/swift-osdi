@@ -18,7 +18,8 @@ int main(void) {
     struct stat file;
     if (fstat(3, &file) || file.st_size < (off_t)sizeof(cs_osdi_precision_control_v1)) return 82;
     cs_osdi_precision_control_v1 *h = mmap(NULL, (size_t)file.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, 3, 0);
-    if (h == MAP_FAILED || h->magic != CS_OSDI_PRECISION_MAGIC || h->mapping_bytes != (uint64_t)file.st_size) return 82;
+    if (h == MAP_FAILED || h->magic != CS_OSDI_PRECISION_MAGIC || h->mapping_bytes != (uint64_t)file.st_size
+        || h->protocol_version != CS_OSDI_PRECISION_PROTOCOL_VERSION || h->header_bytes != sizeof(*h)) return 82;
     unsigned char mode = *((unsigned char *)h + h->regions[0].byte_offset);
     if (mode == 1) _exit(80);
     if (mode == 2) { for (;;) pause(); }

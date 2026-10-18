@@ -178,3 +178,13 @@ bounded children: a prefix budget must stop at the final shared-sum instruction,
 then a budget allowing only 255 of its 256 refinement units must stop at the same
 instruction with unchanged completed work. Omitting the new proof charge cannot
 pass by exhausting an unrelated earlier operation. All execution remains root-owned.
+
+## Conditional Chart Transport Verification
+
+`ChartProcessTests.c` exercises the actual worker through the public native chart owner, including explicit equality versus formula closure, exact tape replay, all eight endpoint planes, borrowed address reuse, session-cumulative work/step limits, tape/capacity refusals, cancellation and retryable exact-child cleanup. Its optional actual-input mode reads the existing header-defined direct request format from `chart_requests.py`, with exact program/setup files. Source/manifest provenance remains that helper's authority; centers are model evaluation points, not circuit solutions or physical certificates.
+
+`ChartWireTests.c` uses the actual C header to construct protocol-3 geometry, then falsifies version, header size, region overlap/count/overflow, reserved fields and post-ready immutable suffix mutation. It spawns the real worker with bounded waits and exact reaping. It does not synthesize numerical success. `chart_fixtures.py` additionally emits a SHA-bound manifest for `OSDIPrecisionChartTests`, whose public Swift path covers scoped guards, complete tape binding, equality/closure, cumulative quotas, source lease independence, wrong-operation/refusal, cancellation and preservation of both chart and retained cleanup causes. The point-only transport fixture now explicitly rejects unknown versions/header sizes. All execution is root-owned and externally timeout-bounded.
+
+The qualified numeric profile retains point/range fields and separately records `chartWireVersion: 3`, `chartSemantics: source-program-conditional-formula-v3` and `chartWorkPolicy: session-cumulative-work-and-source-steps`. Source/header/archive/worker hashes remain the execution identity. These declarations identify the qualified operation; they do not grant physical model or chart-cover authority.
+
+Exact-infinity falsifiers cover both primitive signs, an OPTBARRIER copy, explicit primitive constant indices, replay at another finite point and refusal of an incompatible closure tape. A finite `DBL_MAX*DBL_MAX` guard operand must fail binary64 projection while its selected F/Q/G/C remain finite. `ChartForgeryWorker.c` is an invalid-response generator only: finite-kind infinity, NaN masquerading as a primitive, out-of-range/wrong-sign/finite-leaf provenance and nonfinite output planes must all fail parent protocol validation. It never supplies numerical qualification evidence.

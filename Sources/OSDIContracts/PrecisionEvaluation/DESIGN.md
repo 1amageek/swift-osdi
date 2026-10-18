@@ -172,3 +172,23 @@ process from worker regularity status 10. Existing process issue values, includi
 Verification owns closed boxes touching/crossing switch/domain faces, nonlinear
 closed-form F/Q/G/C bounds, exact twofold ordering, time boxes, operation mismatch,
 regularity failure mapping, atomic refusal, cleanup and unchanged point behavior.
+
+## Conditional Chart Contract
+
+Protocol 3 adds separate chart preparation/evaluation protocols and borrowed result views. It preserves the existing point/range declarations and error raw values. Caller-owned `OSDIPrecisionChartLimits` bounds session-cumulative source steps, tape entries and output guard records; the existing options bound mapping bytes, arena bytes, cumulative work and process deadlines. Limits are explicit policy, not guessed defaults.
+
+| Value | Authority |
+|---|---|
+| Chart binding | Exact model artifact, descriptor, program/setup/semantic digests and complete prepared raw topology/active order |
+| Decision tape | Caller-owned finite decisions, source site/kind/choice/ordinal, bound to that immutable program |
+| Record result | Definite source decisions proposed for explicit caller retention |
+| Exact graph formula | Bounds conditional on the complete actual source guard conjunction |
+| Formula closure | Finite extension of the selected formula, separately tagged from actual equality values |
+
+Eight F/Q/G/C endpoint planes retain range coordinate order, but G/C are retained source AD-root formula bounds. They do not certify seam differentiability or a circuit quotient derivative. Guard records retain strict/non-strict/equality opcode, operand register/type/integer/real bounds, occurrence order and boundary-extension tag. Public guard collection indexing returns one portable guard value; no automatic collection copy or persistent guard certificate is produced. Consumers explicitly retain decisions if needed.
+
+Binding/dimension/mode/operation/tape-count errors rejected before transport preserve the admitted session. Submitted failures publish no result and close that same child. `OSDIPrecisionChartError` wraps existing runtime errors and distinguishes tape mismatch, guard capacity and step exhaustion; cleanup wraps the complete primary chart error plus the complete existing cleanup error. Undefined formulas and removable limits without source identity authority remain explicit numerical refusals. No fallback or root/flow claim is admitted.
+
+Verification covers actual worker record/replay, equality versus closure, wrong binding/version/tape/capacity, cumulative quotas, cancellation, lease independence, repeated borrowed addresses and explicit close, plus unchanged point/range regressions.
+
+Chart operand kinds `negativePrimitiveInfinity` and `positivePrimitiveInfinity` explicitly retain source-bound sentinels used in parameter validation. `sourcePrimitiveConstantIndex` points into the bound program's admitted constant section; copied/phi-selected sentinel values preserve that origin. Their lower/upper fields contain the matching infinity as tagged representation, not an unconstrained finite interval or a physical variable. Ordinary REAL guards still have finite endpoints; NaN, finite-value projection overflow and nonfinite output planes fail. Upper consumers must interpret the value kind before using endpoints. This adds no equality/closure/root authority.

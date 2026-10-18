@@ -305,3 +305,17 @@ ordered matrix validation, explicit-time program facts, nonsmooth atomic refusal
 timeouts/cancellation/resource failures and retained owner cleanup. Existing
 version-1 API/worker fixtures remain regression evidence; successful range
 fixtures certify only the stated local constitutive boxes.
+
+## Conditional Chart Process Operation
+
+`cs_osdi_chart_process_create/evaluate` selects protocol 3 in the existing exclusive owner. The extended control begins with the unchanged 464-byte v1 record, uses the range interpretation for regions 0..13, and appends immutable tape/guard region geometry and limits followed by mutable chart request/response fields. Old versions keep their exact header size. Complete immutable suffix geometry is checked at startup and every response; no prefix-only comparison admits a changed limit or region.
+
+Wire decisions and guards are fixed-width, pointer-free records with explicit zero reserved fields and compile-time size/offset checks. Native interpreter records are field-projected, never copied by native struct layout. All sixteen regions are aligned, in bounds and pairwise disjoint. Checked count/stride arithmetic precedes slab/arena allocation; tape/guard capacity contributes to mapping policy and native scratch to the fixed worker arena.
+
+Chart work counts are cumulative from program admission, and source steps are cumulative across every successful request in that session. Replay consumes remaining quotas; recording does not reset them. The parent verifies monotonic counters and exact limits. The worker uses an explicit validated local range-control view solely to call the existing conditional interpreter; public protocol 3 is never silently treated as a smooth-box request. Statuses 100/101/102 are chart-only tape/capacity/step refusals; existing statuses and issue values remain unchanged. No unsuccessful response authorizes plane/guard borrowing. Existing deadline, cancellation, atomic sequence publication and exact child cleanup remain the sole lifecycle.
+
+Verification covers full suffix/region/version validation, source-ordered tape replay, typed refusals and cumulative quotas, fixed borrowed region lifetime, failure atomicity and old wire regression.
+
+### Tagged Primitive Infinity Guard Values
+
+Chart operand value kinds 5/6 denote exact source primitive negative/positive infinity. The existing integer payload holds the immutable compiler constant-record index for those kinds; their binary64 endpoints must both be the matching signed infinity. Finite REAL kind 1 still requires finite ordered endpoints. Non-real kinds keep their previous meanings. The parent retains the validated constant section at admission and checks each tagged payload by bounded O(1) indexed access to its exact type/bits; no per-guard program search or copied provenance graph is introduced. NaN, forged primitive indices/signs, finite projection overflow and nonfinite F/Q/G/C remain refusals. Wire record/header sizes, old versions and cumulative quota semantics stay unchanged.

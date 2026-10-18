@@ -9,6 +9,8 @@ typedef struct {
   uint64_t token, x_token, c_token;
   uint32_t x_register, c_register;
   unsigned char active, shape;
+  /* Immutable source constant index + 1; zero means no exact infinity fact. */
+  uint32_t primitive_infinity;
 } cs_precision_range_fact;
 typedef struct {
   const CSOsdiPrecisionProgramHeader *header;

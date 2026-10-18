@@ -140,7 +140,48 @@ typedef struct cs_osdi_precision_control_v1 {
     double maximum_timestep;
 } cs_osdi_precision_control_v1;
 
+/* Protocol 3 is a separate conditional-formula operation. Versions 1/2 above
+ * retain their layout. Reserved fields must be zero on both sides. */
+#define CS_OSDI_CHART_PROTOCOL_VERSION UINT32_C(3)
+enum cs_osdi_chart_mode {
+    CS_OSDI_CHART_RECORD = 1, CS_OSDI_CHART_EXACT_GRAPH = 2,
+    CS_OSDI_CHART_FORMULA_CLOSURE = 3
+};
+/* Source REAL sentinels, with the exact constant-record index in integer payload.
+ * Ordinary REAL=1 still requires finite ordered binary64 endpoints. */
+enum cs_osdi_chart_operand_kind {
+    CS_OSDI_CHART_NEGATIVE_PRIMITIVE_INFINITY = 5,
+    CS_OSDI_CHART_POSITIVE_PRIMITIVE_INFINITY = 6
+};
+enum cs_osdi_chart_status {
+    CS_OSDI_CHART_TAPE_MISMATCH = 100, CS_OSDI_CHART_CAPACITY = 101,
+    CS_OSDI_CHART_STEP_LIMIT = 102
+};
+typedef struct cs_osdi_chart_decision_v3 {
+    uint32_t stage, block, instruction, kind, choice, reserved;
+    uint64_t ordinal;
+} cs_osdi_chart_decision_v3;
+typedef struct cs_osdi_chart_guard_v3 {
+    cs_osdi_chart_decision_v3 decision;
+    uint32_t opcode, a, b, a_type, b_type, a_integer, b_integer;
+    uint32_t formula_truth_known, boundary_extension, reserved;
+    double a_lower, a_upper, b_lower, b_upper;
+} cs_osdi_chart_guard_v3;
+typedef struct cs_osdi_chart_limits_v3 {
+    uint64_t maximum_steps, maximum_tape_entries, maximum_guard_records;
+} cs_osdi_chart_limits_v3;
+typedef struct cs_osdi_chart_control_v3 {
+    cs_osdi_precision_control_v1 base;
+    cs_osdi_precision_region_v1 tape_region, guard_region;
+    cs_osdi_chart_limits_v3 limits;
+    uint32_t chart_mode, reserved;
+    uint64_t tape_count, guard_count, completed_steps;
+} cs_osdi_chart_control_v3;
+
 #if defined(__cplusplus)
+static_assert(sizeof(cs_osdi_chart_decision_v3) == 32 && offsetof(cs_osdi_chart_decision_v3, ordinal) == 24, "Invalid chart decision layout");
+static_assert(sizeof(cs_osdi_chart_guard_v3) == 104 && offsetof(cs_osdi_chart_guard_v3, a_lower) == 72, "Invalid chart guard layout");
+static_assert(sizeof(cs_osdi_chart_control_v3) == 552 && offsetof(cs_osdi_chart_control_v3, chart_mode) == 520, "Invalid chart control layout");
 static_assert(sizeof(double) == 8, "Precision protocol requires binary64 double storage");
 static_assert(sizeof(cs_osdi_precision_region_v1) == 16, "Invalid precision region layout");
 static_assert(sizeof(cs_osdi_precision_context_v1) == 24, "Invalid precision context layout");
@@ -148,6 +189,9 @@ static_assert(sizeof(cs_osdi_precision_control_v1) == 464, "Invalid precision co
 static_assert(offsetof(cs_osdi_precision_control_v1, request_sequence) % 8 == 0,
               "Precision sequence must be aligned");
 #else
+_Static_assert(sizeof(cs_osdi_chart_decision_v3) == 32 && offsetof(cs_osdi_chart_decision_v3, ordinal) == 24, "Invalid chart decision layout");
+_Static_assert(sizeof(cs_osdi_chart_guard_v3) == 104 && offsetof(cs_osdi_chart_guard_v3, a_lower) == 72, "Invalid chart guard layout");
+_Static_assert(sizeof(cs_osdi_chart_control_v3) == 552 && offsetof(cs_osdi_chart_control_v3, chart_mode) == 520, "Invalid chart control layout");
 _Static_assert(sizeof(double) == 8, "Precision protocol requires binary64 double storage");
 _Static_assert(sizeof(cs_osdi_precision_region_v1) == 16, "Invalid precision region layout");
 _Static_assert(sizeof(cs_osdi_precision_context_v1) == 24, "Invalid precision context layout");

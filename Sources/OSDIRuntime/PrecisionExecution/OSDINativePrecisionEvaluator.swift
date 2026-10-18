@@ -1,6 +1,6 @@
 import OSDIContracts
 
-public struct OSDINativePrecisionEvaluator: OSDIPrecisionEvaluating, OSDIPrecisionRangeEvaluating {
+public struct OSDINativePrecisionEvaluator: OSDIPrecisionEvaluating, OSDIPrecisionRangeEvaluating, OSDIPrecisionChartEvaluating {
     public init() {}
     public func evaluate<Result>(session: inout OSDIPrecisionSession,
         candidateHigh: borrowing Span<Double>, candidateLow: borrowing Span<Double>,
@@ -19,5 +19,14 @@ public struct OSDINativePrecisionEvaluator: OSDIPrecisionEvaluating, OSDIPrecisi
         try session.evaluateRange(lowerHigh: lowerHigh, lowerLow: lowerLow,
             upperHigh: upperHigh, upperLow: upperLow,
             lowerContext: lowerContext, upperContext: upperContext, precisionBits: precisionBits, body)
+    }
+    public func evaluateChart<Result>(session: inout OSDIPrecisionSession,
+        lowerHigh: borrowing Span<Double>, lowerLow: borrowing Span<Double>,
+        upperHigh: borrowing Span<Double>, upperLow: borrowing Span<Double>,
+        lowerContext: OSDIPrecisionContext, upperContext: OSDIPrecisionContext,
+        precisionBits: UInt32, mode: OSDIPrecisionChartMode, tape: borrowing OSDIPrecisionChartTape?,
+        _ body: (OSDIPrecisionChartEvaluationView) -> Result) throws(OSDIPrecisionChartError) -> Result {
+        try session.evaluateChart(lowerHigh: lowerHigh, lowerLow: lowerLow, upperHigh: upperHigh, upperLow: upperLow,
+            lowerContext: lowerContext, upperContext: upperContext, precisionBits: precisionBits, mode: mode, tape: tape, body)
     }
 }

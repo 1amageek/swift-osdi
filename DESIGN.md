@@ -387,3 +387,16 @@ bind those cards to a separately qualified external matching model through OSDI.
 It must not revive the superseded in-project physical reimplementation or relabel
 the cards as BSIM-BULK107.2.1 calibration. Missing exact model admission is a
 failure, not a substitute model or permission to narrow the original goal.
+
+## Conditional Chart Boundary
+
+The [precision contract](Sources/OSDIContracts/PrecisionEvaluation/DESIGN.md#conditional-chart-contract) owns a separate protocol-3 conditional chart operation. Compiler program ABI 1, point protocol 1 and smooth-box protocol 2 retain their exact semantics and layouts. The exact program/setup/model/descriptor/topology/semantic profile binds every decision tape; the qualified worker/profile binds execution. CoreSpice alone owns projection into circuit coordinates and any reconstruction of whole charge.
+
+```text
+exact source program/setup/topology + bounded source decision tape
+ -> protocol 3 conditional formula F/Q/G/C + scoped guard conjunction
+ -> independent guard coverage/root/continuation checker
+ -> circuit flow/history/tube/event authority
+```
+
+A chart succeeds only at its local conditional formula contract. It does not establish guard nonemptiness, complete chart coverage, equality/one-sided agreement, root existence, charge continuity, a reset, physical flow or a bounded entire history. A formula closure is tagged separately from actual source equality values. The original physical proof remains required. Existing calibration/source admission requirements above remain unchanged.

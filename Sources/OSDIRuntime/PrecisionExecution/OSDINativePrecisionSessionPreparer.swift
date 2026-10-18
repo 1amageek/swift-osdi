@@ -4,7 +4,7 @@ import Foundation
 import OSDIContracts
 
 /// Cold exact artifact acquisition and setup serialization; solver state remains caller-owned.
-public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing, OSDIPrecisionRangeSessionPreparing {
+public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing, OSDIPrecisionRangeSessionPreparing, OSDIPrecisionChartSessionPreparing {
     public let stagingParentDirectory: URL
     public init(stagingParentDirectory: URL = FileManager.default.temporaryDirectory) {
         self.stagingParentDirectory = stagingParentDirectory
@@ -28,9 +28,19 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
         try await prepare(operation: .range, program: program, worker: worker, source: source,
             numericProfile: numericProfile, options: options)
     }
+    public func prepareChart(program: OSDIPrecisionProgram, worker: ArtifactAccessIntent, source: any ArtifactAccessing,
+        numericProfile: ContentDigest, options: OSDIPrecisionOptions,
+        limits: OSDIPrecisionChartLimits) async throws(OSDIPrecisionChartError) -> OSDIPrecisionSession {
+        do {
+            return try await prepare(operation: .chart, program: program, worker: worker, source: source,
+                numericProfile: numericProfile, options: options, chartLimits: limits)
+        } catch { throw .runtime(error) }
+    }
     private func prepare(operation: OSDIPrecisionSession.Operation, program: OSDIPrecisionProgram,
         worker: ArtifactAccessIntent, source: any ArtifactAccessing,
-        numericProfile: ContentDigest, options: OSDIPrecisionOptions) async throws(OSDIError) -> OSDIPrecisionSession {
+        numericProfile: ContentDigest, options: OSDIPrecisionOptions,
+        chartLimits: OSDIPrecisionChartLimits? = nil) async throws(OSDIError) -> OSDIPrecisionSession {
+        guard (operation == .chart) == (chartLimits != nil) else { throw .invalidRange }
         guard UInt64(program.programBytes.count) <= options.maximumProgramBytes,
               UInt64(program.setupBytes.count) <= options.maximumMappingBytes else { throw .resourceLimit }
         let programSHA = try OSDIPrecisionProgramBuilder.digestBytes(program.programDigest)
@@ -49,6 +59,14 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
         var handle: OpaquePointer?, issue = cs_osdi_precision_process_issue()
         let status = directory.appendingPathComponent("model.osdi").path.withCString { path in
             program.programBytes.withUnsafeBufferPointer { bytes in program.setupBytes.withUnsafeBufferPointer { setup in
+                if operation == .chart, let chartLimits {
+                    var limits = cs_osdi_chart_limits_v3(maximum_steps: chartLimits.maximumSteps,
+                        maximum_tape_entries: chartLimits.maximumTapeEntries, maximum_guard_records: chartLimits.maximumGuardRecords)
+                    return cs_osdi_chart_process_create(path, bytes.baseAddress, UInt64(bytes.count), setup.baseAddress,
+                        UInt64(setup.count), program.descriptorIndex, UInt32(program.topology.activeUnknownCount),
+                        UInt32(program.topology.nodes.count), &native, &limits,
+                        cs_osdi_precision_swift_task_cancelled, nil, &handle, &issue)
+                }
                 let create = operation == .point ? cs_osdi_precision_process_create : cs_osdi_range_process_create
                 return create(path, bytes.baseAddress, UInt64(bytes.count), setup.baseAddress,
                     UInt64(setup.count), program.descriptorIndex, UInt32(program.topology.activeUnknownCount),
@@ -62,6 +80,6 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
             throw primary
         }
         return OSDIPrecisionSession(handle: handle, stagingDirectory: directory, program: program,
-            workerReference: worker.expectedReference, numericProfile: numericProfile, options: options, operation: operation)
+            workerReference: worker.expectedReference, numericProfile: numericProfile, options: options, operation: operation, chartLimits: chartLimits)
     }
 }

@@ -6,7 +6,7 @@ import Synchronization
 
 /// Exclusive helper owner. No child wait, client callback or file I/O occurs under Mutex.
 public struct OSDIPrecisionSession: ~Copyable, Sendable {
-    internal enum Operation: Sendable { case point, range }
+    internal enum Operation: Sendable { case point, range, chart }
     internal struct State { var handle: OpaquePointer? }
     private let state: Mutex<State>
     private let stagingDirectory: URL?
@@ -15,11 +15,13 @@ public struct OSDIPrecisionSession: ~Copyable, Sendable {
     public let workerReference: CircuiteFoundation.ArtifactReference
     public let numericProfile: ContentDigest
     public let options: OSDIPrecisionOptions
+    public let chartLimits: OSDIPrecisionChartLimits?
+    public var chartBinding: OSDIPrecisionChartBinding { OSDIPrecisionChartBinding(program: program) }
     internal init(handle: sending OpaquePointer, stagingDirectory: URL?, program: OSDIPrecisionProgram,
                   workerReference: CircuiteFoundation.ArtifactReference, numericProfile: ContentDigest,
-                  options: OSDIPrecisionOptions, operation: Operation = .point) {
+                  options: OSDIPrecisionOptions, operation: Operation = .point, chartLimits: OSDIPrecisionChartLimits? = nil) {
         state = Mutex(State(handle: handle)); self.stagingDirectory = stagingDirectory
-        self.operation = operation
+        self.operation = operation; self.chartLimits = chartLimits
         self.program = program; self.workerReference = workerReference; self.numericProfile = numericProfile; self.options = options
     }
     public mutating func close() throws(OSDIError) {
@@ -128,5 +130,77 @@ public struct OSDIPrecisionSession: ~Copyable, Sendable {
             maximumTimestep: native.has_maximum_timestep == 0 ? nil : native.maximum_timestep,
             usedPrecisionBits: native.used_precision_bits, completedWorkUnits: native.completed_work_units,
             requestSequence: native.request_sequence, programHasTimeInput: native.program_has_time_input != 0))
+    }
+    internal mutating func evaluateChart<Result>(lowerHigh: borrowing Span<Double>, lowerLow: borrowing Span<Double>,
+        upperHigh: borrowing Span<Double>, upperLow: borrowing Span<Double>,
+        lowerContext: OSDIPrecisionContext, upperContext: OSDIPrecisionContext,
+        precisionBits: UInt32, mode: OSDIPrecisionChartMode, tape: borrowing OSDIPrecisionChartTape?,
+        _ body: (OSDIPrecisionChartEvaluationView) -> Result) throws(OSDIPrecisionChartError) -> Result {
+        guard let handle = state.withLock({ $0.handle }) else { throw .runtime(.closed) }
+        guard operation == .chart, let chartLimits else { throw .runtime(.invalidRange) }
+        let count = program.topology.activeUnknownCount
+        guard lowerHigh.count == count, lowerLow.count == count, upperHigh.count == count,
+              upperLow.count == count, lowerContext.mode == upperContext.mode,
+              (mode == .record ? tape == nil : tape != nil) else { throw .runtime(.invalidRange) }
+        // Optional pattern matching consumes its operand. Retain only the immutable
+        // COW handle through this call; the native record buffer is never materialized.
+        let retainedTape = copy tape
+        if let tape = retainedTape {
+            guard tape.binding == chartBinding else { throw .runtime(.identityMismatch) }
+            guard UInt64(tape.count) <= chartLimits.maximumTapeEntries else { throw .runtime(.resourceLimit) }
+        }
+        var lower = cs_osdi_precision_context_v1(mode: lowerContext.mode.rawValue, reserved: 0,
+            time_high: lowerContext.timeHigh, time_low: lowerContext.timeLow)
+        var upper = cs_osdi_precision_context_v1(mode: upperContext.mode.rawValue, reserved: 0,
+            time_high: upperContext.timeHigh, time_low: upperContext.timeLow)
+        var native = cs_osdi_chart_result_view(), issue = cs_osdi_precision_process_issue()
+        func invoke(_ decisions: UnsafeBufferPointer<cs_osdi_chart_decision_v3>) -> Int32 {
+            lowerHigh.withUnsafeBufferPointer { lh in lowerLow.withUnsafeBufferPointer { ll in
+                upperHigh.withUnsafeBufferPointer { uh in upperLow.withUnsafeBufferPointer { ul in
+                    cs_osdi_chart_process_evaluate(handle, lh.baseAddress, ll.baseAddress, uh.baseAddress, ul.baseAddress,
+                        UInt64(count), &lower, &upper, precisionBits, mode.rawValue, decisions.baseAddress, UInt64(decisions.count),
+                        cs_osdi_precision_swift_task_cancelled, nil, &native, &issue)
+                }}
+            }}
+        }
+        let status: Int32
+        if let tape = retainedTape { status = tape.storage.withUnsafeBufferPointer { invoke($0) } }
+        else { status = invoke(UnsafeBufferPointer(start: nil, count: 0)) }
+        guard status == 0 else {
+            let primary = OSDIPrecisionChartError.native(OSDIPrecisionNativeBridge.issue(issue))
+            do { try close() }
+            catch { throw .cleanup(primary: primary, secondary: error) }
+            throw primary
+        }
+        let formulas = native.formulas, nodes = program.topology.nodes.count
+        let (matrix, overflow) = nodes.multipliedReportingOverflow(by: nodes)
+        guard !overflow, formulas.raw_node_count == nodes, formulas.program_has_time_input <= 1,
+              native.semantics == mode.rawValue, native.guard_count <= chartLimits.maximumGuardRecords,
+              native.guard_count <= UInt64(Int.max), native.completed_steps <= chartLimits.maximumSteps,
+              native.guard_count == 0 || native.guards != nil,
+              nodes == 0 || (formulas.f_lower != nil && formulas.f_upper != nil && formulas.q_lower != nil && formulas.q_upper != nil),
+              matrix == 0 || (formulas.g_lower != nil && formulas.g_upper != nil && formulas.c_lower != nil && formulas.c_upper != nil) else {
+            do { try close() }
+            catch { throw .cleanup(primary: .runtime(.identityMismatch), secondary: error) }
+            throw .runtime(.identityMismatch)
+        }
+        // The native boundary validates the entire extended geometry, all fixed
+        // records and ordered planes before this exclusive synchronous borrow.
+        let guards = OSDIPrecisionChartGuardCollectionView(storage: native.guard_count == 0 ? Span() :
+            Span(_unsafeStart: native.guards!, count: Int(native.guard_count)))
+        return body(OSDIPrecisionChartEvaluationView(
+            fLower: nodes == 0 ? Span() : Span(_unsafeStart: formulas.f_lower!, count: nodes),
+            fUpper: nodes == 0 ? Span() : Span(_unsafeStart: formulas.f_upper!, count: nodes),
+            qLower: nodes == 0 ? Span() : Span(_unsafeStart: formulas.q_lower!, count: nodes),
+            qUpper: nodes == 0 ? Span() : Span(_unsafeStart: formulas.q_upper!, count: nodes),
+            gLower: matrix == 0 ? Span() : Span(_unsafeStart: formulas.g_lower!, count: matrix),
+            gUpper: matrix == 0 ? Span() : Span(_unsafeStart: formulas.g_upper!, count: matrix),
+            cLower: matrix == 0 ? Span() : Span(_unsafeStart: formulas.c_lower!, count: matrix),
+            cUpper: matrix == 0 ? Span() : Span(_unsafeStart: formulas.c_upper!, count: matrix),
+            guards: guards, binding: chartBinding, semantics: mode,
+            maximumTimestep: formulas.has_maximum_timestep == 0 ? nil : formulas.maximum_timestep,
+            usedPrecisionBits: formulas.used_precision_bits, completedWorkUnits: formulas.completed_work_units,
+            completedSteps: native.completed_steps, requestSequence: formulas.request_sequence,
+            programHasTimeInput: formulas.program_has_time_input != 0))
     }
 }
