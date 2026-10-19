@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.0 — 2026-10-19 — source release candidate
+
+- Add bounded source guard/chart facts, independently checked complete source
+  decision covers, and exact source-linear F/Q identities with explicit immutable
+  coordinate-quotient conditions through protocol 5. Older protocol bytes and
+  operation semantics remain unchanged.
+- Preserve scoped borrowed results, cumulative work/storage admission, typed
+  refusal, cancellation and explicit worker/source cleanup.
+- Generate all required precision fixtures in fresh standalone lanes and compare
+  public probe bytes with the original independent C fixture recipe. Require a
+  separate public-import snapshot/identity consumer for release and CI.
+- Retain macOS 26+ arm64, Swift 6.4.0, OSDI 0.4, exact CircuiteFoundation
+  `26.1018.0`, GPL-3.0-only and source-only distribution.
+
+These finite model-local source facts do not establish circuit rank, roots,
+forward flow, accepted history, all-phase/all-corner guarantees or foundry
+qualification. Publication is established by the verified remote tag and release.
+
 ## 1.0.1 — 2026-10-18
 
 - Replace the CircuiteFoundation revision requirement with exact stable version

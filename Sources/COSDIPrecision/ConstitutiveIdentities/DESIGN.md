@@ -205,7 +205,7 @@ logic. Tests must show zero exact slots initialized after cold open, small actua
 use under a large node ceiling, repeated-attempt stability and exhausted-work
 cleanup. Actual-model stage timing must distinguish improvement from inference.
 
-### Explicit coordinate quotient (unreleased protocol 5)
+### Explicit coordinate quotient (protocol 5 source-release candidate)
 
 An optional additional active-coordinate quotient is fixed at workspace admission;
 its identity form is explicit for public callers. A canonical table has one UInt32

@@ -37,6 +37,9 @@ native runtime.
 | Ordinary OSDI point | Prepared topology/parameters; local F/Q/G/C, candidate next state, source noise densities and timestep advice in explicit supported contexts |
 | `stateless-precision-v1` | Qualified source-program F and Delta-Q enclosures at explicit high/low endpoints; G/C are approximate Newton aids |
 | `stateless-smooth-box-v2` | Qualified smooth-box outward F/Q and spatial G/C bounds; unsupported nonsmooth faces fail explicitly |
+| Guard/chart v3 | Source-bound conditional formula bounds and exact guard facts; no seam smoothness claim |
+| Complete source decision cover v4 | Independently checked full source decision tree over the original box; no leaf nonemptiness or circuit root claim |
+| Conditional constitutive identities v5 | Independently checked source-linear F/Q identities over the original box intersected with an explicit immutable coordinate quotient |
 
 The caller supplies every active unknown, including internal variables, and every
 previous state. The caller owns circuit assembly/solution, integration, accepted
@@ -71,12 +74,11 @@ requirement; [Package.resolved](Package.resolved) binds it to commit
 published version tag and the resolved commit. No sibling workspace checkout,
 SwiftPM mirror or local override is required; see [RELEASING.md](RELEASING.md).
 
-The stable-release target is **1.0.1**. Version **1.0.0** is superseded and its
-immutable tag is retained as a prerelease: its revision-based dependency cannot
-be resolved when a downstream SwiftPM package requests stable `exact: "1.0.0"`.
-Version 1.0.1 corrects this with a stable exact-version dependency on the same
-Foundation implementation commit. Release admission must exercise downstream
-`exact: "1.0.1"` resolution, rather than only consuming an SDK Git revision.
+The source-release target is **1.1.0**; publication is established by its verified
+remote tag and release. It retains the exact stable CircuiteFoundation dependency
+`26.1018.0`. Version 1.0.1 corrected the superseded 1.0.0 revision-only dependency;
+1.1.0 adds finite source guard/chart/cover and conditional identity contracts.
+Release admission checks downstream `exact: "1.1.0"` resolution.
 
 Python 3 and Apple Clang are required by the tracked verification tools. Ordinary
 runtime products do not link GMP or MPFR. Building all package products, or the
@@ -141,7 +143,7 @@ python3 Tools/OSDIStandaloneVerification/run.py \
 | Lane | Evidence | External inputs |
 |---|---|---|
 | Ordinary | Admission, lifecycle, point API/CLI and precision transport contracts using tracked C fixtures | Swift, SDK, Clang, Python; GMP/MPFR/pkg-config for the test build |
-| Optional deterministic precision | Actual numeric worker and tracked source-program/range fixtures | Ordinary prerequisites plus GMP/MPFR static archives and pkg-config |
+| Optional deterministic precision | Actual numeric worker and tracked range/chart/cover/conditional-identity fixtures | Ordinary prerequisites plus GMP/MPFR static archives and pkg-config |
 | Model qualification | Exact compiler/model/source/reference comparisons | Explicit retained model artifacts and qualification receipts |
 | External consumer | A separate package using only public products; exact persisted API/CLI comparison | Public source/dependency versions and resolved commit bindings |
 
@@ -155,8 +157,11 @@ The [external consumer tool](Tools/OSDIConsumerVerification/DESIGN.md) performs 
 fresh source/dependency resolution with explicit public version and commit
 bindings; its
 `--help` documents the exact invocation. It requires no experimental Swift flags
-in the consuming package. The source and dependency licenses must permit that
-use.
+in the consuming package. Select `--precision` for the required 1.1.0 release/CI
+public source-fact probe, including an actual optional precision export, borrowed
+conditional identities, wrong-operation/limit refusals and explicit cleanup.
+Ordinary mode remains available for lightweight point API/CLI checks. The source
+and dependency licenses must permit that use.
 
 ## Public API
 
@@ -350,7 +355,7 @@ OpenVAFSupport — Copyright (c) 2026, 1amageek — originates from
 notice and its visible attribution requirements. Upstream-derived compiler patch
 material remains subject to its upstream GPL terms as that notice specifies.
 
-Version 1.0.1 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
+Version 1.1.0 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
 model library or GMP/MPFR archive is included as a release asset. Local builds
 remain supported; binary redistribution requires reviewing the actual linked
 licenses and satisfying their corresponding-source/relinking obligations.

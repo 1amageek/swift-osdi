@@ -1,6 +1,6 @@
 # Source release procedure
 
-The corrected source release is prepared as **1.0.1**, dated **2026-10-18**. This
+The source release is prepared as **1.1.0**, dated **2026-10-19**. This
 document describes admission and manual publication; prepared version metadata
 does not mean a tag or release has been published.
 
@@ -20,7 +20,7 @@ exact source + stable dependency version/resolved commit + license approval
 | Host/toolchain | macOS 26+, arm64, exact Swift 6.4.0 release and recorded SDK/Clang |
 | ABI | OSDI 0.4, trusted thin Mach-O native libraries |
 | Ordinary API | Exact artifact admission, lifecycle, setup, explicit-context point F/Q/G/C and candidate state/noise/timestep facts |
-| Precision | Explicit `stateless-precision-v1` and `stateless-smooth-box-v2`; exact qualified program, worker, semantic and numeric identities |
+| Precision | Explicit point v1, smooth box v2, guard/chart v3, complete source decision cover v4 and conditional source-linear identity v5; exact program/setup/topology, worker, semantic and numeric bindings |
 | Excluded claims | Circuit solution, accepted history, complete operating cover, all-history/all-corner guarantees, physical/foundry qualification and new performance claims |
 | Distribution | Source tag/archive only; no compiled CLI, worker, model library or numeric archive assets |
 | SDK license | GPL-3.0-only under the root LICENSE |
@@ -33,7 +33,7 @@ release admission sequence.
 
 ## Admission checklist
 
-1. Confirm repository owner, branch, exact source commit and proposed `1.0.1` tag.
+1. Confirm repository owner, branch, exact source commit and proposed `1.1.0` tag.
    Inspect existing tags/remotes and pending changes. Never overwrite a tag or
    rewrite history as part of this procedure.
 2. Confirm the root GPL-3.0-only LICENSE and the MIT permission at the exact
@@ -52,24 +52,29 @@ release admission sequence.
    dependency. Record every resolved version and commit. A revision-based direct
    dependency is not an acceptable substitute for this stable-release contract.
 4. Run the standalone tool from the README in fresh Debug and Release output
-   directories, including deterministic precision qualification. Run its supported
-   Address Sanitizer lane once for affected native consumer paths and worker
+   directories: ordinary Debug, deterministic precision Release, and precision
+   Debug with Address Sanitizer. Precision lanes freshly generate every required
+   range/chart/cover/identity fixture and require exact public-probe parity with
+   the independent C driver. Run its supported Address Sanitizer lane once for affected native consumer paths and worker
    Address/Undefined Behavior Sanitizers where supported. Preserve the scope limit
    for noninstrumented numeric libraries or external model code. Existing behavioral
    evidence may be reused for a license-only dependency revision after confirming
    exact non-license source equality and unchanged verification assumptions.
    Preserve the original tested revision and the equality evidence; do not report
    reused results as newly executed tests of the new revision.
-5. Run the external consumer requesting the SDK's public stable `exact: "1.0.1"`
+5. Run the external consumer requesting the SDK's public stable `exact: "1.1.0"`
    version, with the canonical public CircuiteFoundation exact version and resolved
    commit bindings. It must resolve and build independently,
    exercise API and CLI success/failure, preserve exact report values after reload,
-   and close owners. A CI `file://` source clone tests package consumption only;
+   and close owners. Require `--precision` to exercise the public snapshot-to-v5
+   conditional identity path, wrong-operation/limit refusals and cleanup. A CI `file://` source clone tests package consumption only;
    it does not prove the release revision is publicly fetchable.
 6. For model claims, retain exact source/include/compiler/model/program/setup,
    numeric profile, worker and independent reference identities with successful
    receipts. Record selected and excluded families/cases explicitly. Missing,
-   disabled or failed model checks do not become qualification successes. Reuse
+   disabled or failed model checks do not become qualification successes. The four
+   retained actual-model protocol-5 joins are separate local release evidence;
+   generic CI fixtures do not replace them. Reuse
    prior evidence only if its bound source and assumptions remain applicable.
 7. Review the complete candidate diff once against the declared contracts and
    update [CHANGELOG.md](CHANGELOG.md). Confirm source archives contain no secrets,

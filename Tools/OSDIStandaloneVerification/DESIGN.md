@@ -12,7 +12,7 @@ profile is macOS 26+ arm64, Swift 6.4.0 and the pinned OSDI 0.4 header.
 worker. These fixtures establish API, ABI and lifetime behavior; they never stand
 in for a physical model. `run.py` records tool identities, prepares inputs and runs
 Swift tests. Optional `--precision` builds the real generic GMP/MPFR worker and
-tracked range programs. Optional `--model-qualification` selects existing actual
+tracked range, chart, complete-cover and conditional-identity programs. Optional `--model-qualification` selects existing actual
 model tests and requires their explicit external inputs.
 
 ## Related Designs
@@ -51,7 +51,7 @@ path so unrelated shell state cannot select external qualification.
 | Selector | Executed evidence | Required inputs |
 |---|---|---|
 | Default | C metadata, protocol and transport API behavior | C compiler |
-| `OSDI_PRECISION_QUALIFICATION=1` / `--precision` | Generic smooth-box numeric API | Actual GMP/MPFR worker, numeric profile and range programs |
+| `OSDI_PRECISION_QUALIFICATION=1` / `--precision` | Generic range/chart/cover/conditional-identity APIs | Actual GMP/MPFR worker, numeric profile and all generated fixture directories |
 | `OSDI_MODEL_QUALIFICATION=1` / `--model-qualification` | Generated VA, current device families, compound precision and SOI 101 precision | Exact compiler/model/receipt environment inputs |
 | `OSDI_LEGACY_SOI_QUALIFICATION=1` / `--legacy-soi-qualification` | Original legacy four-family precision receipt regression | Model selector plus original four-family reference, independent receipt and requests |
 
@@ -76,3 +76,23 @@ Sanitized numeric preparation uses the worker builder's address/undefined saniti
 profile. Bare tests and the runner retain actor isolation for both cache states;
 no Embedded storage or conditional synchronization is introduced. A changed
 manifest requires cache decoder changes; fixture C behavior remains the authority.
+
+## Stable 1.1.0 Source-Fact Lane Composition
+
+Precision selection generates range, chart, frontier and constitutive fixtures in
+fresh runner scratch, sets every enabled suite's explicit fixture directory, and
+records their manifests. The constitutive generator's public-probe switch adds
+only the direct-probe source used by public quotient tests; its default output is
+unchanged. The existing bounded C source-identity verifier runs in separate fresh
+scratch without actual-model inputs. Its original C-produced direct-probe bytes
+must equal the Python public-probe bytes before Swift tests run. Sanitized lanes
+instrument that verifier and the worker with the existing supported profiles.
+Default mode removes inherited actual-identity selectors; generic CI never selects
+workspace-bound model captures. Those captures remain separate local release
+evidence, with their exact source/setup/box/worker receipts.
+
+Small Python composition tests own generator selection, environment isolation and
+byte/semantic parity. The three existing CI lanes remain ordinary Debug,
+precision Release, and precision Debug ASan with worker/C ASan+UBSan. Selecting a
+lane never disables a required new suite to make it pass. These finite generic
+facts establish no circuit rank, roots, forward flow or all-history guarantee.

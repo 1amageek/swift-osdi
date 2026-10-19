@@ -88,7 +88,7 @@ and the linked C boundary, without expanding its qualification scope.
 
 ## Conditional Preparation and Binding
 
-Unreleased protocol 5 now requires an explicit coordinateQuotient argument at its
+Protocol 5, prepared for the 1.1.0 source release, requires an explicit coordinateQuotient argument at its
 preparation requirement. Existing callers migrate to an explicit identity table.
 Runtime revalidates that value against program.topology, including complete
 unknown/residual natures and units. It retains the immutable condition in the same

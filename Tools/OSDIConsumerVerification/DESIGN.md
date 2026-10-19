@@ -3,7 +3,8 @@
 ## Purpose and Scope
 
 Parent: [swift-osdi](../../DESIGN.md). Own an independent SwiftPM consumer smoke
-check for the public OSDIRuntime/OSDIContracts products and ordinary public CLI.
+check for the public OSDIRuntime/OSDIContracts products, ordinary public CLI,
+and an explicitly selected source-fact consumer.
 This tool has no production responsibility or child design.
 
 ## Responsibilities and Boundaries
@@ -20,6 +21,7 @@ ABI transport and consumer integration, not physical model qualification.
 | [Package](../../DESIGN.md) | parent | Public product boundaries | Release consumer evidence | Fixed native baseline only |
 | [Point evaluation](../../Sources/OSDIRuntime/PointEvaluation/DESIGN.md) | depends on | Scoped F/Q/G/C and explicit history | Actual public calls | No solver or implicit acceptance |
 | [Evaluation fixtures](../../Tests/OSDIEvaluationTests/Fixtures/DESIGN.md) | depends on | `protocol.c` modes 12 and 1 | Success and fatal refusal oracle | Transport only |
+| [Constitutive identities](../../Sources/OSDIRuntime/ConstitutiveIdentities/DESIGN.md) | depends on | Public snapshot, preparation and scoped conditional identities | Optional precision probe | No circuit rank/root/flow authority |
 | [CLI](../../Sources/OSDIEvaluate/DESIGN.md) | depends on | Schema 2 request/report | Persisted JSON comparison | Read reports from disk |
 
 ## Architecture
@@ -99,3 +101,28 @@ API/CLI reports. A build failure without client experimental flags is a consumer
 contract failure; adding flags requires an explicit public compatibility decision.
 Changes to public lifetime annotations, artifact contracts, package products,
 ordinary CLI schema or fixture semantics require this probe again.
+
+## Public Protocol-5 Source-Fact Probe
+
+Explicit `--precision` is required by the 1.1.0 source-fact release/CI consumer
+qualification. Ordinary mode retains its lightweight point/API-CLI contract.
+Precision mode builds the existing generic numeric worker in isolated scratch and
+compiles a tracked stateless C ABI fixture exporting an optional precision program.
+That source fixture is an analytic transport/serialization oracle, not an official
+physical model. The public consumer loads and prepares the actual fixture, calls
+public `snapshot`, then prepares an explicit coordinate quotient and borrows
+checked claim coefficients. It never imports `@testable`, exposes an internal raw
+program initializer, or adds client experimental flags.
+
+The probe checks exact source/condition binding, repeated borrowed storage,
+wrong-operation refusal, identity-limit refusal with no callback, idempotent close
+and drained staging. Only the final owned JSON boundary copies observations.
+The fixture declares a semantic-profile digest in its source-program header. That
+identity is distinct from the complete program content digest and the worker
+numeric-profile digest. The runner carries all three separately; public snapshot
+admission must match the declared semantic digest and its returned program must
+match the independent content digest. Fixture, exported program, worker/profile,
+consumer sources and reports are pinned
+in the same external receipt. The generic source-fact probe grants no numerical
+rank, root, circuit trajectory, forward-flow or entire-history authority. Bound
+four-family identity captures remain separate qualification evidence.

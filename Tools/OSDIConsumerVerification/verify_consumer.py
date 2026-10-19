@@ -11,6 +11,7 @@ import shutil
 import signal
 import struct
 import subprocess
+import sys
 import time
 from urllib.parse import unquote, urlparse
 
@@ -214,6 +215,11 @@ def verify(args, runner):
     sources.mkdir(parents=True)
     for name in ('ConsumerEntry.swift', 'ConsumerSnapshot.swift', 'ConsumerFailure.swift'):
         shutil.copyfile(templates / name, sources / name)
+    # Earlier ordinary-only source revisions retain their original templates.
+    if (templates/'PrecisionConsumerProbe.swift').is_file():
+        shutil.copyfile(templates/'PrecisionConsumerProbe.swift', sources/'PrecisionConsumerProbe.swift')
+    require(not args.precision or (sources/'PrecisionConsumerProbe.swift').is_file(),
+            '--precision requires a source revision with the public protocol-5 probe')
     (consumer / 'Package.swift').write_text(manifest(args.source_url, args.source_revision, args.source_version,
                                                    foundation_original, args.foundation_revision, foundation_version))
     for package in (source, consumer):
@@ -235,6 +241,35 @@ def verify(args, runner):
         runner.run([args.clang, '-std=c11', '-D_DARWIN_C_SOURCE', '-dynamiclib', '-Wall', '-Wextra', '-Werror',
                     '-fvisibility=default', '-I', header.parent, f'-DPROTOCOL_MODE={mode}', protocol, '-o', library])
         libraries.append(library)
+    precision_inputs = None
+    precision_arguments = []
+    if args.precision:
+        numeric_dir = runner.scratch / 'numeric'
+        runner.run([sys.executable, source/'Tools/OSDIPrecisionVerification/build_worker.py',
+                    '--output-dir', numeric_dir, '--cc', args.clang, '--pkg-config', args.pkg_config])
+        numeric = json.loads((numeric_dir/'receipt.json').read_bytes())
+        precision_fixtures = runner.scratch/'precision-fixture'
+        runner.run([sys.executable, templates/'precision_fixture.py', precision_fixtures])
+        precision_library = precision_fixtures/'precision.dylib'
+        runner.run([args.clang, '-std=c11', '-D_DARWIN_C_SOURCE', '-dynamiclib', '-Wall', '-Wextra', '-Werror',
+                    '-fvisibility=default', '-I', header.parent, '-I', source/'Sources/COSDI/include',
+                    '-I', precision_fixtures, templates/'precision_fixture.c', '-o', precision_library])
+        precision_program = precision_fixtures/'linear.program'
+        exported = json.loads((precision_fixtures/'manifest.json').read_bytes())
+        require(exported['programSHA256'] == sha(precision_program) and
+                precision_program.read_bytes()[40:72].hex() == exported['semanticProfileSHA256'],
+                'Analytic source export content/semantic bindings differ')
+        precision_report = runner.scratch/'precision-report.json'
+        worker = Path(numeric['worker']['path'])
+        profile = numeric['numericProfile']['sha256']
+        require(sha(worker) == numeric['worker']['sha256'], 'Precision worker changed after build')
+        precision_arguments = [precision_library, worker, profile, sha(precision_program), exported['semanticProfileSHA256'], precision_report]
+        precision_inputs = {'fixtureSourceSHA256': sha(templates/'precision_fixture.c'),
+                            'fixtureGeneratorSHA256': sha(templates/'precision_fixture.py'),
+                            'librarySHA256': sha(precision_library), 'programSHA256': sha(precision_program),
+                            'workerSHA256': sha(worker), 'numericProfileSHA256': profile,
+                            'semanticProfileSHA256': exported['semanticProfileSHA256'],
+                            'workerReceipt': {'path': str(numeric_dir/'receipt.json'), 'sha256': sha(numeric_dir/'receipt.json')}}
     runner.run([args.swift, 'build', '--package-path', consumer, '--product', 'OSDIConsumer'])
     binary_dir = Path(runner.run([args.swift, 'build', '--package-path', consumer, '--show-bin-path']))
     # SwiftPM edits or symlinked sibling checkout sources would invalidate isolation.
@@ -257,8 +292,20 @@ def verify(args, runner):
     staging = runner.scratch / 'staging'
     staging.mkdir()
     api_path = runner.scratch / 'api-report.json'
-    runner.run([binary_dir / 'OSDIConsumer', *libraries, staging, api_path])
+    runner.run([binary_dir / 'OSDIConsumer', *libraries, staging, api_path, *precision_arguments])
     api = round_trip(api_path)
+    if args.precision:
+        observed = round_trip(precision_report)
+        require(observed['programDigest'] == precision_inputs['programSHA256'] and
+                observed['profileDigest'] == precision_inputs['numericProfileSHA256'] and
+                observed['semanticDigest'] == precision_inputs['semanticProfileSHA256'] and
+                re.fullmatch('[0-9a-f]{64}', observed['setupDigest']) is not None,
+                'Public precision snapshot identities differ')
+        require(observed['representatives'] == [4294967295] and observed['kinds'] == [1, 2] and
+                observed['coefficients'] == [1, 1] and all(observed[key] is True for key in
+                ('wrongOperationRefused', 'limitRefused', 'closedRefused')),
+                'Public borrowed conditional identity/refusal observations differ')
+        precision_inputs['publicReport'] = {'path': str(precision_report), 'sha256': sha(precision_report)}
     runner.run([args.swift, 'build', '--package-path', source, '--product', 'osdi-evaluate'])
     cli_dir = Path(runner.run([args.swift, 'build', '--package-path', source, '--show-bin-path']))
     for name, library, expected_exit in [('state', libraries[0], 0), ('fatal', libraries[1], 1)]:
@@ -292,6 +339,7 @@ def verify(args, runner):
             'clang': {'path': str(args.clang), 'sha256': sha(args.clang), 'version': clang_version},
             'host': {'system': platform.system(), 'machine': platform.machine(), 'version': platform.mac_ver()[0]},
             'environment': runner.env, 'clientExperimentalFlags': [], 'testableImports': False,
+            'precisionSelected': args.precision, 'precision': precision_inputs,
             'inputs': {'headerSHA256': sha(header), 'protocolSHA256': sha(protocol),
                        'runnerSHA256': sha(__file__), 'consumerManifestSHA256': sha(consumer / 'Package.swift'),
                        'consumerSources': {path.name: sha(path) for path in sources.glob('*.swift')}},
@@ -306,6 +354,8 @@ def main():
     parser.add_argument('--scratch', type=Path, required=True, help='New absolute directory outside the workspace')
     parser.add_argument('--swift', type=Path, required=True, help='Absolute Swift 6.4.0 release executable')
     parser.add_argument('--clang', type=Path, required=True, help='Absolute clang executable')
+    parser.add_argument('--precision', action='store_true', help='Require the public protocol-5 source-fact probe')
+    parser.add_argument('--pkg-config', help='Numeric discovery executable for --precision (default: caller PATH)')
     parser.add_argument('--timeout-seconds', type=int, default=600, help='Per-command bound, 1...3600 seconds')
     args = parser.parse_args()
     for revision in (args.source_revision, args.foundation_revision):
@@ -319,6 +369,10 @@ def main():
     require(not args.scratch.resolve().is_relative_to(workspace), 'Scratch must be outside the source workspace')
     for tool in (args.swift, args.clang):
         require(tool.is_absolute() and tool.is_file() and os.access(tool, os.X_OK), 'Supply absolute executable tools')
+    if args.precision:
+        selected = shutil.which(args.pkg_config or 'pkg-config')
+        require(selected is not None, '--precision requires installed GMP/MPFR and pkg-config')
+        args.pkg_config = str(Path(selected).resolve(strict=True))
     args.scratch.mkdir(parents=True)
     runner = Runner(args.scratch.resolve(), args.swift, args.timeout_seconds)
     def interrupted(number, frame):

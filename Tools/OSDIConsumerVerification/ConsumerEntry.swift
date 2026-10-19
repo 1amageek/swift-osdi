@@ -9,7 +9,7 @@ import OSDIRuntime
 @main
 enum ConsumerEntry {
     static func main() async throws {
-        guard CommandLine.arguments.count == 5 else { throw ConsumerFailure.arguments }
+        guard CommandLine.arguments.count == 5 || CommandLine.arguments.count == 11 else { throw ConsumerFailure.arguments }
         let staging = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
         guard let snapshot = try await exercise(URL(fileURLWithPath: CommandLine.arguments[1]), staging: staging, fatal: false) else {
             throw ConsumerFailure.invariant("Successful fixture did not publish a snapshot")
@@ -20,12 +20,25 @@ enum ConsumerEntry {
         try data.write(to: output, options: .withoutOverwriting)
         let restored = try JSONDecoder().decode(ConsumerSnapshot.self, from: Data(contentsOf: output))
         guard restored == snapshot else { throw ConsumerFailure.invariant("API JSON round trip") }
+        if CommandLine.arguments.count == 11 {
+            let observed = try await PrecisionConsumerProbe.exercise(
+                libraryFile: URL(fileURLWithPath: CommandLine.arguments[5]),
+                workerFile: URL(fileURLWithPath: CommandLine.arguments[6]),
+                profile: ContentDigest(algorithm: .sha256, hexadecimalValue: CommandLine.arguments[7]),
+                sourceDigest: ContentDigest(algorithm: .sha256, hexadecimalValue: CommandLine.arguments[8]),
+                semanticProfile: ContentDigest(algorithm: .sha256, hexadecimalValue: CommandLine.arguments[9]), staging: staging)
+            let path = URL(fileURLWithPath: CommandLine.arguments[10])
+            try JSONEncoder().encode(observed).write(to: path, options: .withoutOverwriting)
+            guard try JSONDecoder().decode(PrecisionConsumerProbe.Snapshot.self, from: Data(contentsOf: path)) == observed else {
+                throw ConsumerFailure.invariant("Precision JSON round trip")
+            }
+        }
         guard try FileManager.default.contentsOfDirectory(atPath: staging.path).isEmpty else {
             throw ConsumerFailure.invariant("Library staging retained after explicit close")
         }
     }
 
-    private static func load(_ file: URL, staging: URL) async throws -> OSDILibrary {
+    static func load(_ file: URL, staging: URL) async throws -> OSDILibrary {
         let directory = file.deletingLastPathComponent()
         let reference = try LocalArtifactReferencer(digester: SHA256ContentDigester()).reference(
             ArtifactLocator(location: ArtifactLocation(workspaceRelativePath: file.lastPathComponent),

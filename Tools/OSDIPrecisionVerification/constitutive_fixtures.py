@@ -68,12 +68,52 @@ def common_kernel_program():
     return bytes(data)
 
 
-def emit(output):
+def public_probe_program():
+    """Match write_probe_fixture(..., quotient=0) in the C source checker driver."""
+    original = program('conservation')
+    sections = [struct.unpack_from('<QII', original, 72+16*i) for i in range(11)]
+    first = (len(original)+7)&~7
+    registers, constants, inputs = sections[0][1]+7, sections[1][1]+1, sections[2][1]+6
+    constant_at = first+8*registers
+    input_at = constant_at+16*constants
+    root_at = input_at+24*inputs
+    data = bytearray(root_at+6*24);data[:len(original)] = original
+    struct.pack_into('<Q',data,16,len(data))
+    for ordinal,descriptor in [(0,(first,registers,8)),(1,(constant_at,constants,16)),
+                               (2,(input_at,inputs,24)),(7,(root_at,6,24))]:
+        struct.pack_into('<QII',data,72+16*ordinal,*descriptor)
+    for ordinal,destination in [(0,first),(1,constant_at),(2,input_at)]:
+        offset,count,stride=sections[ordinal];data[destination:destination+count*stride]=original[offset:offset+count*stride]
+    truth=sections[0][1]+6
+    struct.pack_into('<II',data,first+truth*8,3,0)
+    struct.pack_into('<IIQ',data,constant_at+(constants-1)*16,truth,3,1)
+    endpoints=[(0,NONE),(0,NONE),(NONE,0),(0,1),(1,0),(2,2)]
+    for i,(a,b) in enumerate(endpoints):
+        reg=sections[0][1]+i
+        struct.pack_into('<II',data,first+reg*8,1,0)
+        struct.pack_into('<IIIIII',data,input_at+(sections[2][1]+i)*24,2,reg,10,a,b,0)
+        struct.pack_into('<IIIIII',data,root_at+i*24,2,1 if i<3 else 2,reg,i%3,NONE,0)
+    return bytes(data)
+
+
+def check_public_probe(output, c_fixtures):
+    """Require exact parity with the independent original C fixture recipe."""
+    result={}
+    for suffix in ('program','setup'):
+        generated=(output/('probe-distinct.'+suffix)).read_bytes()
+        original=(c_fixtures/('probe-distinct.'+suffix)).read_bytes()
+        if generated!=original:raise ValueError('Public probe differs from original C source fixture: '+suffix)
+        result[suffix]=hashlib.sha256(generated).hexdigest()
+    return result
+
+
+def emit(output, public_probes=False):
     output.mkdir(parents=True, exist_ok=False)
     fixtures = {name: program(name) for name in ('conservation','branch','growth','independent_atoms')}
     fixtures['loop'] = phi_program()
     fixtures['common_kernel'] = common_kernel_program()
     fixtures['sparse1000'] = program('conservation', 1000)
+    if public_probes:fixtures['probe-distinct']=public_probe_program()
     entries = []
     for name, data in fixtures.items():
         raw = 1 if name == 'loop' else 4 if name == 'common_kernel' else 1000 if name == 'sparse1000' else 3
@@ -97,4 +137,6 @@ def emit(output):
 
 if __name__ == '__main__':
     import argparse
-    parser=argparse.ArgumentParser();parser.add_argument('output',type=Path);emit(parser.parse_args().output)
+    parser=argparse.ArgumentParser();parser.add_argument('output',type=Path)
+    parser.add_argument('--public-probes',action='store_true')
+    args=parser.parse_args();emit(args.output,args.public_probes)

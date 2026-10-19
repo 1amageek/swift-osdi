@@ -22,6 +22,12 @@ from constitutive_fixtures import emit
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def source_proof_files(root):
+    directory = root/'Tools/OSDIPrecisionVerification'
+    return (directory/'ConstitutiveIdentityTests.c', directory/'DecisionCoverTests.c',
+            directory/'constitutive_fixtures.py')
+
+
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -161,11 +167,10 @@ def main():
     sources=sorted(p for p in (ROOT/'Sources/COSDIPrecision').rglob('*.c') if 'WorkerProtocol' not in p.parts)
     headers=sorted((ROOT/'Sources/COSDIPrecision').rglob('*.h'))
     headers += [ROOT/'Sources/COSDI/include/OSDICompilerPrecision.h',ROOT/'Sources/COSDI/include/OSDIPrecisionProtocol.h']
-    source=ROOT/'tools/OSDIPrecisionVerification/ConstitutiveIdentityTests.c'
+    source,fixture_loader,fixture_generator=source_proof_files(ROOT)
     sources.append(source)
-    fixture_loader=ROOT/'tools/OSDIPrecisionVerification/DecisionCoverTests.c'
     numeric_inputs=[value[key] for value in selected['numeric'].values() for key in ('header','archive')]
-    pins=[native_build.identity(p) for p in sources+headers+numeric_inputs+[fixture_loader,Path(__file__),ROOT/'tools/OSDIPrecisionVerification/constitutive_fixtures.py']]
+    pins=[native_build.identity(p) for p in sources+headers+numeric_inputs+[fixture_loader,Path(__file__),fixture_generator]]
     binary=output/'constitutive-identity-tests'
     command=[selected['compiler'],'-isysroot',selected['sdk'],'-std=c11','-O2','-g','-Wall','-Wextra','-Werror',
              '-fno-fast-math','-ffp-contract=off']

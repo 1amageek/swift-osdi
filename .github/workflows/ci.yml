@@ -119,7 +119,7 @@ jobs:
                           '--foundation-url', url, '--foundation-revision', revision,
                           '--scratch', str(Path(os.environ['RUNNER_TEMP']) / 'osdi-consumer'),
                           '--swift', os.environ['OSDI_CI_SWIFT'], '--clang', '/usr/bin/clang',
-                          '--timeout-seconds', '1200'], check=True, timeout=2400)
+                          '--precision', '--timeout-seconds', '1200'], check=True, timeout=2400)
           PY
       - name: Retain receipts and logs
         if: always()
@@ -135,5 +135,11 @@ jobs:
             .verification/ci-${{ matrix.lane }}/fixtures/manifest.json
             .verification/ci-${{ matrix.lane }}/numeric/receipt.json
             .verification/ci-${{ matrix.lane }}/numeric/numeric-profile.json
+            .verification/ci-${{ matrix.lane }}/ranges/manifest.json
+            .verification/ci-${{ matrix.lane }}/charts/manifest.json
+            .verification/ci-${{ matrix.lane }}/covers/manifest.json
+            .verification/ci-${{ matrix.lane }}/identities/manifest.json
+            .verification/ci-${{ matrix.lane }}/identity-proof/receipt.json
+            .verification/ci-${{ matrix.lane }}/identity-proof/*.json
             ${{ runner.temp }}/osdi-consumer/receipt.json
             ${{ runner.temp }}/osdi-consumer/failure.json

@@ -20,6 +20,10 @@ MODEL_INPUTS = ('OSDI_OPENVAF_COMPILER', 'OSDI_BSIM_LIBRARY', 'OSDI_BSIM_SHA256'
                 'OSDI_SOI101_PRECISION_DIRECTORY')
 LEGACY_INPUTS = ('OSDI_REAL_PRECISION_REFERENCE', 'OSDI_REAL_PRECISION_INDEPENDENT_RECEIPT',
                  'OSDI_REAL_PRECISION_REQUEST_DIRECTORY')
+QUALIFICATION_SELECTORS = ('OSDI_MODEL_QUALIFICATION', 'OSDI_PRECISION_QUALIFICATION',
+                          'OSDI_LEGACY_SOI_QUALIFICATION', 'OSDI_CONSTITUTIVE_ACTUAL_QUALIFICATION')
+GENERATED_FIXTURES = ('OSDI_STANDALONE_FIXTURES', 'OSDI_RANGE_FIXTURES', 'OSDI_CHART_FIXTURES',
+                      'OSDI_DECISION_COVER_FIXTURES', 'OSDI_CONSTITUTIVE_FIXTURES')
 
 
 def digest(path):
@@ -72,6 +76,34 @@ def check_qualification_python_profile(output, environment, commands):
         raise RuntimeError('Optimized qualification must explicitly require assertion-enabled Python')
 
 
+def prepare_precision_inputs(output, clang, sanitized, environment, commands):
+    tools = ROOT / 'Tools/OSDIPrecisionVerification'
+    generators = [('verify_range.py', ['--emit-fixtures', output/'ranges'], 'OSDI_RANGE_FIXTURES', 'ranges'),
+                  ('chart_fixtures.py', [output/'charts'], 'OSDI_CHART_FIXTURES', 'charts'),
+                  ('frontier_fixtures.py', [output/'covers'], 'OSDI_DECISION_COVER_FIXTURES', 'covers'),
+                  ('constitutive_fixtures.py', [output/'identities', '--public-probes'], 'OSDI_CONSTITUTIVE_FIXTURES', 'identities')]
+    for name, arguments, _, label in generators:
+        execute([sys.executable, tools/name, *arguments], output, label+'-inputs', 30, environment, commands)
+    command = [sys.executable, tools/'verify_constitutive_identities.py', '--output-dir', output/'identity-proof',
+               '--coefficient-bits', 4096, '--arena-bytes', 536870912, '--workspace-bytes', 134217728,
+               '--host-memory-bytes', 1073741824, '--maximum-atoms', 4096, '--maximum-nodes', 1000000,
+               '--work', 1000000000, '--steps', 1000000, '--case-timeout', 120, '--cc', clang]
+    if sanitized:command.append('--sanitize')
+    execute(command, output, 'identity-source-check', 180, environment, commands)
+    sys.path.insert(0,str(tools))
+    try:
+        from constitutive_fixtures import check_public_probe
+        parity=check_public_probe(output/'identities',output/'identity-proof/fixtures')
+    finally:sys.path.pop(0)
+    manifests={}
+    for _, _, selector, directory in generators:
+        environment[selector]=str(output/directory)
+        path=output/directory/'manifest.json';manifests[selector]={'path':str(path),'sha256':digest(path)}
+    proof=output/'identity-proof/receipt.json'
+    return {'fixtureManifests':manifests,'publicProbeExactCParity':parity,
+            'independentSourceCheck':{'path':str(proof),'sha256':digest(proof)},'actualModelsSelected':False}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--swift', required=True, type=Path)
@@ -103,8 +135,11 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     environment = dict(os.environ)
     environment['OSDI_TEST_CLANG'] = str(clang)
-    for key in ('OSDI_MODEL_QUALIFICATION', 'OSDI_PRECISION_QUALIFICATION', 'OSDI_LEGACY_SOI_QUALIFICATION', 'OSDI_STANDALONE_FIXTURES'):
+    for key in QUALIFICATION_SELECTORS + GENERATED_FIXTURES:
         environment.pop(key, None)
+    if args.sanitize:
+        environment['ASAN_OPTIONS'] = 'halt_on_error=1:abort_on_error=1:detect_leaks=0'
+        environment['UBSAN_OPTIONS'] = 'halt_on_error=1:abort_on_error=1'
     commands = []
     receipt = {'schema': 'osdi.standalone-verification.v1', 'status': 'failed',
                'configuration': args.configuration, 'sanitizer': args.sanitize,
@@ -134,10 +169,8 @@ def main():
                 command.append('--sanitize')
             execute(command, output, 'numeric-build', 120, environment, commands)
             numeric = json.loads((output / 'numeric/receipt.json').read_text())
-            execute([sys.executable, ROOT / 'Tools/OSDIPrecisionVerification/verify_range.py',
-                     '--emit-fixtures', output / 'ranges'], output, 'range-inputs', 30, environment, commands)
+            receipt['precisionInputs']=prepare_precision_inputs(output,clang,args.sanitize,environment,commands)
             environment['OSDI_PRECISION_QUALIFICATION'] = '1'
-            environment['OSDI_RANGE_FIXTURES'] = str(output / 'ranges')
             # Model receipts bind their supplied worker/profile; preserve those exact inputs.
             if not args.model_qualification:
                 environment['OSDI_PRECISION_WORKER'] = numeric['worker']['path']
@@ -150,9 +183,6 @@ def main():
             environment['OSDI_MODEL_QUALIFICATION'] = '1'
             if args.legacy_soi_qualification:
                 environment['OSDI_LEGACY_SOI_QUALIFICATION'] = '1'
-        if args.sanitize:
-            environment['ASAN_OPTIONS'] = 'halt_on_error=1:abort_on_error=1:detect_leaks=0'
-            environment['UBSAN_OPTIONS'] = 'halt_on_error=1:abort_on_error=1'
         command = [swift, 'test', '--force-resolved-versions', '--package-path', ROOT, '--scratch-path', output / 'build',
                    '--configuration', args.configuration, '--jobs', args.jobs]
         if args.sanitize:
