@@ -110,9 +110,34 @@ Precision mode builds the existing generic numeric worker in isolated scratch an
 compiles a tracked stateless C ABI fixture exporting an optional precision program.
 That source fixture is an analytic transport/serialization oracle, not an official
 physical model. The public consumer loads and prepares the actual fixture, calls
-public `snapshot`, then prepares an explicit coordinate quotient and borrows
+public `snapshot` through `any OSDIPrecisionSessionPreparing`, then prepares an explicit coordinate quotient and borrows
 checked claim coefficients. It never imports `@testable`, exposes an internal raw
 program initializer, or adds client experimental flags.
+
+The 1.2 consumer supplies its own bounded, Mutex-isolated implementation of
+[`OSDIPrecisionSnapshotControlling`](../../Sources/OSDIRuntime/SnapshotConstruction/DESIGN.md).
+It compares controlled program/setup bytes, counts and digests with the same
+fixture's legacy snapshot. Public byte extraction is a separately admitted,
+scope-local copy; it is not a borrowed or zero-copy claim. Work remains cumulative
+after all payload receipts are released. Work, storage and cancellation refusals
+must preserve the exact caller error under `OSDIError.host` and publish no snapshot.
+
+```text
+actual fixture + public preparation -> legacy/control byte equality
+  -> shared controlled value copy -> release original -> close model/library
+  -> existing v5 session is the only remaining snapshot owner
+  -> close session (lease retained) -> destroy session -> complete refund
+```
+
+This consumer template requires the 1.2 public controlled snapshot API. The report
+records nonzero cumulative construction/comparison work, peak managed payload, equal retained
+payload after copying and after session close, and zero final live payload. It
+proves the public controlled construction/lifetime contract for this analytic
+fixture, not hard RSS, arbitrary caller allocations, official-model physics, or
+global circuit/root guarantees. A committed candidate can use the existing exact
+`--source-revision` path before a tag exists; post-tag qualification uses that same
+revision with `--source-version 1.2.0`. Historical 1.1 consumer receipts remain
+evidence of their original templates and do not prove this additional API.
 
 The probe checks exact source/condition binding, repeated borrowed storage,
 wrong-operation refusal, identity-limit refusal with no callback, idempotent close

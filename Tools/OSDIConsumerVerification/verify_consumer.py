@@ -267,6 +267,7 @@ def verify(args, runner):
         precision_inputs = {'fixtureSourceSHA256': sha(templates/'precision_fixture.c'),
                             'fixtureGeneratorSHA256': sha(templates/'precision_fixture.py'),
                             'librarySHA256': sha(precision_library), 'programSHA256': sha(precision_program),
+                            'programByteCount': precision_program.stat().st_size,
                             'workerSHA256': sha(worker), 'numericProfileSHA256': profile,
                             'semanticProfileSHA256': exported['semanticProfileSHA256'],
                             'workerReceipt': {'path': str(numeric_dir/'receipt.json'), 'sha256': sha(numeric_dir/'receipt.json')}}
@@ -305,6 +306,13 @@ def verify(args, runner):
                 observed['coefficients'] == [1, 1] and all(observed[key] is True for key in
                 ('wrongOperationRefused', 'limitRefused', 'closedRefused')),
                 'Public borrowed conditional identity/refusal observations differ')
+        require(observed['programByteCount'] == precision_inputs['programByteCount'] and
+                observed['setupByteCount'] > 0 and observed['cumulativeWork'] > 0 and
+                observed['peakRetainedBytes'] >= observed['copiedRetainedBytes'] > 0 and
+                observed['closedSessionRetainedBytes'] == observed['copiedRetainedBytes'] and
+                observed['finalRetainedBytes'] == 0 and
+                observed['controlledRefusals'] == ['work', 'storage', 'cancelled'],
+                'Public controlled snapshot bytes, cumulative admission, lifetime or typed refusals differ')
         precision_inputs['publicReport'] = {'path': str(precision_report), 'sha256': sha(precision_report)}
     runner.run([args.swift, 'build', '--package-path', source, '--product', 'osdi-evaluate'])
     cli_dir = Path(runner.run([args.swift, 'build', '--package-path', source, '--show-bin-path']))
