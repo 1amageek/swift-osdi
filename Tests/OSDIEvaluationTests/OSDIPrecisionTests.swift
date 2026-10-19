@@ -7,10 +7,10 @@ import Testing
 
 @Suite(.serialized, .timeLimit(.minutes(1)))
 struct OSDIPrecisionTests {
-    private func policy() throws -> OSDIPrecisionOptions {
+    private func policy(startup: UInt64 = 200_000_000, evaluation: UInt64 = 100_000_000) throws -> OSDIPrecisionOptions {
         try OSDIPrecisionOptions(maximumProgramBytes: 1_048_576, maximumMappingBytes: 1_048_576,
             arenaBytes: 1_048_576, maximumWorkUnits: 1_000_000, minimumPrecisionBits: 53, maximumPrecisionBits: 256,
-            startupTimeoutNanoseconds: 200_000_000, evaluationTimeoutNanoseconds: 100_000_000,
+            startupTimeoutNanoseconds: startup, evaluationTimeoutNanoseconds: evaluation,
             cleanupTimeoutNanoseconds: 1_000_000_000, pollNanoseconds: 1_000_000)
     }
     private func external(_ key: String) throws -> String {
@@ -33,8 +33,11 @@ struct OSDIPrecisionTests {
     @Test func scopedTransportAndIdempotentClose() async throws {
         let artifact = try EvaluationArtifact(try await ProtocolFixtureCache.shared.fixtures().transportWorker.path)
         let program = try transportProgram(mode: 0, reference: artifact.intent.expectedReference)
+        // This success fixture tests borrowed storage and close, not scheduler
+        // latency. Keep short failure-fixture deadlines at the policy defaults.
         var session = try await OSDINativePrecisionSessionPreparer().prepare(program: program,
-            worker: artifact.intent, source: artifact.source, numericProfile: program.programDigest, options: policy())
+            worker: artifact.intent, source: artifact.source, numericProfile: program.programDigest,
+            options: policy(startup: 2_000_000_000, evaluation: 2_000_000_000))
         try await artifact.source.close().wait()
         let context = try OSDIPrecisionContext(mode: .transient, timeHigh: 1, timeLow: 0)
         let high = [1.0], low = [0.0], reference = [0.0]

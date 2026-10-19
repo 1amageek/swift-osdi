@@ -167,6 +167,11 @@ preparation/evaluation protocols. Artifact access is injected through
 CircuiteFoundation's `ArtifactAccessing`; runtime verifies the expected content
 identity before loading staged bytes.
 
+The separate [constitutive identity API](Sources/OSDIRuntime/ConstitutiveIdentities/DESIGN.md)
+documents source-linear F/Q claims and their explicit coordinate conditions;
+the [source checker contract](Sources/COSDIPrecision/ConstitutiveIdentities/DESIGN.md)
+owns their proof scope and limitations.
+
 ```text
 exact artifact reference + source + read budget + load limits
   -> OSDINativeLibraryLoader.load

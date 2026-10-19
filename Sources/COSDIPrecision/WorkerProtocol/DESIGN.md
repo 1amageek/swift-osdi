@@ -1,7 +1,7 @@
 # WorkerProtocol
 
 ## Purpose and Scope
-Own child-side shared geometry, request sequencing and publication. Parent: [COSDIPrecision](../DESIGN.md). Child: [DecisionCover](DecisionCover/DESIGN.md).
+Own child-side shared geometry, request sequencing and publication. Parent: [COSDIPrecision](../DESIGN.md). Children: [DecisionCover](DecisionCover/DESIGN.md), [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md).
 
 ## Responsibilities and Boundaries
 One outstanding request uses acquire/release counters and pipe notifications. A result is published only after complete success; no model callback or solver runs here.

@@ -4,7 +4,7 @@
 
 Parent: [swift-osdi](../../DESIGN.md). Children: [Arena](Arena/DESIGN.md),
 [Arithmetic](Arithmetic/DESIGN.md), [ProgramEvaluation](ProgramEvaluation/DESIGN.md),
-[WorkerProtocol](WorkerProtocol/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md). This native C worker evaluates the optional,
+[WorkerProtocol](WorkerProtocol/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md), and [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md). This native C worker evaluates the optional,
 versioned compiler-owned precision program for model setup, F, Q and model-owned
 charge differences. CoreSpice retains circuit equations, MNA assembly, Newton,
 time integration, acceptance and accepted-state ownership in its Swift process.
@@ -35,6 +35,7 @@ nonlocal OOM recovery are unnecessary and unsupported.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [swift-osdi](../../DESIGN.md) | parent | Native optional model profile | Package composition | Precision success requires actual model evidence |
+| [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md) | child | Exact checked F/Q source-linear relations | All original rows and complete terminal scopes are retained | Relations grant no numerical rank, root, flow or history authority |
 | [PointEvaluation](../OSDIRuntime/PointEvaluation/DESIGN.md) | coordinates with | Exclusive session and library lifetime | Runtime owns the process adapter and public borrow | No raw pointer or borrowed span crosses process boundaries |
 | [OpenVAF compiler profile](../../../swift-openvaf/Tools/OpenVAFCompilerProfile/DESIGN.md) | depends on | Exact compiler and source-faithful generated program | Model equations remain compiler-owned | Program ABI and primitive-constant semantics are fixed by the qualified compiler profile |
 | [CoreSpice compensated transient](../../../CoreSpice/Sources/CoreSpiceAnalysis/CompensatedTransient/DESIGN.md) | used by | Compensated coordinates and strict residual gate | Circuit integration remains in-process | Newton aids do not establish final residual acceptance |

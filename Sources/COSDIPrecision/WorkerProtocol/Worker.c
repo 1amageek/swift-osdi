@@ -2,6 +2,7 @@
 #include "../ProgramEvaluation/Program.h"
 #include "../ProgramEvaluation/Chart.h"
 #include "DecisionCover/Transport.h"
+#include "ConstitutiveIdentities/Transport.h"
 #include <COSDIPrecision.h>
 #include <OSDIPrecisionProtocol.h>
 #include <errno.h>
@@ -26,8 +27,9 @@ static int native_bytes(uint64_t count,size_t stride,size_t *out){
 }
 static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
   int chart = c->protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION;
-  int cover = c->protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION;
-  size_t header_bytes = cover ? sizeof(cs_osdi_cover_control_v4) : chart ? sizeof(cs_osdi_chart_control_v3) : sizeof(*c);
+  int identity = c->protocol_version == CS_OSDI_IDENTITY_PROTOCOL_VERSION;
+  int cover = c->protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION || identity;
+  size_t header_bytes = identity ? sizeof(cs_osdi_identity_control_v5) : cover ? sizeof(cs_osdi_cover_control_v4) : chart ? sizeof(cs_osdi_chart_control_v3) : sizeof(*c);
   uint16_t endian = 1;
   if (*(unsigned char *)&endian != 1 || DBL_MANT_DIG != 53 ||
       DBL_MAX_EXP != 1024 || !__atomic_always_lock_free(8, 0) ||
@@ -43,7 +45,7 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
       c->maximum_precision_bits < c->minimum_precision_bits ||
       !c->maximum_work_units)
     return 0;
-  cs_osdi_precision_region_v1 regions[16];
+  cs_osdi_precision_region_v1 regions[20];
   memcpy(regions, c->regions, sizeof(c->regions));
   unsigned total = 14;
   if (chart) {
@@ -74,9 +76,21 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
         !native_bytes(l->maximum_leaves,sizeof(uint32_t),&native_size) || c->active_count>SIZE_MAX/4/sizeof(double))return 0;
     regions[14]=h->tree_region;regions[15]=h->leaf_region;total=16;
   }
+  if(identity){
+    const cs_osdi_identity_control_v5 *h=(const void *)c;
+    const cs_osdi_identity_limits_v5 *l=&h->limits;
+    if(c->raw_node_count>UINT32_MAX/2 || !l->maximum_nodes || l->maximum_nodes==UINT32_MAX ||
+        !l->maximum_atoms || l->maximum_atoms==UINT32_MAX || !l->maximum_coefficient_bits || !l->maximum_workspace_bytes)return 0;
+    uint64_t claims=2*c->raw_node_count,coefficients=claims*c->raw_node_count;
+    uint64_t words=(l->maximum_coefficient_bits-1)/64+1;
+    if(words>UINT64_MAX/coefficients || h->claim_region.element_count!=claims ||
+        h->coefficient_region.element_count!=coefficients || h->word_region.element_count!=words*coefficients)return 0;
+    regions[16]=h->claim_region;regions[17]=h->coefficient_region;regions[18]=h->word_region;regions[19]=h->quotient_region;total=20;
+    if(h->quotient_region.element_count!=c->active_count)return 0;
+  }
   for (unsigned i = 0; i < total; i++) {
     const cs_osdi_precision_region_v1 *r = &regions[i];
-    uint64_t stride = i < 2 ? 1 : i == 14 ? (cover ? sizeof(cs_osdi_cover_node_v4) : sizeof(cs_osdi_chart_decision_v3)) :
+    uint64_t stride = i==19 ? sizeof(uint32_t) : i==16 ? sizeof(cs_osdi_identity_claim_v5) : i==17 ? sizeof(cs_osdi_identity_coefficient_v5) : i < 2 ? 1 : i == 14 ? (cover ? sizeof(cs_osdi_cover_node_v4) : sizeof(cs_osdi_chart_decision_v3)) :
                       i == 15 && chart ? sizeof(cs_osdi_chart_guard_v3) : 8;
     unsigned matrix_start = c->protocol_version == CS_OSDI_PRECISION_PROTOCOL_VERSION ? 12u : 10u;
     uint64_t count = i < 2 || i >= 14 ? r->element_count :
@@ -87,7 +101,7 @@ static int geometry(const cs_osdi_precision_control_v1 *c, size_t size) {
         r->element_count > (size - r->byte_offset) / stride)
       return 0;
     for (unsigned j = 0; j < i; j++) {
-      uint64_t other_stride = j < 2 ? 1 : j == 14 ? (cover ? sizeof(cs_osdi_cover_node_v4) : sizeof(cs_osdi_chart_decision_v3)) : 8;
+      uint64_t other_stride = j==19 ? sizeof(uint32_t) : j==16 ? sizeof(cs_osdi_identity_claim_v5) : j==17 ? sizeof(cs_osdi_identity_coefficient_v5) : j < 2 ? 1 : j == 14 ? (cover ? sizeof(cs_osdi_cover_node_v4) : sizeof(cs_osdi_chart_decision_v3)) : 8;
       uint64_t as = r->byte_offset, an = r->element_count * stride;
       uint64_t bs = regions[j].byte_offset, bn = regions[j].element_count * other_stride;
       if (an && bn && as < bs + bn && bs < as + an) return 0;
@@ -119,14 +133,16 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
   if (mapping == MAP_FAILED)
     return CS_OSDI_PRECISION_EXIT_PROTOCOL;
   cs_osdi_precision_control_v1 *c = mapping;
-  union {cs_osdi_precision_control_v1 base;cs_osdi_chart_control_v3 chart;cs_osdi_cover_control_v4 cover;} snapshot={0};
+  union {cs_osdi_precision_control_v1 base;cs_osdi_chart_control_v3 chart;cs_osdi_cover_control_v4 cover;cs_osdi_identity_control_v5 identity;} snapshot={0};
   if (!geometry(c, size)) { munmap(mapping, size); return CS_OSDI_PRECISION_EXIT_PROTOCOL; }
   memcpy(&snapshot, c, c->header_bytes);
   cs_osdi_chart_control_v3 admitted_chart=snapshot.chart;
   cs_osdi_cover_control_v4 admitted_cover=snapshot.cover;
+  cs_osdi_identity_control_v5 admitted_identity=snapshot.identity;
   cs_osdi_precision_control_v1 admitted = snapshot.base;
   int is_chart = admitted.protocol_version == CS_OSDI_CHART_PROTOCOL_VERSION;
-  int is_cover = admitted.protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION;
+  int is_identity=admitted.protocol_version==CS_OSDI_IDENTITY_PROTOCOL_VERSION;
+  int is_cover = admitted.protocol_version == CS_OSDI_COVER_PROTOCOL_VERSION || is_identity;
   if (!geometry(&snapshot.base, size) ||
       __atomic_load_n(&c->request_sequence, __ATOMIC_ACQUIRE) != 0 ||
       __atomic_load_n(&c->response_sequence, __ATOMIC_ACQUIRE) !=
@@ -159,6 +175,8 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
   cs_precision_cover_transport cover_transport={0};
   if(!status && is_cover){double *planes[8];for(unsigned i=0;i<8;++i)planes[i]=(void *)(base+admitted.regions[i+6].byte_offset);
     status=cs_precision_cover_transport_open(&cover_transport,&admitted_cover,planes);}
+  cs_precision_constitutive_workspace identity_workspace={0};
+  if(!status && is_identity)status=cs_precision_identity_transport_open(&p,&admitted_identity,(const void *)(base+admitted_identity.quotient_region.byte_offset),&identity_workspace);
   uint64_t completed_steps = 0;
   publish(c, 0, status, &p);
   int sent = notification(response_write_fd, 1);
@@ -180,14 +198,19 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
           (unsigned char *)&admitted_chart + sizeof(*c),
           offsetof(cs_osdi_chart_control_v3, chart_mode) - sizeof(*c))) ||
         (is_cover && memcmp((unsigned char *)c+sizeof(*c),(unsigned char *)&admitted_cover+sizeof(*c),
-          offsetof(cs_osdi_cover_control_v4,node_count)-sizeof(*c)))) {
+          offsetof(cs_osdi_cover_control_v4,node_count)-sizeof(*c))) ||
+        (is_identity && memcmp((unsigned char *)c+sizeof(admitted_cover),
+          (unsigned char *)&admitted_identity+sizeof(admitted_cover),
+          offsetof(cs_osdi_identity_control_v5,claim_count)-sizeof(admitted_cover)))) {
       status = CS_OSDI_PRECISION_EXIT_PROTOCOL;
       break;
     }
     double *output[8];
     for (unsigned i = 0; i < 8; i++)
       output[i] = (void *)(base + admitted.regions[i + 6].byte_offset);
-    if(is_cover){
+    if(is_identity){
+      status=cs_precision_identity_transport_evaluate(&cover_transport,&identity_workspace,&p,(void *)c,&admitted_identity,base);
+    }else if(is_cover){
       status=cs_precision_cover_transport_evaluate(&cover_transport,&p,(void *)c,&admitted_cover,base);
     } else if (is_chart) {
       cs_osdi_chart_control_v3 *chart = (void *)c;
@@ -263,6 +286,7 @@ int cs_osdi_precision_worker_run(int slab_fd, int request_read_fd,
     sent = notification(response_write_fd, 1);
     previous = sequence;
   }
+  cs_precision_constitutive_close(&identity_workspace);
   mpfr_free_cache();
   cs_precision_arena_close(&arena);
   munmap(mapping, size);

@@ -12,7 +12,16 @@ typedef struct {
   /* Immutable source constant index + 1; zero means no exact infinity fact. */
   uint32_t primitive_infinity;
 } cs_precision_range_fact;
+struct cs_precision_program;
+/* Internal synchronous source observations; the observer never owns values. */
+enum { CS_SOURCE_RESET = 1, CS_SOURCE_CONSTANT, CS_SOURCE_INPUT,
+       CS_SOURCE_PHI_STAGE, CS_SOURCE_PHI_ASSIGN, CS_SOURCE_INSTRUCTION,
+       CS_SOURCE_ROOT };
 typedef struct {
+  void *context;
+  int (*observe)(void *, struct cs_precision_program *, uint32_t, uint32_t, uint32_t);
+} cs_precision_source_observer;
+typedef struct cs_precision_program {
   const CSOsdiPrecisionProgramHeader *header;
   const CSOsdiPrecisionSetupHeader *setup;
   const CSOsdiPrecisionRegister *registers;
@@ -49,6 +58,7 @@ typedef struct {
   /* Exclusive synchronous chart call only; never retained after its return. */
   struct cs_precision_chart_execution *chart;
   struct cs_precision_frontier_execution *frontier;
+  cs_precision_source_observer *source_observer;
 } cs_precision_program;
 int cs_precision_program_open(cs_precision_program *program, const void *bytes,
                               size_t length, const void *setup,

@@ -98,6 +98,12 @@ deinit must each preserve exactly-once native ownership.
 
 Focused real worker transport, failure, scoped view and cleanup tests own this boundary. Numeric and compiler correctness remain separately verified by their owners.
 
+The successful `scopedTransportAndIdempotentClose` fixture explicitly allows two
+seconds for startup and evaluation so parallel suite scheduling does not obscure
+its borrow, address-reuse and idempotent-close assertions. Its shared test policy
+retains the existing 200 ms startup and 100 ms evaluation defaults for failure
+fixtures. Production deadline options and deadline-refusal behavior are unchanged.
+
 ## Concrete Public Seam
 
 `OSDINativePrecisionSessionPreparer.snapshot(library:descriptorIndex:model:preparation:semanticProfile:options:)`
@@ -219,3 +225,13 @@ Guard view indexing preserves the explicit signed primitive-infinity kind and co
 ## Complete Cover Composition
 
 [Runtime DecisionCover](../DecisionCover/DESIGN.md) owns the complete-only public protocols and views. This component composes its immutable decision-cover operation into the same session, cold staging and retained cleanup owner. New typed cover failures retain the full primary and cleanup causes; no existing operation/lifetime/synchronization contract changes.
+
+## Constitutive Identity Composition
+
+[ConstitutiveIdentities](../ConstitutiveIdentities/DESIGN.md) owns the separate
+protocol-first identity operation and borrowed source-linear kernel. This component
+adds only an immutable operation discriminator, limits and explicit coordinate
+condition to its existing session,
+staging and cleanup owner. The same Mutex, Sendable and platform matrix above
+applies. No circuit chart, rank or continuation authority is inferred from that
+operation. Submitted failure follows the same retained cleanup path.

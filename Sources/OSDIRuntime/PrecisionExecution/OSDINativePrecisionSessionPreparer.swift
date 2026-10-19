@@ -4,7 +4,7 @@ import Foundation
 import OSDIContracts
 
 /// Cold exact artifact acquisition and setup serialization; solver state remains caller-owned.
-public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing, OSDIPrecisionRangeSessionPreparing, OSDIPrecisionChartSessionPreparing, OSDIPrecisionDecisionCoverSessionPreparing {
+public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing, OSDIPrecisionRangeSessionPreparing, OSDIPrecisionChartSessionPreparing, OSDIPrecisionDecisionCoverSessionPreparing, OSDIPrecisionConstitutiveSessionPreparing {
     public let stagingParentDirectory: URL
     public init(stagingParentDirectory: URL = FileManager.default.temporaryDirectory) {
         self.stagingParentDirectory = stagingParentDirectory
@@ -44,13 +44,29 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
                 numericProfile: numericProfile, options: options, decisionCoverLimits: limits)
         } catch { throw .runtime(error) }
     }
+    public func prepareConstitutiveIdentities(program: OSDIPrecisionProgram, worker: ArtifactAccessIntent,
+        source: any ArtifactAccessing, numericProfile: ContentDigest, options: OSDIPrecisionOptions,
+        coverLimits: OSDIPrecisionDecisionCoverLimits, limits: OSDIPrecisionConstitutiveLimits,
+        coordinateQuotient: OSDIPrecisionCoordinateQuotient)
+        async throws(OSDIPrecisionConstitutiveError) -> OSDIPrecisionSession {
+        do {
+            return try await prepare(operation: .constitutiveIdentities, program: program, worker: worker, source: source,
+                numericProfile: numericProfile, options: options, decisionCoverLimits: coverLimits, constitutiveLimits: limits, coordinateQuotient: coordinateQuotient)
+        } catch { throw .runtime(error) }
+    }
     private func prepare(operation: OSDIPrecisionSession.Operation, program: OSDIPrecisionProgram,
         worker: ArtifactAccessIntent, source: any ArtifactAccessing,
         numericProfile: ContentDigest, options: OSDIPrecisionOptions,
         chartLimits: OSDIPrecisionChartLimits? = nil,
-        decisionCoverLimits: OSDIPrecisionDecisionCoverLimits? = nil) async throws(OSDIError) -> OSDIPrecisionSession {
+        decisionCoverLimits: OSDIPrecisionDecisionCoverLimits? = nil,
+        constitutiveLimits: OSDIPrecisionConstitutiveLimits? = nil,
+        coordinateQuotient: OSDIPrecisionCoordinateQuotient? = nil) async throws(OSDIError) -> OSDIPrecisionSession {
         guard (operation == .chart) == (chartLimits != nil),
-              (operation == .decisionCover) == (decisionCoverLimits != nil) else { throw .invalidRange }
+              ((operation == .decisionCover || operation == .constitutiveIdentities) == (decisionCoverLimits != nil)),
+              (operation == .constitutiveIdentities) == (constitutiveLimits != nil),
+              (operation == .constitutiveIdentities) == (coordinateQuotient != nil) else { throw .invalidRange }
+        do { try coordinateQuotient?.validate(for: program.topology) }
+        catch { throw .contract(error) }
         guard UInt64(program.programBytes.count) <= options.maximumProgramBytes,
               UInt64(program.setupBytes.count) <= options.maximumMappingBytes else { throw .resourceLimit }
         let programSHA = try OSDIPrecisionProgramBuilder.digestBytes(program.programDigest)
@@ -69,12 +85,23 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
         var handle: OpaquePointer?, issue = cs_osdi_precision_process_issue()
         let status = directory.appendingPathComponent("model.osdi").path.withCString { path in
             program.programBytes.withUnsafeBufferPointer { bytes in program.setupBytes.withUnsafeBufferPointer { setup in
-                if operation == .decisionCover, let decisionCoverLimits {
+                if (operation == .decisionCover || operation == .constitutiveIdentities), let decisionCoverLimits {
                     var limits = cs_osdi_cover_limits_v4(maximum_steps: decisionCoverLimits.maximumSteps,
                         maximum_guard_records: decisionCoverLimits.maximumGuardRecords, maximum_copied_bytes: decisionCoverLimits.maximumCopiedBytes,
                         maximum_cells: decisionCoverLimits.maximumCells, maximum_nodes: decisionCoverLimits.maximumNodes,
                         maximum_leaves: decisionCoverLimits.maximumLeaves, maximum_pending: decisionCoverLimits.maximumPending,
                         maximum_depth: decisionCoverLimits.maximumDepth, maximum_integer_bits: decisionCoverLimits.maximumIntegerBits, reserved: 0)
+                    if let constitutiveLimits, let coordinateQuotient {
+                        var identities = cs_osdi_identity_limits_v5(maximum_nodes: constitutiveLimits.maximumNodes,
+                            maximum_atoms: constitutiveLimits.maximumAtoms, maximum_coefficient_bits: constitutiveLimits.maximumCoefficientBits,
+                            maximum_workspace_bytes: constitutiveLimits.maximumWorkspaceBytes)
+                        return coordinateQuotient.representatives.withUnsafeBufferPointer { quotient in
+                            cs_osdi_identity_process_create(path, bytes.baseAddress, UInt64(bytes.count), setup.baseAddress,
+                            UInt64(setup.count), program.descriptorIndex, UInt32(program.topology.activeUnknownCount), UInt32(program.topology.nodes.count),
+                            &native, &limits, &identities, quotient.baseAddress, UInt64(quotient.count),
+                            cs_osdi_precision_swift_task_cancelled, nil, &handle, &issue)
+                        }
+                    }
                     return cs_osdi_cover_process_create(path, bytes.baseAddress, UInt64(bytes.count), setup.baseAddress,
                         UInt64(setup.count), program.descriptorIndex, UInt32(program.topology.activeUnknownCount), UInt32(program.topology.nodes.count),
                         &native, &limits, cs_osdi_precision_swift_task_cancelled, nil, &handle, &issue)
@@ -100,6 +127,6 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
             throw primary
         }
         return OSDIPrecisionSession(handle: handle, stagingDirectory: directory, program: program,
-            workerReference: worker.expectedReference, numericProfile: numericProfile, options: options, operation: operation, chartLimits: chartLimits, decisionCoverLimits: decisionCoverLimits)
+            workerReference: worker.expectedReference, numericProfile: numericProfile, options: options, operation: operation, chartLimits: chartLimits, decisionCoverLimits: decisionCoverLimits, constitutiveLimits: constitutiveLimits, coordinateQuotient: coordinateQuotient)
     }
 }

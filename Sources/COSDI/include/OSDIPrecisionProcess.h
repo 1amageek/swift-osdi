@@ -166,6 +166,23 @@ int32_t cs_osdi_cover_process_evaluate(cs_osdi_precision_session *session,
     cs_osdi_precision_cancel_probe cancelled, void *cancel_context,
     cs_osdi_cover_result_view *out, cs_osdi_precision_process_issue *issue);
 
+/* Complete source-linear identities only; no physical rank/root/flow authority.
+ * All pointers borrow the existing session slab until the next attempt/close. */
+typedef struct cs_osdi_identity_result_view {
+    cs_osdi_cover_result_view cover;
+    const cs_osdi_identity_claim_v5 *claims;
+    const cs_osdi_identity_coefficient_v5 *coefficients;
+    const uint64_t *words;
+    uint64_t claim_count, coefficient_count, words_per_coefficient;
+} cs_osdi_identity_result_view;
+int32_t cs_osdi_identity_process_create(const char *, const unsigned char *, uint64_t,
+    const unsigned char *, uint64_t, uint32_t, uint32_t, uint32_t,
+    const cs_osdi_precision_process_options *, const cs_osdi_cover_limits_v4 *, const cs_osdi_identity_limits_v5 *,
+    const uint32_t *, uint64_t, cs_osdi_precision_cancel_probe, void *, cs_osdi_precision_session **, cs_osdi_precision_process_issue *);
+int32_t cs_osdi_identity_process_evaluate(cs_osdi_precision_session *, const double *, const double *,
+    const double *, const double *, uint64_t, const cs_osdi_precision_context_v1 *, const cs_osdi_precision_context_v1 *,
+    uint32_t, cs_osdi_precision_cancel_probe, void *, cs_osdi_identity_result_view *, cs_osdi_precision_process_issue *);
+
 /* Tape may alias a preceding result's decisions only through an explicit caller
  * copy: guard records and decision records have distinct strides. */
 int32_t cs_osdi_chart_process_evaluate(cs_osdi_precision_session *session,

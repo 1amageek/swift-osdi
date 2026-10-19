@@ -150,6 +150,15 @@ are graph facts, not constitutive ranges or physical flow evidence.
 
 ## Internal Conditional Chart Formula Evaluation
 
+The internal [ConstitutiveIdentities](../ConstitutiveIdentities/DESIGN.md) consumer
+may install an exclusive synchronous source observer during a complete terminal
+replay. Observations identify original constants, input bindings, simultaneous
+selected phi transfers, executed instructions and output roots. They do not read
+back a sampled value as an exact coefficient, change source evaluation/control,
+or grant root/flow authority. The consumer resets its versioned expression graph
+at pipeline entry and removes the observer on every exit. Observation failure
+aborts the attempt with no published result.
+
 `Chart.h` defines an internal operation on the same exclusively owned range
 program. The existing interpreter, setup/defaults, source order, simultaneous
 phi transfers, raw-coordinate derivatives and topology check remain authoritative.

@@ -6,6 +6,12 @@ Parent: [COSDIPrecision](../DESIGN.md). No children. Own finite construction and
 
 ## Responsibilities and Boundaries
 
+[ConstitutiveIdentities](../ConstitutiveIdentities/DESIGN.md) reuses the existing
+independent whole-tree validation and exact terminal replay internally. It cannot
+accept a leaf subset, another program/setup, or a changed original box/control
+as the same cover. Its independently checked linear relations add no feasibility,
+seam, circuit-rank, root or forward-flow meaning to a decision cover.
+
 Construct bounded candidate trees using exact source frontiers, then independently replay and validate their partitions, edges, traces, exclusions and terminal formula planes. Builder success alone grants no complete-cover authority. No source physics, arbitrary supplied coefficients, circuit projection, model calibration or source feasibility assumption enters this component. Point/range/chart operations 1–3 and compiler program ABI 1 retain their meanings.
 
 ## Related Designs

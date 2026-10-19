@@ -1,6 +1,6 @@
 import OSDIContracts
 
-public struct OSDINativePrecisionEvaluator: OSDIPrecisionEvaluating, OSDIPrecisionRangeEvaluating, OSDIPrecisionChartEvaluating, OSDIPrecisionDecisionCoverEvaluating {
+public struct OSDINativePrecisionEvaluator: OSDIPrecisionEvaluating, OSDIPrecisionRangeEvaluating, OSDIPrecisionChartEvaluating, OSDIPrecisionDecisionCoverEvaluating, OSDIPrecisionConstitutiveEvaluating {
     public init() {}
     public func evaluate<Result>(session: inout OSDIPrecisionSession,
         candidateHigh: borrowing Span<Double>, candidateLow: borrowing Span<Double>,
@@ -34,6 +34,14 @@ public struct OSDINativePrecisionEvaluator: OSDIPrecisionEvaluating, OSDIPrecisi
         lowerContext: OSDIPrecisionContext, upperContext: OSDIPrecisionContext, precisionBits: UInt32,
         _ body: (OSDIPrecisionDecisionCoverEvaluationView) -> Result) throws(OSDIPrecisionDecisionCoverError) -> Result {
         try session.constructDecisionCover(lowerHigh: lowerHigh, lowerLow: lowerLow, upperHigh: upperHigh, upperLow: upperLow,
+            lowerContext: lowerContext, upperContext: upperContext, precisionBits: precisionBits, body)
+    }
+
+    public func constructConstitutiveIdentities<Result>(session: inout OSDIPrecisionSession,
+        lowerHigh: borrowing Span<Double>, lowerLow: borrowing Span<Double>, upperHigh: borrowing Span<Double>, upperLow: borrowing Span<Double>,
+        lowerContext: OSDIPrecisionContext, upperContext: OSDIPrecisionContext, precisionBits: UInt32,
+        _ body: (OSDIPrecisionConstitutiveEvaluationView) -> Result) throws(OSDIPrecisionConstitutiveError) -> Result {
+        try session.constructConstitutiveIdentities(lowerHigh: lowerHigh, lowerLow: lowerLow, upperHigh: upperHigh, upperLow: upperLow,
             lowerContext: lowerContext, upperContext: upperContext, precisionBits: precisionBits, body)
     }
 

@@ -1293,6 +1293,11 @@ static int source_cell_operation(cs_precision_program *p, uint32_t stage, uint32
   mpz_clears(first, last, count, chosen, NULL);
   return status;
 }
+static int observe_source(cs_precision_program *p, uint32_t kind,
+                          uint32_t index, uint32_t source) {
+  return p->source_observer ? p->source_observer->observe(
+      p->source_observer->context, p, kind, index, source) : 0;
+}
 static int function(cs_precision_program *p, uint32_t index, const double *high,
                     const double *low,
                     const cs_osdi_precision_context_v1 *context) {
@@ -1305,6 +1310,8 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
       int status = bind_input(p, j, high, low, context);
       if (status)
         return status;
+      status = observe_source(p, CS_SOURCE_INPUT, j, 0);
+      if (status) return status;
       cs_precision_value *v = &p->values[p->inputs[j].destination];
       if (!v->identity && !v->failure &&
           !(p->range_mode && *activity(p, v))) {
@@ -1326,8 +1333,9 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
     for (uint32_t j = 0; j < phi_count; j++) {
       const CSOsdiPrecisionPhiEdge *edge = &p->phi[b->first_phi_edge + j];
       if (edge->predecessor_block == previous) {
-        int status =
-            copy_value(p, &p->stage[staged++], &p->values[edge->source]);
+        int status = observe_source(p, CS_SOURCE_PHI_STAGE, staged, edge->source);
+        if (status) return status;
+        status = copy_value(p, &p->stage[staged++], &p->values[edge->source]);
         if (status)
           return status;
       }
@@ -1352,8 +1360,9 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
     for (uint32_t j = 0; j < phi_count; j++) {
       const CSOsdiPrecisionPhiEdge *edge = &p->phi[b->first_phi_edge + j];
       if (edge->predecessor_block == previous) {
-        int status =
-            copy_value(p, &p->values[edge->destination], &p->stage[staged++]);
+        int status = observe_source(p, CS_SOURCE_PHI_ASSIGN, edge->destination, staged);
+        if (status) return status;
+        status = copy_value(p, &p->values[edge->destination], &p->stage[staged++]);
         if (status)
           return status;
       }
@@ -1388,6 +1397,8 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
         }
         if (status)
           return status;
+        status = observe_source(p, CS_SOURCE_INSTRUCTION, p->detail, 0);
+        if (status) return status;
         continue;
       }
       if (i->b != NONE && !p->values[i->b].initialized)
@@ -1498,6 +1509,8 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
         if (status)
           return status;
       }
+      int observation = observe_source(p, CS_SOURCE_INSTRUCTION, p->detail, 0);
+      if (observation) return observation;
     }
     p->detail = NONE;
     if (b->terminator == 0)
@@ -1535,13 +1548,17 @@ static int function(cs_precision_program *p, uint32_t index, const double *high,
           copy_value(p, &p->root_values[j], &p->values[p->roots[j].value]);
       if (status)
         return status;
+      status = observe_source(p, CS_SOURCE_ROOT, j, p->roots[j].value);
+      if (status) return status;
     }
   return 0;
 }
 static int pipeline(cs_precision_program *p, const double *high,
                     const double *low,
                     const cs_osdi_precision_context_v1 *context) {
-  int reset_status = cs_precision_identity_reset(&p->identity, &p->math);
+  int reset_status = observe_source(p, CS_SOURCE_RESET, 0, 0);
+  if (reset_status) return reset_status;
+  reset_status = cs_precision_identity_reset(&p->identity, &p->math);
   if (reset_status)
     return reset_status;
   if (p->range_mode) {
@@ -1569,6 +1586,7 @@ static int pipeline(cs_precision_program *p, const double *high,
     const CSOsdiPrecisionConstant *c = &p->constants[j];
     cs_precision_value *v = &p->values[c->destination];
     int status = bits_value(p, v, c->bits, p->strings);
+    if (!status) status = observe_source(p, CS_SOURCE_CONSTANT, j, 0);
     if (!status && p->range_mode && c->type == 1 &&
         (c->bits == UINT64_C(0x7ff0000000000000) || c->bits == UINT64_C(0xfff0000000000000)))
       range_fact(p, v)->primitive_infinity = j + 1;

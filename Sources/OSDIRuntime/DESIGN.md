@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Parent: [package](../../DESIGN.md). Children: [LibraryLoading](LibraryLoading/DESIGN.md),
-[StableStorage](StableStorage/DESIGN.md), [PointEvaluation](PointEvaluation/DESIGN.md), [Precision Execution](PrecisionExecution/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md). Host-only artifact/library and storage ownership.
+[StableStorage](StableStorage/DESIGN.md), [PointEvaluation](PointEvaluation/DESIGN.md), [Precision Execution](PrecisionExecution/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md), [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md). Host-only artifact/library and storage ownership.
 
 ## Responsibilities and Boundaries
 

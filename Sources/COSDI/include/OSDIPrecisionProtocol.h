@@ -227,7 +227,32 @@ typedef struct cs_osdi_cover_control_v4 {
     uint64_t completed_steps, completed_guard_records, completed_copied_bytes;
 } cs_osdi_cover_control_v4;
 
+/* Protocol 5 adds checked source-linear identities to the unchanged v4 cover.
+ * The immutable quotient is an explicit correlated-domain condition, never a
+ * rewrite of the original box. Exact dyadic coefficients use canonical slots. */
+#define CS_OSDI_IDENTITY_PROTOCOL_VERSION UINT32_C(5)
+enum cs_osdi_identity_status {
+    CS_OSDI_IDENTITY_INVALID = 120, CS_OSDI_IDENTITY_CAPACITY = 121,
+    CS_OSDI_IDENTITY_COEFFICIENT_LIMIT = 122, CS_OSDI_IDENTITY_NONZERO = 123, CS_OSDI_IDENTITY_EMPTY_CONDITION = 124
+};
+typedef struct cs_osdi_identity_limits_v5 {
+    uint32_t maximum_nodes, maximum_atoms;
+    uint64_t maximum_coefficient_bits, maximum_workspace_bytes;
+} cs_osdi_identity_limits_v5;
+typedef struct cs_osdi_identity_claim_v5 { uint32_t kind, reserved; } cs_osdi_identity_claim_v5;
+typedef struct cs_osdi_identity_coefficient_v5 {
+    uint64_t first_word, word_count, denominator_power;
+    uint32_t negative, reserved;
+} cs_osdi_identity_coefficient_v5;
+typedef struct cs_osdi_identity_control_v5 {
+    cs_osdi_cover_control_v4 cover;
+    cs_osdi_precision_region_v1 claim_region, coefficient_region, word_region, quotient_region;
+    cs_osdi_identity_limits_v5 limits;
+    uint64_t claim_count;
+} cs_osdi_identity_control_v5;
+
 #if defined(__cplusplus)
+static_assert(sizeof(cs_osdi_identity_control_v5)==680 && offsetof(cs_osdi_identity_control_v5,claim_count)==672, "Invalid identity header layout");
 static_assert(sizeof(cs_osdi_cover_integer_v4) == 144 && sizeof(cs_osdi_cover_decision_v4) == 184, "Invalid cover cell/decision layout");
 static_assert(sizeof(cs_osdi_cover_event_v4) == 592 && sizeof(cs_osdi_cover_node_v4) == 800, "Invalid cover event/node layout");
 static_assert(sizeof(cs_osdi_cover_control_v4) == 584 && offsetof(cs_osdi_cover_control_v4, node_count) == 552, "Invalid cover header layout");
@@ -241,6 +266,7 @@ static_assert(sizeof(cs_osdi_precision_control_v1) == 464, "Invalid precision co
 static_assert(offsetof(cs_osdi_precision_control_v1, request_sequence) % 8 == 0,
               "Precision sequence must be aligned");
 #else
+_Static_assert(sizeof(cs_osdi_identity_control_v5)==680 && offsetof(cs_osdi_identity_control_v5,claim_count)==672, "Invalid identity header layout");
 _Static_assert(sizeof(cs_osdi_cover_integer_v4) == 144 && sizeof(cs_osdi_cover_decision_v4) == 184, "Invalid cover cell/decision layout");
 _Static_assert(sizeof(cs_osdi_cover_event_v4) == 592 && sizeof(cs_osdi_cover_node_v4) == 800, "Invalid cover event/node layout");
 _Static_assert(sizeof(cs_osdi_cover_control_v4) == 584 && offsetof(cs_osdi_cover_control_v4, node_count) == 552, "Invalid cover header layout");

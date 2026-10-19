@@ -2,12 +2,13 @@
 
 ## Purpose and Scope
 
-Parent: [COSDI](../DESIGN.md). No children. Own bounded native child/slab/pipe
+Parent: [COSDI](../DESIGN.md). Own bounded native child/slab/pipe
 resources and local IPC for the separate precision session. This component does
 not evaluate model arithmetic or own solver/history state. One immutable operation
 selects compensated-point protocol 1 or smooth-box protocol 2 at cold creation.
 
 Child: [DecisionCover](DecisionCover/DESIGN.md) owns protocol-4 record projection and complete-response checking.
+Child: [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md) owns protocol-5 exact source-relation projection and complete-response checking.
 
 ## Responsibilities and Boundaries
 
