@@ -388,8 +388,13 @@ int cs_precision_program_open(cs_precision_program *p, const void *bytes,
     const CSOsdiPrecisionInput *q = &p->inputs[j];
     uint32_t t = type(p, q->destination);
     REQUIRE(q->function_index < 3 && !q->reserved && q->kind >= 1 &&
-            q->kind <= 12 && claim(p, q->destination, q->function_index));
+            q->kind <= CS_OSDI_PRECISION_RAW_PARAMETER_GIVEN &&
+            claim(p, q->destination, q->function_index));
     switch (q->kind) {
+    case CS_OSDI_PRECISION_RAW_PARAMETER_GIVEN:
+      REQUIRE(q->index < h->parameters.count && t == 3 && !q->aux);
+      REQUIRE(q->function_index || p->parameters[q->index].scope == 1);
+      break;
     case 1:
     case 2:
       REQUIRE(q->index < h->parameters.count &&
@@ -414,13 +419,19 @@ int cs_precision_program_open(cs_precision_program *p, const void *bytes,
     case 8:
     case 9:
     case 12:
+    case CS_OSDI_PRECISION_SIM_REAL_VALUE:
+    case CS_OSDI_PRECISION_SIM_REAL_GIVEN:
       REQUIRE(text(q->index, q->aux, h->strings.count) &&
-              (q->kind == 8 || t == 3));
+              (q->kind == 8 ||
+               (q->kind == CS_OSDI_PRECISION_SIM_REAL_VALUE ? t == 1 : t == 3)));
       for (uint32_t k = 0; k < s->simulation_facts.count; k++) {
         const CSOsdiPrecisionSimulationFact *fact = &p->simulation[k];
         if (string_equal(p->strings + q->index, q->aux,
                          p->setup_strings + fact->name_offset,
                          fact->name_bytes)) {
+          if ((q->kind == CS_OSDI_PRECISION_SIM_REAL_VALUE ||
+               q->kind == CS_OSDI_PRECISION_SIM_REAL_GIVEN) && fact->type != 1)
+            continue;
           p->input_simulation[j] = k;
           if (q->kind == 8)
             REQUIRE(t == fact->type);
@@ -665,7 +676,9 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
       return copy_value(p, v, &p->root_values[q->aux]);
     return bits_value(p, v, 0, p->setup_strings);
   }
-  if (q->kind == 2) {
+  if (q->kind == CS_OSDI_PRECISION_RAW_PARAMETER_GIVEN) {
+    v->integer = fact_given(p, q->index);
+  } else if (q->kind == 2) {
     v->integer = fact_given(p, q->index);
     if (q->function_index && p->parameters[q->index].scope == 2) {
       uint32_t peer = p->model_peers[q->index];
@@ -693,9 +706,11 @@ static int bind_input(cs_precision_program *p, uint32_t ordinal,
     v->integer = 0;
   else if (q->kind == 7)
     v->integer = q->index < p->setup->connected_terminal_count;
-  else if (q->kind == 8 || q->kind == 12) {
+  else if (q->kind == 8 || q->kind == 12 ||
+           q->kind == CS_OSDI_PRECISION_SIM_REAL_VALUE ||
+           q->kind == CS_OSDI_PRECISION_SIM_REAL_GIVEN) {
     uint32_t index = p->input_simulation[ordinal];
-    if (q->kind == 12)
+    if (q->kind == 12 || q->kind == CS_OSDI_PRECISION_SIM_REAL_GIVEN)
       v->integer = index != NONE && p->simulation[index].given;
     else
       return bits_value(p, v,

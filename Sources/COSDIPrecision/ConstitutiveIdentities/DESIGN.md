@@ -45,8 +45,12 @@ validated complete cover + original program/setup/box/context
 
 Coefficients use the existing GMP `mpq_t` implementation. They represent exact
 dyadic real numbers, never MPFR midpoints, native caches, or sampled constants.
-Finite primitive binary64 literals are imported exactly. Potential inputs (kind
-10) are canonicalized from the exact immutable setup map: raw `index` minus raw
+Finite primitive binary64 literals are imported exactly. Kind-13 typed
+simulation-REAL values also use immutable admitted setup bits, or the
+format-defined neutral zero when typed-absent, as exact literals; the
+[format contract](../../COSDI/CompilerPrecision/DESIGN.md#additive-typed-simulation-real-bindings)
+owns this lookup distinction. They never derive coefficients from MPFR endpoints.
+Potential inputs (kind 10) are canonicalized from the exact immutable setup map: raw `index` minus raw
 `aux`, where `NONE` or a raw coordinate mapped to `NONE` is exact ground zero.
 Each actual active coordinate has one canonical atom within a fresh source replay.
 Repeated/reversed probes therefore share the same signed coordinate form; equal

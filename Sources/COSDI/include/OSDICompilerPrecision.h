@@ -72,16 +72,27 @@ typedef enum {
     CS_OSDI_PRECISION_ANALYSIS = 9,
     CS_OSDI_PRECISION_RAW_DIFFERENCE = 10,
     CS_OSDI_PRECISION_PRIOR_ROOT = 11,
-    CS_OSDI_PRECISION_SIM_PARAMETER_GIVEN = 12
+    CS_OSDI_PRECISION_SIM_PARAMETER_GIVEN = 12,
+    CS_OSDI_PRECISION_SIM_REAL_VALUE = 13,
+    CS_OSDI_PRECISION_SIM_REAL_GIVEN = 14,
+    CS_OSDI_PRECISION_RAW_PARAMETER_GIVEN = 15
 } CSOsdiPrecisionInputKind;
 /* Parameter index addresses parameters[]; scope is recorded there.
    Instance-scope GIVEN is instanceGiven OR modelGiven for the same OSDI index.
+   RAW_PARAMETER_GIVEN (BOOL, aux=0) reads only the exact parameter record's
+   own given fact, without model-peer inheritance. Model-stage use is model-scope.
    Instance-setup VALUE uses the supplied instance value if given, otherwise the
    prior model-setup root named by aux; model-setup VALUE has aux=NONE.
    Evaluation resolved values use PRIOR_ROOT from instance setup (or model setup
    for model-only parameters). No binary64 resolved default replaces that root.
    RAW_DIFFERENCE index/aux are raw endpoints, NONE means ground.
    SIM_PARAMETER/ANALYSIS index/aux are exact UTF-8 name offset/length.
+   SIM_REAL_VALUE (REAL) / SIM_REAL_GIVEN (BOOL) use the same name encoding,
+   matching only explicitly given REAL simulation facts. Missing or wrong-type
+   facts yield neutral zero / false; explicit REAL zero yields zero / true.
+   Source SSA owns fallback/fatal behavior. Existing kinds 8/12 are unchanged.
+   These additive kinds require a new producer semantic profile. Old workers
+   reject their unknown kinds; program/setup/protocol layouts remain unchanged.
    PRIOR_ROOT index addresses roots[] from an earlier completed stage.
    PORT_CONNECTED index is the terminal ordinal, aux=0.
    ANALYSIS names are ac/dc/noise/tran/ic/static/nodeset, matched exactly against

@@ -114,6 +114,12 @@ their SHA-256 digests for independent replay. Only explicit given assignments ar
 serialized; compiler metadata owns primitive defaults and source SSA owns all
 compound defaults. Unknown parameter flags and record strides fail admission.
 
+Snapshot capture preserves simulation-fact names, types, given flags and exact
+bits, including a STRING that a typed REAL query ignores and an explicitly given
+REAL zero. It does not replace either with a numeric default or omit the original
+fact. The additive query grammar and compatibility boundary are owned by the
+[compiler format](../../COSDI/CompilerPrecision/DESIGN.md#additive-typed-simulation-real-bindings).
+
 `prepare(program:worker:source:numericProfile:options:)` admits an exact statically
 qualified helper through `ArtifactAccessing`, stages it privately and starts the
 bounded process adapter. The helper artifact identity binds numeric code; the
@@ -235,3 +241,7 @@ condition to its existing session,
 staging and cleanup owner. The same Mutex, Sendable and platform matrix above
 applies. No circuit chart, rank or continuation authority is inferred from that
 operation. Submitted failure follows the same retained cleanup path.
+
+## Controlled Snapshot Construction
+
+The additive ASCII controlled snapshot overload delegates layout, construction work and managed-payload leases to [Snapshot Construction](../SnapshotConstruction/DESIGN.md). Existing uncontrolled overloads retain their behavior. Internal worker creation borrows the same program storage and does not materialize controlled public Array getters.

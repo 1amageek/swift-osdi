@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.2.0 — 2026-10-19 — source release candidate
+
+- Add precision-program input kinds 13 (`SIM_REAL_VALUE`) and 14
+  (`SIM_REAL_GIVEN`) for exact-name, REAL-only simulation-parameter lookup.
+  Missing or non-REAL facts yield neutral zero/false; explicit REAL zero remains
+  present. Source instructions retain authority for defaults and fatal conditions.
+- Add kind 15 (`RAW_PARAMETER_GIVEN`) for exact own-scope assignment presence.
+  Preserve kind 2 instance-or-model presence; neither explicit zero nor equal
+  resolved values erase the original source distinction.
+- Require a worker supporting these new kinds and an explicitly bound new numeric
+  profile, producer semantic identity and model/program artifact. Older workers
+  refuse the new grammar. Existing kinds 8/12, Program ABI 1, header/setup layouts
+  and protocol 1–5 wire bytes retain their semantics and layout.
+- Check new REAL coefficients from immutable setup bits independently of MPFR
+  endpoint values. Retain the existing cumulative resource, cancellation and
+  cleanup owners across all five precision operations.
+- Add caller-controlled snapshot construction with fixed program/setup buffers,
+  cumulative work and managed-payload admission, cancellation and shared immutable
+  program/session leases. ASCII parameter, alias and simulation names are explicit
+  in this profile; string values preserve exact UTF-8 bytes. Legacy capture stays
+  available, and an unsupported controlled implementation refuses without falling
+  back to it. External byte-array copies remain caller-owned; this contract does
+  not bound allocator overhead, cryptographic internals or process RSS.
+- Initial kinds 13/14 qualification passed 38 affected native Release tests without
+  skips and seven independent
+  reference comparisons. Combined Address/Undefined Behavior Sanitizer evidence
+  covers the C checker, new bindings and four retained original-model conditional
+  identity captures. Of 38 sanitizer-worker tests, 37 passed together and one
+  existing 200-ms startup-bound test passed separately with the same bound; the
+  concurrent timeout remains recorded, rather than claimed as a parallel pass.
+  The final transport fixture isolates the intentionally unresponsive startup
+  deadline from other IPC failures; production timeout policies are unchanged.
+  Final combined qualification additionally passed the controlled-snapshot and
+  typed-binding paths in Release, Debug and Address Sanitizer lanes: 73 actual
+  tests passed per fresh Debug/ASan lane, with two explicit existing model gates
+  skipped. A separate selected test passed the four current original-model
+  conditional-identity joins. All five controlled-snapshot tests and eight typed
+  binding tests executed. Independent kind-15 checking covered four positive
+  cases, four malformed programs and actual old-worker refusal.
+
+The new binding fixtures and cold snapshot exercise SDK semantics, not a completed
+Official C three-stage producer. The four-model evidence retains its original
+finite capture/condition scope. This release adds no circuit-root, flow/history,
+foundry or performance guarantee. Distribution remains source-only; publication
+requires the verified tag, public exact-version consumer and source archive.
+
 ## 1.1.0 — 2026-10-19 — source release candidate
 
 - Add bounded source guard/chart facts, independently checked complete source

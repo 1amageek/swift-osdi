@@ -59,6 +59,17 @@ imports, evidence reads/writes or child startup, preserving the binding and
 qualification checks implemented with assertions.
 
 ## Verification and Change Impact
+
+The tracked `simulation_real_fixtures.py` also emits a separate kind-15 profile
+that retains exact scoped parameter facts and the old kind-2 merged predicate.
+`RawGivenSnapshotFixture.c` is a two-row analytic oracle with matching ordinary
+callbacks and precision roots: equal resolved parameter values may retain
+different own-scope given flags. Its setup copies a model value into an unspecified
+instance without changing that instance's original given bit. The public fixture
+suite compares ordinary output, exact cold program/setup bytes and all five
+precision operations after model/library closure. This tests source-input and
+transport semantics, not semiconductor physics or circuit-root authority.
+
 Run build_worker.py with --output-dir, then verify_worker.py with --worker under an external timeout. ArithmeticTests.c links the same production arithmetic/arena/identity sources. verify_models.py reuses exact native snapshot bytes and records explicit raw-point vectors, both contexts, all output slabs, first-request timing and optional OS-heap interposition samples; these points are not circuit solutions. Repeat using address/undefined sanitizers. Record steady process/IPC latency separately from arithmetic allocation requests; zero total allocation is not assumed.
 
 ## Same-Condition Performance Comparison

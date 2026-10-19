@@ -18,6 +18,22 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
             topology: model.topology, metadata: model.parameterMetadata, preparation: preparation,
             semanticProfile: semanticProfile, options: options)
     }
+    public func snapshot(library: borrowing OSDILibrary, descriptorIndex: Int, model: borrowing OSDIPreparedModel,
+        preparation: OSDIPreparationOptions, semanticProfile: ContentDigest,
+        options: OSDIPrecisionOptions, control: any OSDIPrecisionSnapshotControlling) throws(OSDIError) -> OSDIPrecisionProgram {
+        do {
+            try control.checkpoint(workUnits: 0)
+            // Exact UTF-8 comparison avoids implicit Unicode-normalization scratch.
+            try OSDIPrecisionControlledSnapshotBuilder.validatePreparation(preparation,
+                matches: model.precisionPreparation, control: control)
+            guard model.precisionModelReference == library.reference,
+                  Int(model.descriptorIndex) == descriptorIndex else { throw OSDIError.identityMismatch }
+            return try OSDIPrecisionControlledSnapshotBuilder.build(library: library, descriptorIndex: descriptorIndex,
+                topology: model.topology, metadata: model.parameterMetadata, preparation: preparation,
+                semanticProfile: semanticProfile, options: options, control: control)
+        } catch let error as OSDIError { throw error }
+        catch { throw .host(operation: "controlled precision snapshot", underlying: error) }
+    }
     public func prepare(program: OSDIPrecisionProgram, worker: ArtifactAccessIntent, source: any ArtifactAccessing,
         numericProfile: ContentDigest, options: OSDIPrecisionOptions) async throws(OSDIError) -> OSDIPrecisionSession {
         try await prepare(operation: .point, program: program, worker: worker, source: source,
@@ -67,8 +83,8 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
               (operation == .constitutiveIdentities) == (coordinateQuotient != nil) else { throw .invalidRange }
         do { try coordinateQuotient?.validate(for: program.topology) }
         catch { throw .contract(error) }
-        guard UInt64(program.programBytes.count) <= options.maximumProgramBytes,
-              UInt64(program.setupBytes.count) <= options.maximumMappingBytes else { throw .resourceLimit }
+        guard UInt64(program.programByteCount) <= options.maximumProgramBytes,
+              UInt64(program.setupByteCount) <= options.maximumMappingBytes else { throw .resourceLimit }
         let programSHA = try OSDIPrecisionProgramBuilder.digestBytes(program.programDigest)
         let profileSHA = try OSDIPrecisionProgramBuilder.digestBytes(numericProfile)
         let directory = try await OSDIArtifactMaterializer(parent: stagingParentDirectory).materialize(worker, source: source)
@@ -84,7 +100,7 @@ public struct OSDINativePrecisionSessionPreparer: OSDIPrecisionSessionPreparing,
         withUnsafeMutableBytes(of: &native.worker_profile_sha256) { $0.copyBytes(from: profileSHA) }
         var handle: OpaquePointer?, issue = cs_osdi_precision_process_issue()
         let status = directory.appendingPathComponent("model.osdi").path.withCString { path in
-            program.programBytes.withUnsafeBufferPointer { bytes in program.setupBytes.withUnsafeBufferPointer { setup in
+            program.withProgramBytes { bytes in program.withSetupBytes { setup in
                 if (operation == .decisionCover || operation == .constitutiveIdentities), let decisionCoverLimits {
                     var limits = cs_osdi_cover_limits_v4(maximum_steps: decisionCoverLimits.maximumSteps,
                         maximum_guard_records: decisionCoverLimits.maximumGuardRecords, maximum_copied_bytes: decisionCoverLimits.maximumCopiedBytes,

@@ -37,7 +37,7 @@ let package = Package(
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFileSystem", package: "CircuiteFoundation")
         ], exclude: ["DESIGN.md", "LibraryLoading/DESIGN.md", "StableStorage/DESIGN.md", "PointEvaluation/DESIGN.md",
-                    "PrecisionExecution/DESIGN.md", "DecisionCover/DESIGN.md", "ConstitutiveIdentities/DESIGN.md"],
+                    "PrecisionExecution/DESIGN.md", "SnapshotConstruction/DESIGN.md", "DecisionCover/DESIGN.md", "ConstitutiveIdentities/DESIGN.md"],
                 swiftSettings: [.enableExperimentalFeature("Lifetimes"), .enableExperimentalFeature("LifetimeDependence")]),
         .executableTarget(name: "OSDIInspect", dependencies: ["OSDIRuntime", "OSDIContracts",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),

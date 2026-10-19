@@ -4,7 +4,14 @@
 Validate and execute the compiler-owned stateless setup/evaluation program. Parent: [COSDIPrecision](../DESIGN.md). No children.
 
 ## Responsibilities and Boundaries
-Each endpoint executes all three stages, simultaneous phi transfers and explicit scoped facts. Compiler-proved preparation-only collapse guards may be serialized in evaluation; after each complete three-stage endpoint, their equivalence must match the supplied map before publication. Original derivative roots supply inexact Newton midpoints.
+Each endpoint executes all three stages, simultaneous phi transfers and explicit scoped facts. Kind 15 reads the exact requested-scope immutable given bit; existing kind 2 retains instance-or-model presence. Source guards, not merged resolved values, choose the original setup branch. Compiler-proved preparation-only collapse guards may be serialized in evaluation; after each complete three-stage endpoint, their equivalence must match the supplied map before publication. Original derivative roots supply inexact Newton midpoints.
+
+Typed simulation-REAL input kinds 13/14 follow the
+[format contract](../../COSDI/CompilerPrecision/DESIGN.md#additive-typed-simulation-real-bindings).
+Their exact-name/type lookup is admitted once in the existing input index table;
+all source stages use the same immutable setup facts. They neither change legacy
+8/12 semantics nor choose the source fallback. No extra arena pool or operation
+owner is introduced.
 
 ## Related Designs
 | Design | Relationship | Contract Used | Summary | Cautions |
@@ -17,7 +24,7 @@ Program/setup bytes -> validated SSA/CFG -> candidate/reference pipelines -> F a
 ```
 
 ## Contracts and Invariants
-Each endpoint executes all three stages, simultaneous phi transfers and explicit scoped facts. Compiler-proved preparation-only collapse guards may be serialized in evaluation; after each complete three-stage endpoint, their equivalence must match the supplied map before publication. Original derivative roots supply inexact Newton midpoints.
+Each endpoint executes all three stages, simultaneous phi transfers and explicit scoped facts. Kind 15 reads the exact requested-scope immutable given bit; existing kind 2 retains instance-or-model presence. Source guards, not merged resolved values, choose the original setup branch. Compiler-proved preparation-only collapse guards may be serialized in evaluation; after each complete three-stage endpoint, their equivalence must match the supplied map before publication. Original derivative roots supply inexact Newton midpoints.
 
 Expression identity is local to one endpoint and reset before the next pipeline. A fixed arena-owned interning table uses complete typed keys: exact singleton MPFR values, exact integer/Boolean/string values, or supported opcode plus already-proved operand identities. Hash matches alone never prove equality, and overlapping/equal interval endpoints never prove expression identity. Definite SELECT/phi/root copies preserve the selected token. After operand initialization and successful domain checks, subtraction of the same finite expression is exact zero and comparisons of proved identical expressions are definite. Table capacity, stored singleton significands and collision probes are bounded; capacity exhaustion terminates the isolated worker as a resource failure, and all probes/key work consume the request work budget. Tokens never cross endpoints or programs.
 

@@ -23,6 +23,7 @@ def load(name, path):
 
 
 runner = load('standalone_runner', HERE/'run.py')
+typed_fixture = load('typed_simulation_real_fixture', TOOLS/'simulation_real_fixtures.py')
 consumer_fixture = load('public_precision_fixture', HERE.parent/'OSDIConsumerVerification/precision_fixture.py')
 source_checker = load('source_identity_checker', TOOLS/'verify_constitutive_identities.py')
 
@@ -84,7 +85,13 @@ class CompositionTests(unittest.TestCase):
         for forged in (False, True):
             with self.subTest(forged=forged), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                environment, calls = {}, []
+                environment = {'OSDI_PRECISION_WORKER': '/model/worker', 'OSDI_PRECISION_NUMERIC_PROFILE_SHA256': 'model-profile'}
+                initial = dict(environment)
+                calls = []
+                numeric = {'sdk': '/explicit/sdk', 'worker': {'path': '/new/worker', 'sha256': 'a'*64},
+                           'numericProfile': {'path': '/new/profile', 'sha256': 'b'*64}}
+                legacy = {'mode': 'caller-qualified-artifact', 'worker': {'path': '/old/worker', 'sha256': 'c'*64},
+                          'numericProfileSHA256': 'd'*64}
                 def execute(argv, output, label, timeout, env, commands):
                     calls.append((list(map(str, argv)), label))
                     if label == 'identity-source-check':
@@ -96,27 +103,154 @@ class CompositionTests(unittest.TestCase):
                                 value = value[:-1]+bytes([value[-1]^1])
                             (proof/'fixtures'/f'probe-distinct.{suffix}').write_bytes(value)
                         (proof/'receipt.json').write_text('{"synthetic":"passed"}\n')
+                    elif label in ('simulation-real-library', 'raw-given-library'):
+                        name = 'cold.dylib' if label == 'simulation-real-library' else 'raw-given.dylib'
+                        (root/'simulation-real'/name).write_bytes(b'cold-library')
                     else:
                         selected = root/label.removesuffix('-inputs')
-                        if selected.name == 'identities':
+                        if selected.name == 'simulation-real':
+                            with patch.object(sys, 'argv', ['simulation_real_fixtures.py', str(selected)]):
+                                typed_fixture.main()
+                        elif selected.name == 'identities':
                             identities.emit(selected, public_probes=True)
                         else:
                             selected.mkdir()
                             (selected/'manifest.json').write_text('{}\n')
-                with patch.object(runner, 'execute', execute):
+                with patch.object(runner, 'execute', execute), patch.object(runner, 'prepare_legacy_worker', return_value=legacy):
                     if forged:
                         with self.assertRaisesRegex(ValueError, 'differs.*setup'):
-                            runner.prepare_precision_inputs(root, Path('/explicit/clang'), True, environment, [])
-                        self.assertEqual(environment, {})
+                            runner.prepare_precision_inputs(root, Path('/explicit/clang'), True, environment, [], numeric)
+                        self.assertEqual(environment, initial)
                     else:
-                        result = runner.prepare_precision_inputs(root, Path('/explicit/clang'), True, environment, [])
-                        self.assertEqual(set(environment), set(runner.GENERATED_FIXTURES)-{'OSDI_STANDALONE_FIXTURES'})
+                        result = runner.prepare_precision_inputs(root, Path('/explicit/clang'), True, environment, [], numeric)
+                        self.assertEqual(set(environment), (set(runner.GENERATED_FIXTURES)-{'OSDI_STANDALONE_FIXTURES'}) | set(runner.TYPED_WORKER_BINDINGS) | {'OSDI_SIMULATION_REAL_QUALIFICATION'} | set(initial))
+                        self.assertEqual({key: environment[key] for key in initial}, initial)
+                        self.assertEqual(environment['OSDI_SIMULATION_REAL_WORKER'], '/new/worker')
+                        self.assertEqual(environment['OSDI_SIMULATION_REAL_NUMERIC_PROFILE_SHA256'], 'b'*64)
+                        self.assertEqual(environment['OSDI_PRECISION_OLD_WORKER'], '/old/worker')
+                        self.assertEqual(environment['OSDI_SIMULATION_REAL_QUALIFICATION'], '1')
+                        self.assertTrue(result['typedSimulationReal']['required'])
+                        self.assertEqual(result['typedSimulationReal']['library']['sha256'], hashlib.sha256(b'cold-library').hexdigest())
                         self.assertFalse(result['actualModelsSelected'])
                         self.assertEqual(set(result['publicProbeExactCParity']), {'program', 'setup'})
-                    command = calls[-1][0]
+                    command = next(argv for argv, label in calls if label == 'identity-source-check')
                     self.assertIn('--sanitize', command)
                     self.assertNotIn('--actual-manifest', command)
-                    self.assertEqual({label for _, label in calls}, {'ranges-inputs', 'charts-inputs', 'covers-inputs', 'identities-inputs', 'identity-source-check'})
+                    self.assertEqual({label for _, label in calls}, {'ranges-inputs', 'charts-inputs', 'covers-inputs', 'identities-inputs', 'simulation-real-inputs', 'identity-source-check'} | (set() if forged else {'simulation-real-library', 'raw-given-library'}))
+                    if not forged:
+                        cold = next(argv for argv, label in calls if label == 'simulation-real-library')
+                        self.assertIn(str(runner.ROOT/'Tools/OSDIConsumerVerification/precision_fixture.c'), cold)
+                        self.assertEqual(cold[cold.index('-isysroot')+1], '/explicit/sdk')
+
+
+    def test_model_precision_uses_current_worker_while_only_legacy_preserves_receipt_pair(self):
+        numeric = {'worker': {'path': '/fresh/protocol-five-worker'}, 'numericProfile': {'sha256': 'fresh-profile'}}
+        original = {'OSDI_PRECISION_WORKER': '/historical/protocol-one-worker',
+                    'OSDI_PRECISION_NUMERIC_PROFILE_SHA256': 'historical-profile',
+                    'OSDI_SIMULATION_REAL_WORKER': '/separate/typed-worker'}
+        for legacy in (False, True):
+            environment = dict(original)
+            runner.bind_precision_worker(environment, numeric, legacy)
+            self.assertEqual(environment['OSDI_PRECISION_WORKER'], original['OSDI_PRECISION_WORKER'] if legacy else '/fresh/protocol-five-worker')
+            self.assertEqual(environment['OSDI_PRECISION_NUMERIC_PROFILE_SHA256'], 'historical-profile' if legacy else 'fresh-profile')
+            self.assertEqual(environment['OSDI_SIMULATION_REAL_WORKER'], '/separate/typed-worker')
+
+    def test_sdk_selection_pins_explicit_or_xcrun_root_without_invalid_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);sdk=root/'MacOSX.sdk';sdk.mkdir();settings=sdk/'SDKSettings.json';settings.write_text('{"CanonicalName":"macosx"}')
+            for explicit in (False, True):
+                environment={'SDKROOT':str(sdk)} if explicit else {}
+                with patch.object(runner, 'execute', return_value=str(sdk)+'\n') as execute:
+                    selected=runner.select_sdk(root,environment,[])
+                    self.assertEqual(execute.call_count,0 if explicit else 1)
+                self.assertEqual(environment['SDKROOT'],str(sdk.resolve()))
+                self.assertEqual(selected['settings']['sha256'],hashlib.sha256(settings.read_bytes()).hexdigest())
+                self.assertEqual(selected['selection'],'caller' if explicit else 'xcrun-macosx')
+            with patch.object(runner, 'execute', side_effect=AssertionError('Invalid explicit SDK fell back')):
+                with self.assertRaisesRegex(RuntimeError,'unavailable'):
+                    runner.select_sdk(root,{'SDKROOT':str(root/'absent')},[])
+                empty=root/'empty';empty.mkdir()
+                with self.assertRaisesRegex(RuntimeError,'settings identity'):
+                    runner.select_sdk(root,{'SDKROOT':str(empty)},[])
+
+    def test_raw_given_fixtures_keep_own_scope_separate_from_merged_presence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'fixtures'
+            with patch.object(sys, 'argv', ['simulation_real_fixtures.py', str(output)]):typed_fixture.main()
+            manifest=json.loads((output/'manifest.json').read_text())
+            entries={entry['id']:entry for entry in manifest['fixtures']}
+            absent=Path(entries['raw-given-model-only']['setupPath']).read_bytes()
+            explicit=Path(entries['raw-given-instance-same']['setupPath']).read_bytes()
+            offset,count,stride=struct.unpack_from('<QII',absent,32)
+            self.assertEqual((count,stride),(2,16))
+            self.assertEqual(struct.unpack_from('<IIQ',absent,offset),(0,1,typed_fixture.real(1)))
+            self.assertEqual(struct.unpack_from('<IIQ',absent,offset+stride),(1,0,0))
+            self.assertEqual(struct.unpack_from('<IIQ',explicit,offset+stride),(1,1,typed_fixture.real(1)))
+            program=Path(entries['raw-given-model-only']['programPath']).read_bytes()
+            at,count,stride=struct.unpack_from('<QII',program,72+2*16)
+            inputs=[struct.unpack_from('<IIIIII',program,at+i*stride)for i in range(count)]
+            self.assertEqual({q[0]for q in inputs if q[2]==15},{0,1,2})
+            self.assertTrue(any(q[2]==2 and q[3]==1 for q in inputs))
+            self.assertTrue(all(q[4]==0 for q in inputs if q[2]==15))
+            self.assertEqual(entries['raw-given-model-only']['expectedF'],3)
+            self.assertEqual(entries['raw-given-instance-same']['expectedF'],5)
+            self.assertNotEqual(program[40:72],typed_fixture.PROFILE)
+
+    def test_ordinary_selection_clears_typed_inputs_without_changing_model_bindings(self):
+        environment = {key: 'inherited' for key in runner.QUALIFICATION_SELECTORS + runner.GENERATED_FIXTURES + runner.TYPED_WORKER_BINDINGS}
+        environment.update(OSDI_PRECISION_WORKER='/model/worker', OSDI_PRECISION_NUMERIC_PROFILE_SHA256='model-profile', PATH='/usr/bin')
+        runner.clear_qualification_inputs(environment)
+        self.assertEqual(environment, {'OSDI_PRECISION_WORKER': '/model/worker',
+            'OSDI_PRECISION_NUMERIC_PROFILE_SHA256': 'model-profile', 'PATH': '/usr/bin'})
+
+    def test_explicit_old_worker_pair_is_offline_and_half_pair_refuses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker = root/'old-worker';worker.write_bytes(b'qualified-old-artifact');worker.chmod(0o700)
+            inputs = {'OSDI_PRECISION_OLD_WORKER': str(worker), 'OSDI_PRECISION_OLD_NUMERIC_PROFILE_SHA256': 'e'*64}
+            with patch.object(runner, 'execute', side_effect=AssertionError('Offline selection attempted a process')):
+                result = runner.prepare_legacy_worker(root, Path('/clang'), {}, inputs, {}, [])
+                self.assertEqual(result['mode'], 'caller-qualified-artifact')
+                self.assertEqual(result['worker']['sha256'], hashlib.sha256(worker.read_bytes()).hexdigest())
+                with self.assertRaisesRegex(RuntimeError, 'together'):
+                    runner.prepare_legacy_worker(root, Path('/clang'), {}, {'OSDI_PRECISION_OLD_WORKER': str(worker)}, {}, [])
+                inputs['OSDI_PRECISION_OLD_NUMERIC_PROFILE_SHA256'] = 'bad-profile'
+                with self.assertRaisesRegex(RuntimeError, 'Invalid qualified'):
+                    runner.prepare_legacy_worker(root, Path('/clang'), {}, inputs, {}, [])
+
+    def test_public_old_worker_requires_exact_revision_and_matching_numeric_inputs(self):
+        for bad_revision, bad_numeric in [(False, False), (True, False), (False, True)]:
+            with self.subTest(bad_revision=bad_revision, bad_numeric=bad_numeric), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory);calls=[]
+                numeric = {'sdk': '/sdk', 'compiler': {'sha256': 'compiler'}, 'buildSelection': {
+                    'sdkSettings': {'sha256': 'sdk'}, 'numeric': [
+                        {'name': 'mpfr', 'header': {'sha256': 'header'}, 'archive': {'sha256': 'archive'}}]}}
+                def execute(argv, output, label, timeout, environment, commands):
+                    calls.append((list(map(str, argv)), label, environment))
+                    if label == 'legacy-source-revision':return 'wrong' if bad_revision else runner.LEGACY_REVISION+'\n'
+                    if label == 'legacy-numeric-build':
+                        old = json.loads(json.dumps(numeric));old['worker']={'path': '/old/worker', 'sha256': 'a'*64}
+                        old['numericProfile']={'sha256': 'b'*64}
+                        if bad_numeric:old['buildSelection']['numeric'][0]['archive']['sha256']='different'
+                        (root/'legacy-numeric').mkdir()
+                        (root/'legacy-numeric/receipt.json').write_text(json.dumps(old))
+                    return ''
+                with patch.object(runner, 'execute', execute):
+                    if bad_revision or bad_numeric:
+                        with self.assertRaisesRegex(RuntimeError, 'qualified commit' if bad_revision else 'inputs differ'):
+                            runner.prepare_legacy_worker(root, Path('/clang'), numeric, None, {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'url.bad.insteadOf'}, [])
+                    else:
+                        result=runner.prepare_legacy_worker(root, Path('/clang'), numeric, None, {}, [])
+                        self.assertEqual(result['mode'], 'public-immutable-source')
+                        self.assertEqual(result['revision'], runner.LEGACY_REVISION)
+                fetch, label, environment = calls[0]
+                self.assertEqual(label, 'legacy-source-fetch')
+                self.assertEqual(fetch[-2], 'https://github.com/1amageek/swift-osdi.git')
+                self.assertEqual(fetch[fetch.index('--branch')+1], '1.1.0')
+                self.assertEqual(environment['GIT_CONFIG_GLOBAL'], '/dev/null')
+                self.assertNotIn('GIT_CONFIG_COUNT', environment)
+                self.assertNotIn('GIT_CONFIG_KEY_0', environment)
+                if bad_revision:self.assertEqual(len(calls), 2)
 
 
 if __name__ == '__main__':

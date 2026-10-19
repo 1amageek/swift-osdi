@@ -21,9 +21,14 @@ MODEL_INPUTS = ('OSDI_OPENVAF_COMPILER', 'OSDI_BSIM_LIBRARY', 'OSDI_BSIM_SHA256'
 LEGACY_INPUTS = ('OSDI_REAL_PRECISION_REFERENCE', 'OSDI_REAL_PRECISION_INDEPENDENT_RECEIPT',
                  'OSDI_REAL_PRECISION_REQUEST_DIRECTORY')
 QUALIFICATION_SELECTORS = ('OSDI_MODEL_QUALIFICATION', 'OSDI_PRECISION_QUALIFICATION',
-                          'OSDI_LEGACY_SOI_QUALIFICATION', 'OSDI_CONSTITUTIVE_ACTUAL_QUALIFICATION')
+                          'OSDI_LEGACY_SOI_QUALIFICATION', 'OSDI_CONSTITUTIVE_ACTUAL_QUALIFICATION',
+                          'OSDI_SIMULATION_REAL_QUALIFICATION')
 GENERATED_FIXTURES = ('OSDI_STANDALONE_FIXTURES', 'OSDI_RANGE_FIXTURES', 'OSDI_CHART_FIXTURES',
-                      'OSDI_DECISION_COVER_FIXTURES', 'OSDI_CONSTITUTIVE_FIXTURES')
+                      'OSDI_DECISION_COVER_FIXTURES', 'OSDI_CONSTITUTIVE_FIXTURES',
+                      'OSDI_SIMULATION_REAL_FIXTURES', 'OSDI_SIMULATION_REAL_LIBRARY', 'OSDI_RAW_GIVEN_LIBRARY')
+TYPED_WORKER_BINDINGS = ('OSDI_SIMULATION_REAL_WORKER', 'OSDI_SIMULATION_REAL_NUMERIC_PROFILE_SHA256',
+                         'OSDI_PRECISION_OLD_WORKER', 'OSDI_PRECISION_OLD_NUMERIC_PROFILE_SHA256')
+LEGACY_REVISION = '2c9ee1f620406e7a479ac10a4fddfaa17bc23d6d'
 
 
 def digest(path):
@@ -76,18 +81,90 @@ def check_qualification_python_profile(output, environment, commands):
         raise RuntimeError('Optimized qualification must explicitly require assertion-enabled Python')
 
 
-def prepare_precision_inputs(output, clang, sanitized, environment, commands):
+def clear_qualification_inputs(environment):
+    for key in QUALIFICATION_SELECTORS + GENERATED_FIXTURES + TYPED_WORKER_BINDINGS:
+        environment.pop(key, None)
+
+
+def select_sdk(output, environment, commands):
+    selected = environment.get('SDKROOT')
+    mode = 'caller' if selected else 'xcrun-macosx'
+    if not selected:
+        selected = execute(['/usr/bin/xcrun', '--sdk', 'macosx', '--show-sdk-path'],
+                           output, 'sdk-selection', 30, environment, commands).strip()
+    try:
+        sdk = Path(selected).resolve(strict=True)
+    except OSError as error:
+        raise RuntimeError('Selected SDKROOT is unavailable') from error
+    settings = next((sdk/name for name in ('SDKSettings.json', 'SDKSettings.plist') if (sdk/name).is_file()), None)
+    if not sdk.is_dir() or settings is None:
+        raise RuntimeError('Selected SDKROOT has no SDK settings identity')
+    environment['SDKROOT'] = str(sdk)
+    return {'path': str(sdk), 'selection': mode,
+            'settings': {'path': str(settings), 'sha256': digest(settings)}}
+
+
+def bind_precision_worker(environment, numeric, legacy_selected):
+    # Only the legacy SOI receipt requires the caller's global worker/profile.
+    if not legacy_selected:
+        environment['OSDI_PRECISION_WORKER'] = numeric['worker']['path']
+        environment['OSDI_PRECISION_NUMERIC_PROFILE_SHA256'] = numeric['numericProfile']['sha256']
+
+
+def prepare_legacy_worker(output, clang, numeric, supplied, environment, commands):
+    worker_key, profile_key = TYPED_WORKER_BINDINGS[2:]
+    if supplied:
+        if set(supplied) != {worker_key, profile_key}:
+            raise RuntimeError('Both explicit old-worker inputs are required together')
+        worker = Path(supplied[worker_key]).resolve(strict=True)
+        profile = supplied[profile_key]
+        if not worker.is_file() or not os.access(worker, os.X_OK) or not re.fullmatch('[0-9a-f]{64}', profile):
+            raise RuntimeError('Invalid qualified old-worker artifact or numeric profile')
+        return {'mode': 'caller-qualified-artifact', 'worker': {'path': str(worker), 'sha256': digest(worker)},
+                'numericProfileSHA256': profile}
+    source = output/'legacy-source'
+    repository = 'https://github.com/1amageek/swift-osdi.git'
+    git_environment = dict(environment)
+    for key in list(git_environment):
+        if key == 'GIT_CONFIG_COUNT' or key.startswith(('GIT_CONFIG_KEY_', 'GIT_CONFIG_VALUE_')):
+            del git_environment[key]
+    git_environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_TERMINAL_PROMPT='0')
+    execute(['/usr/bin/git', 'clone', '--depth', '1', '--single-branch', '--branch', '1.1.0', repository, source],
+            output, 'legacy-source-fetch', 120, git_environment, commands)
+    revision = execute(['/usr/bin/git', '-C', source, 'rev-parse', 'HEAD'], output,
+                       'legacy-source-revision', 30, git_environment, commands).strip()
+    if revision != LEGACY_REVISION:
+        raise RuntimeError('Public old-worker source tag differs from its qualified commit')
+    execute([sys.executable, source/'Tools/OSDIPrecisionVerification/build_worker.py',
+             '--output-dir', output/'legacy-numeric', '--cc', clang, '--sdk', numeric['sdk']],
+            output, 'legacy-numeric-build', 120, environment, commands)
+    old = json.loads((output/'legacy-numeric/receipt.json').read_text())
+    def numeric_pins(receipt):
+        return {entry['name']: (entry['header']['sha256'], entry['archive']['sha256'])
+                for entry in receipt['buildSelection']['numeric']}
+    if (numeric_pins(old) != numeric_pins(numeric) or
+            old['compiler']['sha256'] != numeric['compiler']['sha256'] or
+            old['buildSelection']['sdkSettings']['sha256'] != numeric['buildSelection']['sdkSettings']['sha256']):
+        raise RuntimeError('Old-worker compiler/SDK/numeric inputs differ from the current worker')
+    return {'mode': 'public-immutable-source', 'repository': repository, 'tag': '1.1.0', 'revision': revision,
+            'worker': old['worker'], 'numericProfileSHA256': old['numericProfile']['sha256'],
+            'buildReceipt': {'path': str(output/'legacy-numeric/receipt.json'),
+                             'sha256': digest(output/'legacy-numeric/receipt.json')}}
+
+
+def prepare_precision_inputs(output, clang, sanitized, environment, commands, numeric, legacy_worker=None):
     tools = ROOT / 'Tools/OSDIPrecisionVerification'
     generators = [('verify_range.py', ['--emit-fixtures', output/'ranges'], 'OSDI_RANGE_FIXTURES', 'ranges'),
                   ('chart_fixtures.py', [output/'charts'], 'OSDI_CHART_FIXTURES', 'charts'),
                   ('frontier_fixtures.py', [output/'covers'], 'OSDI_DECISION_COVER_FIXTURES', 'covers'),
-                  ('constitutive_fixtures.py', [output/'identities', '--public-probes'], 'OSDI_CONSTITUTIVE_FIXTURES', 'identities')]
+                  ('constitutive_fixtures.py', [output/'identities', '--public-probes'], 'OSDI_CONSTITUTIVE_FIXTURES', 'identities'),
+                  ('simulation_real_fixtures.py', [output/'simulation-real'], 'OSDI_SIMULATION_REAL_FIXTURES', 'simulation-real')]
     for name, arguments, _, label in generators:
         execute([sys.executable, tools/name, *arguments], output, label+'-inputs', 30, environment, commands)
     command = [sys.executable, tools/'verify_constitutive_identities.py', '--output-dir', output/'identity-proof',
                '--coefficient-bits', 4096, '--arena-bytes', 536870912, '--workspace-bytes', 134217728,
                '--host-memory-bytes', 1073741824, '--maximum-atoms', 4096, '--maximum-nodes', 1000000,
-               '--work', 1000000000, '--steps', 1000000, '--case-timeout', 120, '--cc', clang]
+               '--work', 1000000000, '--steps', 1000000, '--case-timeout', 120, '--cc', clang, '--sdk', numeric['sdk']]
     if sanitized:command.append('--sanitize')
     execute(command, output, 'identity-source-check', 180, environment, commands)
     sys.path.insert(0,str(tools))
@@ -95,13 +172,36 @@ def prepare_precision_inputs(output, clang, sanitized, environment, commands):
         from constitutive_fixtures import check_public_probe
         parity=check_public_probe(output/'identities',output/'identity-proof/fixtures')
     finally:sys.path.pop(0)
+    library = output/'simulation-real/cold.dylib'
+    execute([clang, '-isysroot', numeric['sdk'], '-dynamiclib', '-std=c11', '-O2',
+             '-I', ROOT/'Sources/COSDI/ABI', '-I', ROOT/'Sources/COSDI/include', '-I', output/'simulation-real',
+             ROOT/'Tools/OSDIConsumerVerification/precision_fixture.c', '-o', library],
+            output, 'simulation-real-library', 30, environment, commands)
+    raw_library = output/'simulation-real/raw-given.dylib'
+    execute([clang, '-isysroot', numeric['sdk'], '-dynamiclib', '-std=c11', '-O2',
+             '-I', ROOT/'Sources/COSDI/ABI', '-I', ROOT/'Sources/COSDI/include', '-I', output/'simulation-real',
+             tools/'RawGivenSnapshotFixture.c', '-o', raw_library],
+            output, 'raw-given-library', 30, environment, commands)
+    old = prepare_legacy_worker(output, clang, numeric, legacy_worker, environment, commands)
     manifests={}
+    selected = {}
     for _, _, selector, directory in generators:
-        environment[selector]=str(output/directory)
+        selected[selector]=str(output/directory)
         path=output/directory/'manifest.json';manifests[selector]={'path':str(path),'sha256':digest(path)}
+    selected.update(OSDI_SIMULATION_REAL_QUALIFICATION='1', OSDI_SIMULATION_REAL_LIBRARY=str(library),
+        OSDI_RAW_GIVEN_LIBRARY=str(raw_library),
+        OSDI_SIMULATION_REAL_WORKER=numeric['worker']['path'],
+        OSDI_SIMULATION_REAL_NUMERIC_PROFILE_SHA256=numeric['numericProfile']['sha256'],
+        OSDI_PRECISION_OLD_WORKER=old['worker']['path'],
+        OSDI_PRECISION_OLD_NUMERIC_PROFILE_SHA256=old['numericProfileSHA256'])
+    environment.update(selected)
     proof=output/'identity-proof/receipt.json'
     return {'fixtureManifests':manifests,'publicProbeExactCParity':parity,
-            'independentSourceCheck':{'path':str(proof),'sha256':digest(proof)},'actualModelsSelected':False}
+            'independentSourceCheck':{'path':str(proof),'sha256':digest(proof)},'actualModelsSelected':False,
+            'typedSimulationReal': {'required': True, 'library': {'path': str(library), 'sha256': digest(library)},
+                'rawGivenLibrary': {'path': str(raw_library), 'sha256': digest(raw_library)},
+                'worker': numeric['worker'], 'numericProfile': numeric['numericProfile'], 'legacyWorker': old}}
+
 
 
 def main():
@@ -135,8 +235,8 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     environment = dict(os.environ)
     environment['OSDI_TEST_CLANG'] = str(clang)
-    for key in QUALIFICATION_SELECTORS + GENERATED_FIXTURES:
-        environment.pop(key, None)
+    legacy_worker = {key: environment[key] for key in TYPED_WORKER_BINDINGS[2:] if environment.get(key)} if args.precision else None
+    clear_qualification_inputs(environment)
     if args.sanitize:
         environment['ASAN_OPTIONS'] = 'halt_on_error=1:abort_on_error=1:detect_leaks=0'
         environment['UBSAN_OPTIONS'] = 'halt_on_error=1:abort_on_error=1'
@@ -157,6 +257,7 @@ def main():
                             'sha256': digest(resolved_swift), 'version': version}
         receipt['clang'] = {'path': str(clang), 'resolvedPath': str(resolved_clang),
                             'sha256': digest(resolved_clang)}
+        receipt['sdk'] = select_sdk(output, environment, commands)
         check_qualification_python_profile(output, environment, commands)
         execute([sys.executable, ROOT / 'Tools/OSDIStandaloneVerification/prepare.py',
                  '--output', output / 'fixtures', '--clang', clang], output, 'prepare', 120,
@@ -164,17 +265,14 @@ def main():
         environment['OSDI_STANDALONE_FIXTURES'] = str(output / 'fixtures/manifest.json')
         if args.precision:
             command = [sys.executable, ROOT / 'Tools/OSDIPrecisionVerification/build_worker.py',
-                       '--output-dir', output / 'numeric', '--cc', clang]
+                       '--output-dir', output / 'numeric', '--cc', clang, '--sdk', receipt['sdk']['path']]
             if args.sanitize:
                 command.append('--sanitize')
             execute(command, output, 'numeric-build', 120, environment, commands)
             numeric = json.loads((output / 'numeric/receipt.json').read_text())
-            receipt['precisionInputs']=prepare_precision_inputs(output,clang,args.sanitize,environment,commands)
+            receipt['precisionInputs']=prepare_precision_inputs(output,clang,args.sanitize,environment,commands,numeric,legacy_worker)
             environment['OSDI_PRECISION_QUALIFICATION'] = '1'
-            # Model receipts bind their supplied worker/profile; preserve those exact inputs.
-            if not args.model_qualification:
-                environment['OSDI_PRECISION_WORKER'] = numeric['worker']['path']
-                environment['OSDI_PRECISION_NUMERIC_PROFILE_SHA256'] = numeric['numericProfile']['sha256']
+            bind_precision_worker(environment, numeric, args.legacy_soi_qualification)
         if args.model_qualification:
             required = MODEL_INPUTS + (LEGACY_INPUTS if args.legacy_soi_qualification else ())
             missing = [key for key in required if not environment.get(key)]
@@ -188,6 +286,8 @@ def main():
         if args.sanitize:
             command += ['--sanitize', args.sanitize]
         execute(command, output, 'swift-test', args.timeout, environment, commands)
+        if digest(Path(receipt['sdk']['settings']['path'])) != receipt['sdk']['settings']['sha256']:
+            raise RuntimeError('Selected SDK settings changed during qualification')
         receipt['status'] = 'passed'
     except Exception as error:
         receipt['error'] = str(error)

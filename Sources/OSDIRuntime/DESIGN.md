@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Parent: [package](../../DESIGN.md). Children: [LibraryLoading](LibraryLoading/DESIGN.md),
-[StableStorage](StableStorage/DESIGN.md), [PointEvaluation](PointEvaluation/DESIGN.md), [Precision Execution](PrecisionExecution/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md), [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md). Host-only artifact/library and storage ownership.
+[StableStorage](StableStorage/DESIGN.md), [PointEvaluation](PointEvaluation/DESIGN.md), [Precision Execution](PrecisionExecution/DESIGN.md), [SnapshotConstruction](SnapshotConstruction/DESIGN.md), [DecisionCover](DecisionCover/DESIGN.md), [ConstitutiveIdentities](ConstitutiveIdentities/DESIGN.md). Host-only artifact/library and storage ownership.
 
 ## Responsibilities and Boundaries
 
@@ -19,6 +19,7 @@ or solve circuit analyses.
 | [Contracts](../OSDIContracts/DESIGN.md) | depends on | Pointer-free values | Shared portable vocabulary | No file/ABI ownership |
 | [COSDI](../COSDI/DESIGN.md) | depends on | C admission and zeroed allocation | Native boundary | Trusted native code, not a sandbox |
 | [Foundation](../../../CircuiteFoundation/DESIGN.md) | depends on | ArtifactAccessing/reference/termination | Acquisition identity | Close failures remain failures |
+| [SnapshotConstruction](SnapshotConstruction/DESIGN.md) | child | Caller-controlled immutable precision snapshot | Cumulative admission and retained byte ownership | ASCII names, exact UTF-8 values and managed-payload budget; not a process RSS bound |
 
 ## Architecture
 

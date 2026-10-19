@@ -94,6 +94,16 @@ zero, so sampled derivative inference cannot satisfy the metadata contract.
 `OSDIPrecisionTests` owns scoped shared-slab views, exact worker acquisition,
 helper failure/cancellation and close behavior. `ProtocolFixtureCache`
 builds the tracked C transport oracle; it does not qualify arithmetic.
+`failedWorkersPublishNoViewAndRetainNoChild` separates startup from the targeted
+IPC/evaluation failure. Transport mode 1 exits with the arena code before ACK;
+mode 2 deliberately never ACKs and retains its exact 200-ms startup timeout.
+The remaining modes ACK before their exit, protocol, evaluation-timeout or
+malformed-output behavior. They and mode 1 use the existing success fixture's
+two-second startup allowance so unrelated launch latency does not replace the
+intended failure. Every evaluation still has the original 100-ms deadline.
+Startup refusal remains valid only for modes 1/2 with their original expected
+resource/timeout issue types. Mode, issue code, exit and signal diagnostics must
+identify a failed premise; no successful view or retained child is permitted.
 `OSDI_PRECISION_MODEL`, `OSDI_PRECISION_WORKER` and
 `OSDI_PRECISION_SEMANTIC_SHA256` and `OSDI_PRECISION_NUMERIC_PROFILE_SHA256` bind the actual compiler compound-default fixture
 and statically linked numeric helper. Tests discriminate binary64-folded defaults,

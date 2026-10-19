@@ -60,6 +60,12 @@ int cs_constitutive_observe(void *context, cs_precision_program *p, uint32_t eve
       return node(w,CS_ID_SUB,index,a,b,0,&w->registers[q->destination]);
     }
     if(q->kind==11){w->registers[q->destination]=w->roots[q->index];return 0;}
+    if(q->kind==CS_OSDI_PRECISION_SIM_REAL_VALUE){
+      uint32_t fact=p->input_simulation[index];
+      uint64_t bits=fact!=CS_ID_NONE && p->simulation[fact].given?p->simulation[fact].bits:0;
+      if(((bits>>52)&2047)==2047)return CS_IDENTITY_INVALID;
+      return node(w,CS_ID_LITERAL,index,0,0,bits,&w->registers[q->destination]);
+    }
     if(p->registers[q->destination].type==1 && q->kind==1){
       uint32_t fact=p->fact_index[q->index];
       const CSOsdiPrecisionParameter *parameter=&p->parameters[q->index];

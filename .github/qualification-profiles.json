@@ -1,6 +1,6 @@
 {
   "schema": "osdi.release-qualification-index.v1",
-  "releaseVersion": "1.1.0",
+  "releaseVersion": "1.2.0",
   "intendedSourceReleaseDate": "2026-10-19",
   "status": "scope-index-not-a-publication-or-success-receipt",
   "host": {
@@ -21,7 +21,12 @@
       "id": "deterministic-precision",
       "entrypoint": "Tools/OSDIStandaloneVerification/run.py --precision",
       "externalModels": false,
-      "proofScope": "tracked range/chart/complete-source-cover/conditional-identity fixtures, independent C checker and exact probe-byte parity with actual numeric worker"
+      "proofScope": "tracked range/chart/complete-source-cover/conditional-identity fixtures, independent C checker and exact probe-byte parity with actual numeric worker; mandatory typed simulation-REAL and raw own-scope GIVEN three-stage/five-operation, cold snapshot and actual old-worker compatibility fixtures",
+      "requiredTypedSimulationRealInputs": [
+        "generated program/setup manifest, analytic simulation-REAL and raw-scoped-given cold snapshot libraries",
+        "fresh current numeric worker and exact numeric profile independent of optional model bindings",
+        "qualified old worker/profile pair, or canonical public1.1.0 source at2c9ee1f620406e7a479ac10a4fddfaa17bc23d6d built with the same compiler/SDK/numeric libraries"
+      ]
     },
     {
       "id": "external-consumer",

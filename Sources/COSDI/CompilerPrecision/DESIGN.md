@@ -52,6 +52,61 @@ simulation facts have explicit presence and source-level fallback control flow. 
 evaluation then reads their exact interval results. Parameter inputs retain scope,
 value and given facts; model-level instance defaults precede instance overrides.
 
+### Additive Typed Simulation-REAL Bindings
+
+The 1.2.0 candidate adds input kinds 13 (`SIM_REAL_VALUE`, REAL destination) and
+14 (`SIM_REAL_GIVEN`, BOOL destination) to the existing closed program grammar.
+Both use the exact UTF-8 name offset/length and search only explicitly given REAL
+simulation facts. Missing or same-name non-REAL facts yield false presence and
+neutral value zero; explicit REAL zero yields true presence and zero. The source
+SSA alone selects a fallback or demands its original fatal condition. No SDK
+default parameter, numeric conversion or hidden model-specific value is added.
+This matches an ordinary ABI callback that searches only `names`/`vals`, never
+`names_str`/`vals_str`. Matching is case-sensitive exact bytes. Ordinary preparation
+continues to reject duplicate exact names across types.
+
+Kinds 8 (strict same-name typed value) and 12 (type-independent given) keep their
+existing meaning. Program ABI 1, export/header/record/setup layouts, flags and all
+protocol 1--5 wire layouts remain unchanged. An older worker's closed kind<=12
+admission rejects a new binding with INVALID_PROGRAM before any output publishes;
+there is no fallback to an old binding. Programs that do not use the new kinds
+retain their old bytes and semantics. The producing compiler/source profile must
+use a new semantic-profile digest and new program/model artifact identity when
+adopting this grammar; an old digest cannot be reinterpreted as the new profile.
+
+The same candidate adds kind 15 (`RAW_PARAMETER_GIVEN`, BOOL destination,
+parameter-table index, aux zero). It reads only that exact scoped record's
+immutable `given` bit. Model-stage use requires a model-scope record, as for
+existing parameter inputs. Missing and non-given facts are false; explicit zero
+or an assignment equal to a model value is still true. This query neither reads
+resolved values nor consults the model peer. Existing kind 2 retains its
+instance-or-model presence semantics. Both facts are necessary when original
+source guards or callbacks distinguish an explicit instance assignment from a
+model-scope fallback. The source snapshot already retains separate scoped facts;
+no setup record or wire layout changes. The new producer profile binds use of
+kind 15, and an older worker refuses it before publishing any result. The source
+checker treats the BOOL as guard authority replayed from those facts, never as a
+REAL coefficient obtained from an endpoint.
+
+Setup capture retains original names, types, presence and exact value bits without
+coercing or removing STRING facts. The independent constitutive source checker
+uses exact immutable setup REAL bits (or the defined neutral zero) for kind 13
+literal coefficients; it never imports MPFR endpoints or native resolved caches.
+New bindings run in all three source stages through the same VM and existing
+work/storage/cancellation/cleanup owners. Qualification must exercise the real
+point/range/chart/cover/identity worker paths, legacy refusal, source fallback
+versus REAL-zero fatal behavior and cold immutable snapshot fidelity.
+
+The owned regressions are
+[OSDIPrecisionSimulationRealTests](../../../Tests/OSDIEvaluationTests/OSDIPrecisionSimulationRealTests.swift)
+and its bounded [fixture generator](../../../Tools/OSDIPrecisionVerification/simulation_real_fixtures.py).
+They require explicitly selected new/old real workers and their matching numeric
+profile digests. The snapshot library uses the existing analytic consumer fixture;
+it tests cold byte/lifetime preservation, not official-model physics. Separate
+producer receipts retain the original STRING/missing fallback and REAL-zero fatal
+evidence. Source release qualification must not replace those receipts with the
+analytic fixture.
+
 Raw node indices identify the ordinary descriptor coordinates. Input voltage or
 current differences use explicit raw positive/negative endpoints; UINT32_MAX is
 ground. The runtime supplies the admitted raw-to-active mapping. The shared precision compiler path applies the upstream operating-point value

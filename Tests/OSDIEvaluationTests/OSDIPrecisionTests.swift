@@ -34,7 +34,7 @@ struct OSDIPrecisionTests {
         let artifact = try EvaluationArtifact(try await ProtocolFixtureCache.shared.fixtures().transportWorker.path)
         let program = try transportProgram(mode: 0, reference: artifact.intent.expectedReference)
         // This success fixture tests borrowed storage and close, not scheduler
-        // latency. Keep short failure-fixture deadlines at the policy defaults.
+        // latency. Failure fixtures below isolate startup from evaluation deadlines.
         var session = try await OSDINativePrecisionSessionPreparer().prepare(program: program,
             worker: artifact.intent, source: artifact.source, numericProfile: program.programDigest,
             options: policy(startup: 2_000_000_000, evaluation: 2_000_000_000))
@@ -65,9 +65,11 @@ struct OSDIPrecisionTests {
         for mode: UInt8 in [1,2,3,4,6,7,8,9,10] {
             let artifact = try EvaluationArtifact(try await ProtocolFixtureCache.shared.fixtures().transportWorker.path)
             let program = try transportProgram(mode: mode, reference: artifact.intent.expectedReference)
+            let startup: UInt64 = mode == 2 ? 200_000_000 : 2_000_000_000
             do {
                 var session = try await OSDINativePrecisionSessionPreparer().prepare(program: program,
-                    worker: artifact.intent, source: artifact.source, numericProfile: program.programDigest, options: policy())
+                    worker: artifact.intent, source: artifact.source, numericProfile: program.programDigest,
+                    options: policy(startup: startup))
                 if mode == 3 { try await Task.sleep(for: .milliseconds(100)) }
                 let high = [1.0], low = [0.0]
                 let context = try OSDIPrecisionContext(mode: .transient, timeHigh: 1, timeLow: 0)
@@ -78,13 +80,15 @@ struct OSDIPrecisionTests {
                         candidateContext: context, referenceContext: context, precisionBits: 128) { _ in called = true }
                     Issue.record("Failure fixture published success: \(mode)")
                 } catch OSDIError.precision(let issue) {
-                    #expect(issue.code != .cleanupFailure)
+                    let details: Comment = "mode=\(mode), code=\(issue.code), exit=\(String(describing: issue.exitCode)), signal=\(String(describing: issue.signal))"
+                    #expect(issue.code != .cleanupFailure, details)
                 }
-                #expect(!called)
+                #expect(!called, "mode=\(mode): failure must not publish a view")
                 try session.close()
             } catch OSDIError.precision(let issue) {
-                #expect(mode == 1 || mode == 2)
-                #expect(issue.code == (mode == 1 ? .resourceLimit : .timeout))
+                let details: Comment = "mode=\(mode), code=\(issue.code), exit=\(String(describing: issue.exitCode)), signal=\(String(describing: issue.signal))"
+                #expect(mode == 1 || mode == 2, details)
+                #expect(issue.code == (mode == 1 ? .resourceLimit : .timeout), details)
             }
             try await artifact.source.close().wait()
         }

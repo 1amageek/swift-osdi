@@ -15,6 +15,35 @@ Swift tests. Optional `--precision` builds the real generic GMP/MPFR worker and
 tracked range, chart, complete-cover and conditional-identity programs. Optional `--model-qualification` selects existing actual
 model tests and requires their explicit external inputs.
 
+Precision selection also owns the typed simulation-REAL fixture suite. It emits
+the tracked three-stage programs and setup facts, compiles the existing analytic
+cold-snapshot library and the scoped-given analytic fixture, and supplies the freshly built numeric worker/profile via
+separate `OSDI_SIMULATION_REAL_WORKER` and
+`OSDI_SIMULATION_REAL_NUMERIC_PROFILE_SHA256` selectors. The generic precision
+worker/profile also becomes the global pair during ordinary model qualification.
+Only explicit legacy-SOI qualification preserves the caller's global pair for
+its historically bound receipt; the current SOI101 test reads its own pinned
+worker/profile from its qualification input. Typed fixtures always use their
+separate fresh pair.
+Only completed fixture preparation and independent probe parity publish the
+suite's required flag and inputs; ordinary selection clears inherited typed
+selectors and does not generate these fixtures.
+
+The old-worker compatibility test requires an actual qualified 1.1.0 worker.
+Explicit `OSDI_PRECISION_OLD_WORKER` and
+`OSDI_PRECISION_OLD_NUMERIC_PROFILE_SHA256` inputs retain the existing offline
+artifact interface; both must be supplied together, and the receipt records the
+worker's actual content hash and caller-declared numeric profile. Without that
+pair, precision preparation fetches the canonical public 1.1.0 source into fresh
+runner output under isolated Git configuration, verifies commit
+`2c9ee1f620406e7a479ac10a4fddfaa17bc23d6d`, and invokes its existing worker builder
+with the selected compiler/SDK/numeric libraries. The two builds' numeric
+header/archive identities must match. Fetch, build and test deadlines apply.
+The public-source old worker remains uninstrumented and is used only for the
+compatibility probe; sanitizer coverage belongs to the current worker/checker.
+There is no fabricated old interpreter, old/new profile substitution or skipped
+compatibility test. This is a verification dependency, not a runtime backend.
+
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
@@ -41,6 +70,15 @@ installed GMP/MPFR headers and libraries, even when numeric tests are unselected
 The runner installs no dependencies. Swift version must report 6.4.0 release, or
 report 6.4 from a resolved `swift-6.4.0-RELEASE` toolchain path; development snapshots
 and other patch versions fail admission.
+Each invocation selects one macOS SDK: an explicit valid `SDKROOT`, otherwise the
+bounded `xcrun --sdk macosx --show-sdk-path` result. It records the resolved path
+and SDK settings hash, sets that invocation's child `SDKROOT`, and supplies the
+same path to numeric worker/checker builders. Invalid explicit selections refuse
+without fallback; settings must remain unchanged through execution. This local
+environment does not change system configuration. In particular, external
+OpenVAF linking under a Swift-toolchain PATH needs this explicit selection;
+compiler exit zero without an emitted model is not fixture success. Preserve the
+original linker diagnostics and require successful downstream artifact admission.
 Bare `swift test` prepares C fixtures once per cache. Runner output must be fresh;
 all compiler/test processes have deadlines, process-group cleanup and retained
 command/output records. Nonzero exit and timeout fail the runner. Qualification
@@ -52,6 +90,7 @@ path so unrelated shell state cannot select external qualification.
 |---|---|---|
 | Default | C metadata, protocol and transport API behavior | C compiler |
 | `OSDI_PRECISION_QUALIFICATION=1` / `--precision` | Generic range/chart/cover/conditional-identity APIs | Actual GMP/MPFR worker, numeric profile and all generated fixture directories |
+| `OSDI_SIMULATION_REAL_QUALIFICATION=1` / `--precision` | Typed-REAL/raw-scoped-given point/range/chart/cover/identity, cold snapshots and actual old-worker refusal | Fresh typed fixtures/library, separately bound current worker/profile and qualified old worker/profile |
 | `OSDI_MODEL_QUALIFICATION=1` / `--model-qualification` | Generated VA, current device families, compound precision and SOI 101 precision | Exact compiler/model/receipt environment inputs |
 | `OSDI_LEGACY_SOI_QUALIFICATION=1` / `--legacy-soi-qualification` | Original legacy four-family precision receipt regression | Model selector plus original four-family reference, independent receipt and requests |
 
@@ -77,7 +116,7 @@ profile. Bare tests and the runner retain actor isolation for both cache states;
 no Embedded storage or conditional synchronization is introduced. A changed
 manifest requires cache decoder changes; fixture C behavior remains the authority.
 
-## Stable 1.1.0 Source-Fact Lane Composition
+## Source-Fact and 1.2.0 Typed-REAL Lane Composition
 
 Precision selection generates range, chart, frontier and constitutive fixtures in
 fresh runner scratch, sets every enabled suite's explicit fixture directory, and
@@ -92,7 +131,9 @@ workspace-bound model captures. Those captures remain separate local release
 evidence, with their exact source/setup/box/worker receipts.
 
 Small Python composition tests own generator selection, environment isolation and
-byte/semantic parity. The three existing CI lanes remain ordinary Debug,
+byte/semantic parity, typed fixture/library selection and old-worker input
+admission. Their mocked dispatch tests do not replace the real native lanes.
+The three existing CI lanes remain ordinary Debug,
 precision Release, and precision Debug ASan with worker/C ASan+UBSan. Selecting a
 lane never disables a required new suite to make it pass. These finite generic
 facts establish no circuit rank, roots, forward flow or all-history guarantee.
