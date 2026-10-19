@@ -74,11 +74,26 @@ requirement; [Package.resolved](Package.resolved) binds it to commit
 published version tag and the resolved commit. No sibling workspace checkout,
 SwiftPM mirror or local override is required; see [RELEASING.md](RELEASING.md).
 
-The source-release target is **1.1.0**; publication is established by its verified
+The source-release target is **1.2.0**; publication is established by its verified
 remote tag and release. It retains the exact stable CircuiteFoundation dependency
 `26.1018.0`. Version 1.0.1 corrected the superseded 1.0.0 revision-only dependency;
-1.1.0 adds finite source guard/chart/cover and conditional identity contracts.
-Release admission checks downstream `exact: "1.1.0"` resolution.
+1.1.0 added finite source guard/chart/cover and conditional identity contracts.
+1.2.0 adds typed simulation-REAL and own-scope Given inputs, and caller-controlled
+snapshot construction. Release admission checks downstream `exact: "1.2.0"`
+resolution.
+
+For cumulatively bounded snapshot construction, implement
+`OSDIPrecisionSnapshotControlling` and call the public
+`OSDIPrecisionSessionPreparing.snapshot(..., control:)` requirement. The caller
+admits work and managed payload before use; the returned program and sessions
+share receipts until their last owner is released. This profile requires ASCII
+parameter, alias and simulation names and preserves exact UTF-8 string values.
+`programByteCount` and `setupByteCount` inspect sizes without copying; extracting
+`programBytes` or `setupBytes` creates caller-owned arrays requiring separate
+admission. See the [contract](Sources/OSDIRuntime/SnapshotConstruction/DESIGN.md)
+and [public consumer](Tools/OSDIConsumerVerification/PrecisionConsumerProbe.swift)
+for the actual protocol, failure and lifetime paths. This managed-payload contract
+does not bound allocator overhead or process RSS.
 
 Python 3 and Apple Clang are required by the tracked verification tools. Ordinary
 runtime products do not link GMP or MPFR. Building all package products, or the
@@ -157,7 +172,7 @@ The [external consumer tool](Tools/OSDIConsumerVerification/DESIGN.md) performs 
 fresh source/dependency resolution with explicit public version and commit
 bindings; its
 `--help` documents the exact invocation. It requires no experimental Swift flags
-in the consuming package. Select `--precision` for the required 1.1.0 release/CI
+in the consuming package. Select `--precision` for the required 1.2.0 release/CI
 public source-fact probe, including an actual optional precision export, borrowed
 conditional identities, wrong-operation/limit refusals and explicit cleanup.
 Ordinary mode remains available for lightweight point API/CLI checks. The source
@@ -355,7 +370,7 @@ OpenVAFSupport — Copyright (c) 2026, 1amageek — originates from
 notice and its visible attribution requirements. Upstream-derived compiler patch
 material remains subject to its upstream GPL terms as that notice specifies.
 
-Version 1.1.0 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
+Version 1.2.0 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
 model library or GMP/MPFR archive is included as a release asset. Local builds
 remain supported; binary redistribution requires reviewing the actual linked
 licenses and satisfying their corresponding-source/relinking obligations.
