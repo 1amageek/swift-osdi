@@ -8,6 +8,7 @@ from pathlib import Path
 import platform
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -206,7 +207,7 @@ def prepare_precision_inputs(output, clang, sanitized, environment, commands, nu
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--swift', required=True, type=Path)
+    parser.add_argument('--swift', default=Path('swift'), type=Path, help='Swift executable (default: PATH)')
     parser.add_argument('--clang', default='/usr/bin/clang', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--configuration', choices=('debug', 'release'), default='debug')
@@ -226,7 +227,10 @@ def main():
     if int(platform.mac_ver()[0].split('.')[0]) < 26:
         parser.error('Standalone native verification requires macOS 26 or newer')
     # Driver dispatch depends on argv[0]; retain the selected symlink name.
-    swift, clang = args.swift.absolute(), args.clang.absolute()
+    selected_swift = shutil.which(str(args.swift))
+    if selected_swift is None:
+        parser.error('Swift executable not found: ' + str(args.swift))
+    swift, clang = Path(selected_swift).absolute(), args.clang.absolute()
     resolved_swift, resolved_clang = swift.resolve(strict=True), clang.resolve(strict=True)
     for tool, resolved in ((swift, resolved_swift), (clang, resolved_clang)):
         if not resolved.is_file() or not os.access(tool, os.X_OK):
@@ -250,7 +254,7 @@ def main():
         version = execute([swift, '--version'], output, 'swift-version', 30, environment, commands)
         exact_version = re.search(r'\bSwift version 6\.4\.0(?:\s|\()', version) is not None
         tagged_release = (re.search(r'\bSwift version 6\.4(?:\s|\()', version) is not None
-                          and any('swift-6.4.0-RELEASE' in str(path) for path in (swift, resolved_swift)))
+                          and 'swift-6.4-RELEASE' in version)
         if not (exact_version or tagged_release) or 'DEVELOPMENT' in version:
             raise RuntimeError('Select the fixed Swift 6.4.0 release toolchain')
         receipt['swift'] = {'path': str(swift), 'resolvedPath': str(resolved_swift),

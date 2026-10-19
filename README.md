@@ -57,15 +57,8 @@ deadline for unbounded native code.
 
 ## Build from a standalone checkout
 
-Install the exact [Swift 6.4.0 release toolchain](https://www.swift.org/install/macos/)
-and an Xcode/macOS SDK supporting macOS 26. Use the
-[official signed package installation instructions](https://www.swift.org/install/macos/package_installer/),
-then select its absolute executable:
-
-```sh
-SWIFT="$HOME/Library/Developer/Toolchains/swift-6.4.0-RELEASE.xctoolchain/usr/bin/swift"
-"$SWIFT" --version
-```
+Requires Swift 6.4.0 and an Xcode/macOS SDK supporting macOS 26.
+Use the default `swift` executable.
 
 The package requires CircuiteFoundation at exact stable version **26.1018.0**
 from its public Git URL. [Package.swift](Package.swift) owns that version
@@ -133,8 +126,8 @@ except BaseException:
 raise SystemExit(code)
 PYTIMEOUT
 }
-bounded 600 "$SWIFT" build --product osdi-inspect --jobs 2
-bounded 600 "$SWIFT" build --product osdi-evaluate --jobs 2
+bounded 600 swift build --product osdi-inspect --jobs 2
+bounded 600 swift build --product osdi-evaluate --jobs 2
 ```
 
 ## Verification lanes
@@ -147,10 +140,8 @@ process has a deadline, and each run uses a fresh output directory:
 
 ```sh
 python3 Tools/OSDIStandaloneVerification/run.py \
-  --swift "$SWIFT" --clang /usr/bin/clang \
   --output /absolute/path/to/new/ordinary-run --configuration debug --timeout-seconds 600
 python3 Tools/OSDIStandaloneVerification/run.py \
-  --swift "$SWIFT" --clang /usr/bin/clang \
   --output /absolute/path/to/new/precision-run --configuration release \
   --precision --timeout-seconds 600
 ```

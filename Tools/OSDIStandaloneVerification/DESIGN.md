@@ -67,9 +67,10 @@ explicit external model inputs -> selected model qualification -> original regre
 Default tests need no OpenVAF executable, model download or external model receipt.
 The existing SwiftPM worker product can cause a full `swift test` build to require
 installed GMP/MPFR headers and libraries, even when numeric tests are unselected.
-The runner installs no dependencies. Swift version must report 6.4.0 release, or
-report 6.4 from a resolved `swift-6.4.0-RELEASE` toolchain path; development snapshots
-and other patch versions fail admission.
+The runner installs no dependencies and uses `swift` from PATH by default.
+`--swift` optionally selects another executable. Admission checks the reported
+Swift 6.4.0 release version, including Apple's `6.4 (swift-6.4-RELEASE)` format;
+development snapshots and other patch versions fail admission.
 Each invocation selects one macOS SDK: an explicit valid `SDKROOT`, otherwise the
 bounded `xcrun --sdk macosx --show-sdk-path` result. It records the resolved path
 and SDK settings hash, sets that invocation's child `SDKROOT`, and supplies the
@@ -106,8 +107,7 @@ and detects removal of the guard that protects assertion-based evidence binding.
 
 ## Verification and Change Impact
 
-Root owns compile and behavioral execution. Run `run.py --swift <swift> --clang
-<clang> --output <fresh-directory>` for ordinary tests, adding `--precision` for
+Root owns compile and behavioral execution. Run `run.py --output <fresh-directory>` for ordinary tests, adding `--precision` for
 MPFR range evidence or `--model-qualification` for the supplied exact compiler/model
 receipts. `--timeout` bounds each test command (default 600 seconds). `--configuration
 debug|release`, `--jobs` and `--sanitize address` select the test build profile.

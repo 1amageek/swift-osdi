@@ -2,12 +2,15 @@
 import importlib.util
 import hashlib
 import json
+import shutil
+import subprocess
 from pathlib import Path
 import struct
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 TOOLS = HERE.parent/'OSDIPrecisionVerification'
@@ -23,12 +26,60 @@ def load(name, path):
 
 
 runner = load('standalone_runner', HERE/'run.py')
+consumer = load('public_consumer_runner', HERE.parent/'OSDIConsumerVerification/verify_consumer.py')
 typed_fixture = load('typed_simulation_real_fixture', TOOLS/'simulation_real_fixtures.py')
 consumer_fixture = load('public_precision_fixture', HERE.parent/'OSDIConsumerVerification/precision_fixture.py')
 source_checker = load('source_identity_checker', TOOLS/'verify_constitutive_identities.py')
 
 
 class CompositionTests(unittest.TestCase):
+    def test_standalone_uses_default_or_explicit_swift_without_path_name_requirement(self):
+        swift = Path(shutil.which('swift')).absolute()
+        version = subprocess.check_output([str(swift), '--version'], text=True, timeout=15)
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit), tempfile.TemporaryDirectory() as directory:
+                arguments = ['run.py', '--output', str(Path(directory)/'run')]
+                if explicit:
+                    arguments += ['--swift', str(swift)]
+                with patch.object(sys, 'argv', arguments), \
+                        patch.object(runner, 'execute', return_value=version) as execute, \
+                        patch.object(runner, 'select_sdk', side_effect=RuntimeError('tool admission passed')):
+                    with self.assertRaisesRegex(RuntimeError, 'tool admission passed'):
+                        runner.main()
+                self.assertEqual(execute.call_args.args[0], [swift, '--version'])
+
+    def test_consumer_default_swift_selection_and_explicit_override(self):
+        swift = Path(shutil.which('swift')).absolute()
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit), tempfile.TemporaryDirectory() as directory:
+                arguments = ['verify_consumer.py', '--source-url', 'https://example.invalid/source.git',
+                    '--source-revision', '0'*40, '--foundation-url', 'https://example.invalid/foundation.git',
+                    '--foundation-revision', '1'*40, '--scratch', str(Path(directory)/'consumer'),
+                    '--clang', '/usr/bin/clang']
+                if explicit:
+                    arguments += ['--swift', str(swift)]
+                with patch.object(sys, 'argv', arguments), \
+                        patch.object(consumer, 'verify', side_effect=RuntimeError('selected tools inspected')) as verify:
+                    with self.assertRaisesRegex(RuntimeError, 'selected tools inspected'):
+                        consumer.main()
+                self.assertEqual(verify.call_args.args[0].swift, swift)
+
+    def test_consumer_version_gate_uses_version_output_and_rejects_other_releases(self):
+        for version, accepted in (
+                ('Apple Swift version 6.4 (swift-6.4-RELEASE)', True),
+                ('Swift version 6.4.0 (swift-6.4.0-RELEASE)', True),
+                ('Swift version 6.4.1 (swift-6.4.1-RELEASE)', False),
+                ('Swift version 6.4 (DEVELOPMENT-SNAPSHOT)', False)):
+            with self.subTest(version=version):
+                execution = Mock()
+                execution.run.return_value = version
+                execution.checkout.side_effect = RuntimeError('version admission passed')
+                with self.assertRaisesRegex(RuntimeError,
+                        'version admission passed' if accepted else 'Swift 6.4.0 release'):
+                    consumer.verify(SimpleNamespace(swift=Path('/usr/bin/swift'),
+                        source_url='https://example.invalid/source.git', source_revision='0'*40), execution)
+                self.assertEqual(execution.checkout.call_count, 1 if accepted else 0)
+
     def test_source_checker_paths_use_exact_tracked_directory_case(self):
         root = Path('/synthetic/source')
         expected = ('ConstitutiveIdentityTests.c', 'DecisionCoverTests.c', 'constitutive_fixtures.py')

@@ -37,9 +37,9 @@ source URL/revision [+ exact source version] + Foundation URL/revision + new scr
 
 ## Contracts and Invariants
 
-Require macOS 26 or later arm64 and the fixed Swift 6.4.0 release. Accept an
-explicit 6.4.0 version or a 6.4 version from a `swift-6.4.0-RELEASE` toolchain path,
-matching the standalone runner; development toolchains are refused.
+Require macOS 26 or later arm64 and the Swift 6.4.0 release. Use `swift` from
+PATH unless `--swift` selects another executable. Check the reported version,
+including Apple's `6.4 (swift-6.4-RELEASE)` format; development toolchains are refused.
 Both revisions are full Git object identities. The runtime Foundation declaration,
 its tracked `Package.resolved` entry and the expected Foundation revision must
 agree. For an exact Foundation version, the resolved version and tag commit must
@@ -90,7 +90,7 @@ scratch logs rather than inherited terminal buffers.
 
 Run `verify_consumer.py --help` for inputs. Run against a committed release
 candidate (published URL or an explicitly supplied local Git URL/revision), with
-the expected Foundation commit and absolute Swift/clang paths. Add
+the expected Foundation commit and an absolute clang path. Add
 `--source-version` to exercise the stable-version graph; the receipt records
 source and Foundation versions alongside their exact commits. The ordinary CI
 consumer creates a local-only `0.0.0` tag at checkout HEAD and requests that exact

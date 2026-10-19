@@ -184,7 +184,7 @@ def verify(args, runner):
     swift_version = runner.run([args.swift, '--version'])
     exact_version = re.search(r'\bSwift version 6\.4\.0(?:\s|\()', swift_version) is not None
     tagged_release = (re.search(r'\bSwift version 6\.4(?:\s|\()', swift_version) is not None and
-                      'swift-6.4.0-RELEASE' in str(args.swift))
+                      'swift-6.4-RELEASE' in swift_version)
     require((exact_version or tagged_release) and 'DEVELOPMENT' not in swift_version and
             '-dev' not in swift_version, 'Select the fixed Swift 6.4.0 release toolchain')
     source = runner.checkout(args.source_url, args.source_revision, 'source')
@@ -360,7 +360,7 @@ def main():
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--source-version', help='Exact stable SDK version whose tag must match --source-revision')
     parser.add_argument('--scratch', type=Path, required=True, help='New absolute directory outside the workspace')
-    parser.add_argument('--swift', type=Path, required=True, help='Absolute Swift 6.4.0 release executable')
+    parser.add_argument('--swift', type=Path, default=Path('swift'), help='Swift executable (default: PATH)')
     parser.add_argument('--clang', type=Path, required=True, help='Absolute clang executable')
     parser.add_argument('--precision', action='store_true', help='Require the public protocol-5 source-fact probe')
     parser.add_argument('--pkg-config', help='Numeric discovery executable for --precision (default: caller PATH)')
@@ -375,6 +375,9 @@ def main():
     require(args.scratch.is_absolute() and not args.scratch.exists(), 'Scratch must be a new absolute directory')
     workspace = Path(__file__).resolve().parents[3]
     require(not args.scratch.resolve().is_relative_to(workspace), 'Scratch must be outside the source workspace')
+    selected_swift = shutil.which(str(args.swift))
+    require(selected_swift is not None, 'Swift executable not found: ' + str(args.swift))
+    args.swift = Path(selected_swift).absolute()
     for tool in (args.swift, args.clang):
         require(tool.is_absolute() and tool.is_file() and os.access(tool, os.X_OK), 'Supply absolute executable tools')
     if args.precision:
