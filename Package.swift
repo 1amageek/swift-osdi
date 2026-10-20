@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/1amageek/CircuiteFoundation.git",
-                 exact: "26.1018.0")
+                 exact: "26.1021.0")
     ],
     targets: [
         .systemLibrary(name: "CGMP", pkgConfig: "gmp", providers: [.brew(["gmp"])]),

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1 — 2026-10-21 — source compatibility release candidate
+
+- Align CircuiteFoundation with exact stable `26.1021.0`, resolving to
+  `4d03b5a561c82a756aaf93860f657733371538dc`.
+- Preserve all SDK API, worker/model source, numeric profiles, wire layouts and
+  failure/ownership semantics from immutable `1.2.0`.
+- Require fresh Native release gates and the independent public exact-version
+  consumer. Historical model evidence keeps its original scope.
+- Retain GPL-3.0-only, MIT dependency notices, upstream exceptions and source-only
+  distribution. Old tags remain unchanged; no new circuit/history/corner claim.
+
 ## 1.2.0 — 2026-10-19 — source release candidate
 
 - Add precision-program input kinds 13 (`SIM_REAL_VALUE`) and 14

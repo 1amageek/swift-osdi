@@ -1,6 +1,6 @@
 # Source release procedure
 
-The source release is prepared as **1.2.0**, dated **2026-10-19**. This
+The source release is prepared as **1.2.1**, dated **2026-10-21**. This
 document describes admission and manual publication; prepared version metadata
 does not mean a tag or release has been published.
 
@@ -26,7 +26,7 @@ exact source + stable dependency version/resolved commit + license approval
 | Excluded claims | Circuit solution, accepted history, complete operating cover, all-history/all-corner guarantees, physical/foundry qualification and new performance claims |
 | Distribution | Source tag/archive only; no compiled CLI, worker, model library or numeric archive assets |
 | SDK license | GPL-3.0-only under the root LICENSE |
-| Dependency license | MIT-licensed CircuiteFoundation at exact stable version `26.1018.0`, resolved to `5f132c58209123433e0e479e1ea61096e46061ba` |
+| Dependency license | MIT-licensed CircuiteFoundation at exact stable version `26.1021.0`, resolved to `4d03b5a561c82a756aaf93860f657733371538dc` |
 | Retained exceptions | OpenVAFCompilerFixture support materials retain OpenVAFSupport Attribution License 1.0; upstream-derived patch material retains upstream GPL terms |
 
 The [README](README.md) owns user-facing setup and API/CLI use. The
@@ -40,6 +40,19 @@ legacy capture. Preparation identity compares original UTF-8 bytes; Unicode
 canonical equivalence does not replace byte identity. Its resource accounting
 covers managed initialized payload and required simultaneous scratch, not allocator
 rounding/metadata, stack, cryptographic backend internals or hard process RSS.
+
+## 1.2.1 compatibility qualification boundary
+
+The authorized patch aligns the stable Foundation dependency and preserves all
+SDK production/test/fixture/model/numerical source bytes from immutable `1.2.0`.
+The prior model/source evidence below remains historical and conditional on its
+original bindings. Fresh Debug, precision Release, precision Address Sanitizer
+and public exact-version consumer gates remain required for 1.2.1; they do not
+silently replace skipped model gates with success. Foundation's additive cost
+planning APIs leave its previously consumed factory/hash APIs unchanged.
+ToolQualification independently selects the same Foundation version; the SDK has
+no ToolQualification dependency. Distribution and all retained license exceptions
+remain source-only and unchanged.
 
 ## 1.2.0 qualification boundary
 
@@ -82,7 +95,7 @@ model gates do not qualify those paths or permit fabricated model inputs.
 
 ## Admission checklist
 
-1. Confirm repository owner, branch, exact source commit and proposed `1.2.0` tag.
+1. Confirm repository owner, branch, exact source commit and proposed `1.2.1` tag.
    Inspect existing tags/remotes and pending changes. Never overwrite a tag or
    rewrite history as part of this procedure.
 2. Confirm the root GPL-3.0-only LICENSE and the MIT permission at the exact
@@ -94,8 +107,8 @@ model gates do not qualify those paths or permit fabricated model inputs.
    unresolved permission blocks publication. Preserve applicable notices and
    corresponding source in the source archive.
 3. Confirm the SDK manifest uses a public dependency URL and exact published
-   stable version `26.1018.0`. Verify that version tag and Package.resolved both
-   bind CircuiteFoundation to commit `5f132c58209123433e0e479e1ea61096e46061ba`.
+   stable version `26.1021.0`. Verify that version tag and Package.resolved both
+   bind CircuiteFoundation to commit `4d03b5a561c82a756aaf93860f657733371538dc`.
    Resolve the complete stable version graph from a fresh clone with isolated
    SwiftPM state, no workspace sibling, local mirror or `.package(path:)`
    dependency. Record every resolved version and commit. A revision-based direct
@@ -119,8 +132,8 @@ model gates do not qualify those paths or permit fabricated model inputs.
    conditional identity path, wrong-operation/limit refusals and cleanup. A CI `file://` source clone tests package consumption only;
    it does not prove the release revision is publicly fetchable. After the reviewed
    source tag exists, the separate public remote run must use
-   `--source-version 1.2.0` and the exact tagged `--source-revision`, producing the downstream
-   `exact: "1.2.0"` requirement. A revision-only candidate check does not replace it.
+   `--source-version 1.2.1` and the exact tagged `--source-revision`, producing the downstream
+   `exact: "1.2.1"` requirement. A revision-only candidate check does not replace it.
 6. For model claims, retain exact source/include/compiler/model/program/setup,
    numeric profile, worker and independent reference identities with successful
    receipts. Record selected and excluded families/cases explicitly. Missing,
@@ -146,7 +159,7 @@ model gates do not qualify those paths or permit fabricated model inputs.
    by the repository owner; obtain it only when absent. Tag creation/push and GitHub
    release publication are separate from routine commits.
 10. After authorization, publish the reviewed source tag. Verify its exact commit,
-    run the fresh public `exact: "1.2.0"` consumer, and inspect the tagged source
+    run the fresh public `exact: "1.2.1"` consumer, and inspect the tagged source
     archive before creating the source-only GitHub release. Then verify that the
     remote tag still resolves to the reviewed source commit and the published
     assets match the source-only contract. Record the actual publication result.

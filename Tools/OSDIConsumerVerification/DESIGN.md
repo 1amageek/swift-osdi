@@ -136,7 +136,9 @@ proves the public controlled construction/lifetime contract for this analytic
 fixture, not hard RSS, arbitrary caller allocations, official-model physics, or
 global circuit/root guarantees. A committed candidate can use the existing exact
 `--source-revision` path before a tag exists; post-tag qualification uses that same
-revision with `--source-version 1.2.0`. Historical 1.1 consumer receipts remain
+revision with `--source-version 1.2.1` for the dependency compatibility patch.
+The 1.2.1 patch preserves this consumer source and all SDK API/worker/model
+semantics; its stable Foundation requirement is the changed qualification boundary. Historical 1.1 consumer receipts remain
 evidence of their original templates and do not prove this additional API.
 
 The probe checks exact source/condition binding, repeated borrowed storage,

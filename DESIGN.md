@@ -166,17 +166,24 @@ or all-corner obligations below.
 
 ### Independent release dependency
 
-The release candidate requires exact stable CircuiteFoundation version
-`26.1018.0`, with Package.resolved binding its publicly retrievable commit
-`5f132c58209123433e0e479e1ea61096e46061ba`. It adds only an MIT license to
-`ae88104c556f5802819713ed741f5b2fffffc2d9`; all implementation, manifest and test
-bytes are unchanged. The prior separate SwiftPM consumer compiled, linked and
-exercised the public artifact, preparation, evaluation and cleanup contracts at
-`ae88104c556f5802819713ed741f5b2fffffc2d9` without client experimental flags or
-dependency mirrors. Publication additionally verifies the new exact graph. This replaces the historical unpublished S3 availability input below;
-the used public contracts are unchanged. The publisher approved GPL-3.0-only for this source distribution and MIT for
-CircuiteFoundation. Root LICENSE/NOTICE and separately identified upstream notices
-are authoritative; public Git availability alone does not imply permission.
+Version 1.2.1 requires exact stable CircuiteFoundation `26.1021.0`, with
+Package.resolved binding public commit
+`4d03b5a561c82a756aaf93860f657733371538dc`. Compared with immutable SDK
+`1.2.0`, this patch changes only dependency selection and release documentation;
+all SDK production, test, fixture, worker, model and numerical source bytes remain
+unchanged. Foundation adds opt-in scalar construction-cost APIs while preserving
+the original factory, canonical encoding, digest and artifact contracts consumed
+by the SDK. This patch does not use those new cost APIs to infer a stronger SDK
+resource guarantee. ToolQualification is a sibling consumer of Foundation, not an
+SDK dependency; CoreSpice separately selects both stable packages.
+
+The release procedure requires fresh Native Debug, precision Release and precision
+Address Sanitizer lanes plus an independent public `exact: "1.2.1"` consumer.
+Previously qualified model/source results retain their original exact-input scope;
+they are not newly executed 1.2.1 results. The publisher approved GPL-3.0-only for
+this source distribution and MIT for Foundation. Existing LICENSE/NOTICE and
+upstream exceptions remain authoritative. Old tags remain immutable, and this
+patch adds no numerical, circuit-root, history, corner or performance claim.
 
 ### Historical S3 dependency compatibility — development only
 
