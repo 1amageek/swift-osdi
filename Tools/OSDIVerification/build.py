@@ -59,6 +59,7 @@ def build(args):
     # A reused output would invalidate constructor/destructor ownership evidence.
     if (output/'manifest.json').exists():
         raise RuntimeError('Output already contains a fixture manifest; use a unique directory.')
+    (output/'.osdi-fixture-run').write_text('osdi.fixture-run.v1\n')
     sources = Path(__file__).resolve().parents[2]/'Tests'/'OSDIRuntimeTests'/'Fixtures'
     include = output/'include'
     include.mkdir(exist_ok=True)
@@ -69,23 +70,23 @@ def build(args):
     libraries = {}
     for kind, name in enumerate(FIXTURES):
         library = output/f'{name}.dylib'
-        marker = output/f'{name}.lifetime'
+        marker = output/f'fixture-{kind}.lifetime'
         if marker.exists():
             raise RuntimeError(f'Lifetime marker already exists: {marker}')
         run([clang, '-std=c11', '-dynamiclib', '-Wall', '-Wextra', '-Werror',
              '-fvisibility=default', '-I', include, f'-DFIXTURE_KIND={kind}',
-             '-DFIXTURE_MARKER='+json.dumps(str(marker)), sources/'metadata.c',
+             sources/'metadata.c',
              '-o', library], receipts)
         libraries[name] = {'path': str(library), 'sha256': digest(library),
                            'lifetimeMarker': str(marker), 'kind': kind,
                            'qualification': 'ABI metadata/lifetime only; callbacks refuse evaluation'}
     library = output/'wrong_architecture.dylib'
-    marker = output/'wrong_architecture.lifetime'
+    marker = output/f'fixture-{len(FIXTURES)}.lifetime'
     if marker.exists():
         raise RuntimeError(f'Lifetime marker already exists: {marker}')
     run([clang, '-arch', 'x86_64', '-std=c11', '-dynamiclib', '-Wall', '-Wextra',
          '-Werror', '-fvisibility=default', '-I', include, '-DFIXTURE_KIND=0',
-         '-DFIXTURE_MARKER='+json.dumps(str(marker)), sources/'metadata.c',
+         f'-DFIXTURE_LIFETIME_ID={len(FIXTURES)}', sources/'metadata.c',
          '-o', library], receipts)
     libraries['wrong_architecture'] = {
         'path': str(library), 'sha256': digest(library), 'lifetimeMarker': str(marker),

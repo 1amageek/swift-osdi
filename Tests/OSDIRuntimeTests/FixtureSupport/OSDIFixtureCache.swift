@@ -20,6 +20,10 @@ actor OSDIFixtureCache {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
+        if ProcessInfo.processInfo.environment["OSDI_MODEL_QUALIFICATION"] != "1" {
+            return try await OSDINativeFixturePreparation.prepare(root: root)
+        }
+        // Explicit model qualification retains its independent tracked builder.
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent("swift-osdi-fixtures-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)

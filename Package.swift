@@ -12,6 +12,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/1amageek/CircuiteFoundation.git",
+                 exact: "26.1018.0"),
+        .package(url: "https://github.com/1amageek/SignoffToolSupport.git",
                  exact: "26.1018.0")
     ],
     targets: [
@@ -40,14 +42,18 @@ let package = Package(
             .product(name: "CircuiteFoundationFileSystem", package: "CircuiteFoundation")],
                 exclude: ["DESIGN.md", "Inspection/DESIGN.md", "PointEvaluation/DESIGN.md", "PrecisionEvaluation/DESIGN.md"],
                 swiftSettings: [.enableExperimentalFeature("Lifetimes"), .enableExperimentalFeature("LifetimeDependence")]),
-        .testTarget(name: "OSDIEvaluationTests", dependencies: ["OSDIRuntime", "OSDIContracts", "COSDI",
+        .target(name: "OSDITestSupport", dependencies: [
+            .product(name: "SignoffToolSupport", package: "SignoffToolSupport")],
+                path: "Tests/OSDITestSupport", exclude: ["DESIGN.md", "BuildCache/DESIGN.md"]),
+        .testTarget(name: "OSDIEvaluationTests", dependencies: ["OSDITestSupport", "OSDIRuntime", "OSDIContracts", "COSDI",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFileSystem", package: "CircuiteFoundation")],
                 exclude: ["DESIGN.md", "Fixtures", "FixtureSupport/DESIGN.md"],
                 swiftSettings: [.enableExperimentalFeature("Lifetimes"), .enableExperimentalFeature("LifetimeDependence")]),
-        .testTarget(name: "OSDIRuntimeTests", dependencies: ["OSDIRuntime", "OSDIContracts", "COSDI",
+        .testTarget(name: "OSDIRuntimeTests", dependencies: ["OSDITestSupport",
+            .product(name: "SignoffToolSupport", package: "SignoffToolSupport"), "OSDIRuntime", "OSDIContracts", "COSDI",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),

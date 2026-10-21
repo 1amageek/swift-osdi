@@ -53,6 +53,24 @@ not publisher trust, a malicious-code sandbox or physical correctness. An
 in-process model call cannot be forcibly interrupted; use an outer process
 deadline for unbounded native code.
 
+## Run tests
+
+```sh
+swift test
+```
+
+Ordinary tests automatically prepare their native fixtures in Swift and require
+no Python or separate preparation command. SwiftPM reuses its incremental build;
+external fixture builds reuse verified immutable artifacts under
+`.build/osdi-fixture-cache-v1`. Unchanged reruns execute tests with no fixture
+recompilation. Source/header, compiler/SDK, target or flag changes invalidate only
+affected artifacts. Every invocation owns fresh mutable lifetime/diagnostic state.
+The cache is local build data, not a substitute for running assertions.
+
+The existing Swift 6.4 release/macOS SDK/Clang and numeric-library build
+prerequisites still apply. Explicit real-model/independent precision qualification
+tools retain Python where required; those gates are separate from ordinary tests.
+
 ## Next-major module composition
 
 The working source exposes two Swift libraries, `OSDIContracts` and `OSDIRuntime`,
@@ -106,7 +124,7 @@ and [public consumer](Tools/OSDIConsumerVerification/PrecisionConsumerProbe.swif
 for the actual protocol, failure and lifetime paths. This managed-payload contract
 does not bound allocator overhead or process RSS.
 
-Python 3 and Apple Clang are required by the tracked verification tools. Ordinary
+Python 3 is required by explicitly selected independent qualification tools; ordinary `swift test` uses Swift preparation and Apple Clang. Ordinary
 runtime products do not link GMP or MPFR. Building all package products, or the
 precision worker, additionally requires installed **GMP, MPFR and pkg-config**,
 with their `.pc` files discoverable through `PKG_CONFIG_PATH` when necessary.
@@ -362,6 +380,8 @@ receipts only apply while their bound source/profile assumptions remain valid.
 
 The SDK is licensed under **GPL-3.0-only**; see the root [LICENSE](LICENSE)
 and [NOTICE](NOTICE).
+The host-only test support also uses MIT-licensed SignoffToolSupport at exact
+stable version `26.1018.0`; its original license is retained in the dependency checkout.
 CircuiteFoundation is a separate **MIT-licensed** dependency at exact stable
 version **26.1018.0**, bound by [Package.resolved](Package.resolved) to
 [`5f132c58209123433e0e479e1ea61096e46061ba`](https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE).

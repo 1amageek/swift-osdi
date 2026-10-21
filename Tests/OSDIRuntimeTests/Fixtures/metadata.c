@@ -1,4 +1,9 @@
 /* Metadata/lifetime oracle only: callbacks deliberately refuse model execution. */
+#define _DARWIN_C_SOURCE
+#include <dlfcn.h>
+#include <limits.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,8 +12,8 @@
 #ifndef FIXTURE_KIND
 #error FIXTURE_KIND must identify one bounded metadata fixture
 #endif
-#ifndef FIXTURE_MARKER
-#error FIXTURE_MARKER must be a unique per-build file path
+#ifndef FIXTURE_LIFETIME_ID
+#define FIXTURE_LIFETIME_ID FIXTURE_KIND
 #endif
 
 #if FIXTURE_KIND != 4
@@ -84,10 +89,31 @@ static void reject_noise_parameters(void *instance, void *model, double *power, 
     (void)instance; (void)model; (void)power; (void)exponent; abort();
 }
 
+/* The mapped image owns dladdr's borrowed name during this callback. All paths
+ * stay in checked stack buffers; bounded ancestor search finds only the test's
+ * run sentinel, independent of private loader directory names or cached paths. */
 static void record_lifetime(const char *event) {
-    FILE *file = fopen(FIXTURE_MARKER, "a");
-    if (file == NULL) abort();
-    if (fputs(event, file) == EOF || fclose(file) != 0) abort();
+    Dl_info info;
+    if (!dladdr((const void *)&record_lifetime, &info) || !info.dli_fname) abort();
+    char parent[PATH_MAX], path[PATH_MAX];
+    int count = snprintf(parent, sizeof(parent), "%s", info.dli_fname);
+    if (count < 0 || (size_t)count >= sizeof(parent)) abort();
+    for (unsigned int depth = 0; depth < 64; ++depth) {
+        char *slash = strrchr(parent, '/');
+        if (slash == NULL || slash == parent) abort();
+        *slash = '\0';
+        count = snprintf(path, sizeof(path), "%s/.osdi-fixture-run", parent);
+        if (count < 0 || (size_t)count >= sizeof(path)) abort();
+        if (access(path, F_OK) != 0) continue;
+        count = snprintf(path, sizeof(path), "%s/fixture-%u.lifetime", parent,
+                         (unsigned int)FIXTURE_LIFETIME_ID);
+        if (count < 0 || (size_t)count >= sizeof(path)) abort();
+        FILE *file = fopen(path, "a");
+        if (file == NULL) abort();
+        if (fputs(event, file) == EOF || fclose(file) != 0) abort();
+        return;
+    }
+    abort();
 }
 
 __attribute__((constructor)) static void construct_fixture(void) {

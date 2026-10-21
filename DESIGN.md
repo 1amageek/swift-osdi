@@ -25,6 +25,8 @@ Verification children include [runtime tests](Tests/OSDIRuntimeTests/DESIGN.md),
 [standalone verification](Tools/OSDIStandaloneVerification/DESIGN.md), and the
 [external public-product consumer](Tools/OSDIConsumerVerification/DESIGN.md).
 
+The host-only [test support](Tests/OSDITestSupport/DESIGN.md) owns automatic cached native fixture preparation.
+
 ## Module Composition
 
 The next-major source layout exposes four products: `OSDIContracts`,

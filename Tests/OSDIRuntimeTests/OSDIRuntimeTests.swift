@@ -380,8 +380,8 @@ struct OSDIRuntimeTests {
         let loader: OSDINativeLibraryLoader
 
         init(copying source: URL) throws {
-            let directory = FileManager.default.temporaryDirectory
-                .appendingPathComponent("swift-osdi-input-\(UUID().uuidString)", isDirectory: true)
+            let directory = source.deletingLastPathComponent()
+                .appendingPathComponent("load-\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             file = directory.appendingPathComponent("input.osdi")
             try FileManager.default.copyItem(at: source, to: file)

@@ -76,6 +76,51 @@ jobs:
           if [[ "$OSDI_CI_PRECISION" == true ]]; then args+=(--precision); fi
           if [[ -n "$OSDI_CI_SANITIZER" ]]; then args+=(--sanitize "$OSDI_CI_SANITIZER"); fi
           python3 Tools/OSDIStandaloneVerification/run.py "${args[@]}"
+      - name: Verify ordinary Swift tests reuse fixtures without Python
+        if: matrix.lane == 'ordinary-debug'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCACHE'
+          from pathlib import Path
+          import json
+          import os
+          import shlex
+          import subprocess
+          import time
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          output = root / '.verification/ci-swift-cache'
+          output.mkdir(parents=True, exist_ok=False)
+          guard = output / 'guard'
+          guard.mkdir()
+          (guard/'python3').write_text('#!/bin/sh\necho "Unexpected Python invocation" >&2\nexit 97\n')
+          (guard/'python3').chmod(0o755)
+          compiler = subprocess.check_output(['xcrun', '--find', 'clang'], text=True, timeout=10).strip()
+          counter = output/'compiler-invocations.log'
+          wrapper = output/'clang-observer'
+          wrapper.write_text("#!/bin/sh\nprintf 'compile\\n' >> " + shlex.quote(str(counter))
+                             + "\nexec " + shlex.quote(compiler) + ' "$@"\n')
+          wrapper.chmod(0o755)
+          environment = dict(os.environ)
+          environment.update(PATH=str(guard)+':'+environment['PATH'], OSDI_TEST_CLANG=str(wrapper),
+                             OSDI_TEST_CACHE_DIRECTORY=str(output/'cache'))
+          for key in list(environment):
+              if key.startswith('OSDI_') and key not in ('OSDI_TEST_CLANG', 'OSDI_TEST_CACHE_DIRECTORY'):
+                  del environment[key]
+          reports = []
+          for name in ('cold', 'warm'):
+              before = counter.read_text().count('compile\n') if counter.exists() else 0
+              started = time.monotonic()
+              with (output/(name+'.log')).open('w') as log:
+                  subprocess.run(['swift', 'test', '--jobs', '2'], cwd=root, env=environment,
+                                 stdout=log, stderr=subprocess.STDOUT, timeout=120, check=True)
+              builds = counter.read_text().count('compile\n')-before
+              assert (builds > 0 if name == 'cold' else builds == 0), (name, builds)
+              reports.append({'run':name, 'fixtureCompilerInvocations':builds,
+                              'elapsedSeconds':time.monotonic()-started})
+          (output/'receipt.json').write_text(json.dumps(reports, indent=2)+'\n')
+          print(json.dumps(reports))
+          PYCACHE
       - name: Run separate public-product consumer
         if: matrix.lane == 'ordinary-debug'
         shell: bash
@@ -116,6 +161,8 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           path: |
+            .verification/ci-swift-cache/receipt.json
+            .verification/ci-swift-cache/*.log
             .verification/ci-${{ matrix.lane }}/receipt.json
             .verification/ci-${{ matrix.lane }}/*.stdout
             .verification/ci-${{ matrix.lane }}/*.stderr

@@ -1,5 +1,5 @@
 {
-  "originHash" : "abd9564eb35c87842622245eeff8474d538c90be54f8ae79ed8a4d585603fc1b",
+  "originHash" : "9984f06ee2b29a03ea0bf1cf40f9e679c0fdb02aa7b701f1f19e5b919a9c3b7e",
   "pins" : [
     {
       "identity" : "circuitefoundation",
@@ -7,6 +7,15 @@
       "location" : "https://github.com/1amageek/CircuiteFoundation.git",
       "state" : {
         "revision" : "5f132c58209123433e0e479e1ea61096e46061ba",
+        "version" : "26.1018.0"
+      }
+    },
+    {
+      "identity" : "signofftoolsupport",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/SignoffToolSupport.git",
+      "state" : {
+        "revision" : "e15ea6cd60ca1957297aafbba839e51a478d735e",
         "version" : "26.1018.0"
       }
     },

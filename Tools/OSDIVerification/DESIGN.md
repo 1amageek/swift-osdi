@@ -2,7 +2,8 @@
 
 ## Purpose and Scope
 
-Own bounded compilation, provenance and cleanup-custody fault probes for S1. Parent:
+Own explicit qualification compilation, provenance and cleanup-custody fault probes for S1.
+Ordinary Swift tests use [shared Swift preparation](../../Tests/OSDITestSupport/DESIGN.md). Parent:
 [swift-osdi](../../DESIGN.md). Input semantics belong to the
 [fixtures](../../Tests/OSDIRuntimeTests/Fixtures/DESIGN.md).
 
@@ -37,7 +38,8 @@ or claim model numerical qualification.
 Every subprocess has a thirty-second timeout and nonzero exit status fails the
 build. A manifest is written only after every requested library is generated.
 Existing manifests and lifetime markers are rejected rather than reused. Paths
-are passed as subprocess argument arrays, including the compiled marker constant.
+are passed as subprocess argument arrays. Compiled lifetime IDs resolve marker
+paths beneath a run-owned sentinel, preserving compatibility with cached fixtures.
 The manifest records the builder, header, fixture sources, compiler executables,
 versions, commands, outputs, and binary digests. No static binaries are committed.
 

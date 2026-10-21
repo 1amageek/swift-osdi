@@ -48,3 +48,12 @@ The [standalone verification contract](../../../Tools/OSDIStandaloneVerification
 owns explicit qualification selectors. Default metadata/protocol inputs need only
 the C compiler; requested actual-model qualification retains the original input
 validation and fails on missing compiler/artifact evidence.
+
+## Ordinary Cached Preparation
+
+ProtocolFixtureCache automatically uses the shared [Swift build cache](../../OSDITestSupport/BuildCache/DESIGN.md)
+for all fifteen protocol variants and the transport worker. The source, pinned
+ABI/wire include closure, compiler/SDK, target and flags form each immutable key.
+No Python or manually generated manifest is required by normal swift test.
+An explicitly supplied standalone qualification manifest retains its existing
+validation path. Optional independent model captures remain separately selected.

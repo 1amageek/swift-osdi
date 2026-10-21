@@ -27,7 +27,7 @@ actual input programs compiled by a recorded OpenVAF executable.
 ## Architecture
 
 ```text
-metadata.c + pinned header + fixture kind + unique marker path -> clang -> dylib
+metadata.c + pinned header + fixture kind/lifetime ID -> cached clang -> dylib
 linear_rc.va / two_models.va + recorded OpenVAF -> actual OSDI model library
 compiled libraries -> runtime loader -> metadata/storage/close assertions
 ```
@@ -50,9 +50,10 @@ as the second collapse node in the valid ground-pair fixture.
 
 ## State, Ownership, and Lifecycle
 
-Each build uses a fresh output directory. Every native library embeds its own
-absolute marker path and appends `load` in its constructor and `unload` in its
-destructor. The test owns the directory until all library/storage owners release.
+Each test invocation owns a fresh sentinel-rooted observation directory. Every
+native library resolves its fixed lifetime ID under that root and appends `load`
+in its constructor and `unload` in its destructor. The test owns the directory
+until all library/storage owners release. Immutable compiled bytes are reusable.
 No environment variable, shared global callback, or cross-test marker is used.
 
 ## Verification and Change Impact
@@ -62,3 +63,12 @@ and binary SHA-256 values. Loader tests inspect both descriptor names and verify
 markers after success, failed admission and explicit close. Actual OpenVAF output
 must also pass metadata admission. Updating the ABI source invalidates every
 fixture and requires intentional pin replacement and full S1 regression.
+
+## Runtime-Bound Lifetime Observation
+
+Immutable metadata binaries contain only a variant ID. A test-owned sentinel
+ancestor of the loaded image selects the current run's lifetime output directory.
+The test harness stages all metadata inputs below that root. Local dladdr/path
+buffers remain valid only in the synchronous constructor/destructor; bounded
+parent traversal and checked snprintf prevent path overflow. No environment or
+shared mutable global selects the output, and no private Runtime path is assumed.
