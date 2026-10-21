@@ -14,7 +14,7 @@ Validated caller limits bound steps, explicit cover copies, guard publication, i
 |---|---|---|---|---|
 | [OSDIContracts](../DESIGN.md) | parent | Portable Sendable values | Module composition | No host imports |
 | [Runtime DecisionCover](../../OSDIRuntime/DecisionCover/DESIGN.md) | used by | Scoped complete-only publication | Values become inspectable inside a borrow | Standalone values carry no completeness authority |
-| [Native DecisionCover](../../COSDIPrecision/DecisionCover/DESIGN.md) | coordinates with | Exact partition semantics | Original source operations define the cells | No locally invented source lemma |
+| [Native DecisionCover](../../OSDIPrecisionWorker/DecisionCover/DESIGN.md) | coordinates with | Exact partition semantics | Original source operations define the cells | No locally invented source lemma |
 
 ## Architecture
 

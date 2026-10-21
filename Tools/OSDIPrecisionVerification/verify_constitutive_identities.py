@@ -164,8 +164,8 @@ def main():
         parser.error('Node/atom capacities must fit their admitted UInt32 representation')
     output=args.output_dir.resolve();output.mkdir(parents=True,exist_ok=False)
     selected=native_build.resolve(args)
-    sources=sorted(p for p in (ROOT/'Sources/COSDIPrecision').rglob('*.c') if 'WorkerProtocol' not in p.parts)
-    headers=sorted((ROOT/'Sources/COSDIPrecision').rglob('*.h'))
+    sources=sorted(p for p in (ROOT/'Sources/OSDIPrecisionWorker').rglob('*.c') if 'WorkerProtocol' not in p.parts and p.name != 'WorkerEntry.c')
+    headers=sorted((ROOT/'Sources/OSDIPrecisionWorker').rglob('*.h'))
     headers += [ROOT/'Sources/COSDI/include/OSDICompilerPrecision.h',ROOT/'Sources/COSDI/include/OSDIPrecisionProtocol.h']
     source,fixture_loader,fixture_generator=source_proof_files(ROOT)
     sources.append(source)
@@ -175,7 +175,7 @@ def main():
     command=[selected['compiler'],'-isysroot',selected['sdk'],'-std=c11','-O2','-g','-Wall','-Wextra','-Werror',
              '-fno-fast-math','-ffp-contract=off']
     if args.sanitize:command+=['-fsanitize=address,undefined','-fno-omit-frame-pointer']
-    for directory in [ROOT/'Sources/COSDI/include',ROOT/'Sources/COSDIPrecision/include',
+    for directory in [ROOT/'Sources/COSDI/include',
                       selected['numeric']['mpfr']['include'],selected['numeric']['gmp']['include']]:
         command+=['-I',directory]
     command+=sources+[selected['numeric']['mpfr']['archive'],selected['numeric']['gmp']['archive'],'-o',binary]

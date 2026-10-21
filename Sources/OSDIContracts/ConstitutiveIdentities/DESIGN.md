@@ -11,7 +11,7 @@ evaluation and imports no native runtime or process implementation.
 `OSDIPrecisionConstitutiveKind` identifies the complete original resistive or
 reactive raw-row axis. `OSDIPrecisionConstitutiveLimits` carries caller-selected
 node, atom, coefficient-bit and fixed-workspace capabilities. The meaning and
-proof authority of an identity belong to the [source algorithm](../../COSDIPrecision/ConstitutiveIdentities/DESIGN.md#contracts-and-invariants);
+proof authority of an identity belong to the [source algorithm](../../OSDIPrecisionWorker/ConstitutiveIdentities/DESIGN.md#contracts-and-invariants);
 these values alone grant no identity, rank, root or history authority.
 
 ## Related Designs
@@ -19,7 +19,7 @@ these values alone grant no identity, rank, root or history authority.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [OSDIContracts](../DESIGN.md) | parent | Portable value composition | Module owner | No host imports |
-| [Source algorithm](../../COSDIPrecision/ConstitutiveIdentities/DESIGN.md) | semantic reference | Exact source-linear identity scope | Owns algebra and checker authority | A value is not a proof |
+| [Source algorithm](../../OSDIPrecisionWorker/ConstitutiveIdentities/DESIGN.md) | semantic reference | Exact source-linear identity scope | Owns algebra and checker authority | A value is not a proof |
 | [Runtime](../../OSDIRuntime/ConstitutiveIdentities/DESIGN.md) | used by | Preparation and borrowed result protocols | Consumes these values | Native execution is separate from portable representation |
 
 ## Architecture

@@ -1,6 +1,6 @@
-#include "../../Sources/COSDIPrecision/Arena/Arena.h"
-#include "../../Sources/COSDIPrecision/Arithmetic/Arithmetic.h"
-#include "../../Sources/COSDIPrecision/ProgramEvaluation/Identity.h"
+#include "../../Sources/OSDIPrecisionWorker/Arena/Arena.h"
+#include "../../Sources/OSDIPrecisionWorker/Arithmetic/Arithmetic.h"
+#include "../../Sources/OSDIPrecisionWorker/ProgramEvaluation/Identity.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,5 +1,5 @@
-#include "../../Sources/COSDIPrecision/ProgramEvaluation/GuardedGraph.h"
-#include "../../Sources/COSDIPrecision/Arena/Arena.h"
+#include "../../Sources/OSDIPrecisionWorker/ProgramEvaluation/GuardedGraph.h"
+#include "../../Sources/OSDIPrecisionWorker/Arena/Arena.h"
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>

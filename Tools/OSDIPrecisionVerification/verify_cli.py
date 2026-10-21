@@ -80,8 +80,8 @@ def request(model, worker, semantic, numeric, staging, operation):
     return result
 
 
-def run(executable, request_path, output, flag='--precision-request'):
-    command = [str(executable), flag, str(request_path), '--output', str(output)]
+def run(executable, request_path, output, command_name='precision'):
+    command = [str(executable), command_name, '--request', str(request_path), '--output', str(output)]
     env = {k: v for k, v in os.environ.items() if k in ['HOME', 'PATH', 'TMPDIR', 'SDKROOT', 'TOOLCHAINS', 'MallocNanoZone']}
     start = time.monotonic()
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
@@ -208,7 +208,7 @@ def main():
         assert not list(staging.iterdir()), (mutation, list(staging.iterdir()))
     # Preserve the unchanged ordinary schema/profile on the same model and executable.
     value = ordinary(args.model); path = args.output_dir / 'ordinary-request.json'; save(path, value)
-    command, report = run(args.executable, path, args.output_dir / 'ordinary-report.json', '--request')
+    command, report = run(args.executable, path, args.output_dir / 'ordinary-report.json', 'evaluate')
     commands.append(command); assert command['exitCode'] == 0 and report['schemaVersion'] == 1
     assert report['stage'] == 'osdi-preparation' and report.get('evaluation') is None
     if args.family_requests:

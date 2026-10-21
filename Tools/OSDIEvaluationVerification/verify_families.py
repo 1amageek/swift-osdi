@@ -111,7 +111,7 @@ def verify(args):
             request_path = args.output/(label + '-request.json')
             report_path = args.output/(label + '-report.json')
             save(request_path, request)
-            run([args.cli, '--request', request_path, '--output', report_path],
+            run([args.cli, 'evaluate', '--request', request_path, '--output', report_path],
                 args.output, label + '-cli', receipts, expected=1 if rejected_noise else 0)
             # Verify the saved bytes through a fresh read, including the exact request binding.
             report = json.loads(report_path.read_bytes())

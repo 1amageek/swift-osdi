@@ -1,5 +1,5 @@
-#include "../../Sources/COSDIPrecision/DecisionCover/DecisionCover.h"
-#include "../../Sources/COSDIPrecision/Arena/Arena.h"
+#include "../../Sources/OSDIPrecisionWorker/DecisionCover/DecisionCover.h"
+#include "../../Sources/OSDIPrecisionWorker/Arena/Arena.h"
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>

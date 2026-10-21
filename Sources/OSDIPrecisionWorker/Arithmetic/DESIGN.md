@@ -1,7 +1,7 @@
 # Arithmetic
 
 ## Purpose and Scope
-Own directed MPFR intervals, definite predicates and enclosure-preserving output projection. Parent: [COSDIPrecision](../DESIGN.md). No children.
+Own directed MPFR intervals, definite predicates and enclosure-preserving output projection. Parent: [OSDIPrecisionWorker](../DESIGN.md). No children.
 
 ## Responsibilities and Boundaries
 The closed opcode subset preserves decoded primitive facts and encloses every supported operation. Periodic range extrema and tangent poles are checked; unresolved predicates/domain/projection failures remain explicit. Output high/low centers are renormalized with TwoSum before the outward radius is recomputed against the original interval.
@@ -9,7 +9,7 @@ The closed opcode subset preserves decoded primitive facts and encloses every su
 ## Related Designs
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [COSDIPrecision](../DESIGN.md) | parent | Isolated precision execution | Owns composition and resource contract | Failure never changes accepted circuit state |
+| [OSDIPrecisionWorker](../DESIGN.md) | parent | Isolated precision execution | Owns composition and resource contract | Failure never changes accepted circuit state |
 
 ## Architecture
 ```text

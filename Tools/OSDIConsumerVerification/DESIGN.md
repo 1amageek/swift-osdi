@@ -22,7 +22,7 @@ ABI transport and consumer integration, not physical model qualification.
 | [Point evaluation](../../Sources/OSDIRuntime/PointEvaluation/DESIGN.md) | depends on | Scoped F/Q/G/C and explicit history | Actual public calls | No solver or implicit acceptance |
 | [Evaluation fixtures](../../Tests/OSDIEvaluationTests/Fixtures/DESIGN.md) | depends on | `protocol.c` modes 12 and 1 | Success and fatal refusal oracle | Transport only |
 | [Constitutive identities](../../Sources/OSDIRuntime/ConstitutiveIdentities/DESIGN.md) | depends on | Public snapshot, preparation and scoped conditional identities | Optional precision probe | No circuit rank/root/flow authority |
-| [CLI](../../Sources/OSDIEvaluate/DESIGN.md) | depends on | Schema 2 request/report | Persisted JSON comparison | Read reports from disk |
+| [CLI](../../Sources/OSDICLI/PointEvaluation/DESIGN.md) | depends on | Schema 2 request/report | Persisted JSON comparison | Read reports from disk |
 
 ## Architecture
 
@@ -31,7 +31,7 @@ source URL/revision [+ exact source version] + Foundation URL/revision + new scr
   -> isolated HOME/environment and detached exact Git checkouts
   -> tracked header/protocol source -> bounded clang -> two native fixtures
   -> URL/revision-only generated consumer package -> build -> public API probe
-  -> exact source checkout -> osdi-evaluate build -> persisted success/refusal reports
+  -> exact source checkout -> osdi build -> persisted success/refusal reports
   -> API/CLI numeric equality + binding/persistence/cleanup checks -> receipt.json
 ```
 

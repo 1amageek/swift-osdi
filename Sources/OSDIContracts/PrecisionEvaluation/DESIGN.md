@@ -53,7 +53,7 @@ Arithmetic validity is required for the selected source-observable outputs and
 their necessary control dependencies. An unused undefined temporary does not
 invalidate an otherwise finite selected output. The bounded proof and refusal
 rules for deferring invalid pure values/control belong to
-[Program Evaluation](../../COSDIPrecision/ProgramEvaluation/DESIGN.md); effects,
+[Program Evaluation](../../OSDIPrecisionWorker/ProgramEvaluation/DESIGN.md); effects,
 required input facts and resource/cancellation failures cannot be discarded.
 
 For every raw row the result provides normalized high/low centers and nonnegative finite absolute

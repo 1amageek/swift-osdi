@@ -314,14 +314,42 @@ def verify(args, runner):
                 observed['controlledRefusals'] == ['work', 'storage', 'cancelled'],
                 'Public controlled snapshot bytes, cumulative admission, lifetime or typed refusals differ')
         precision_inputs['publicReport'] = {'path': str(precision_report), 'sha256': sha(precision_report)}
-    runner.run([args.swift, 'build', '--package-path', source, '--product', 'osdi-evaluate'])
+    runner.run([args.swift, 'build', '--package-path', source, '--product', 'osdi'])
     cli_dir = Path(runner.run([args.swift, 'build', '--package-path', source, '--show-bin-path']))
+    cli = cli_dir / 'osdi'
+    for options in (['--help'], ['inspect', '--help'], ['evaluate', '--help'], ['precision', '--help']):
+        require('Usage: osdi' in runner.run([cli, *options]), 'CLI help did not identify the unified executable')
+    for options in ([], ['unknown'], ['precision', '--precision-request'], ['inspect', '--bad'], ['evaluate', '--bad']):
+        runner.run([cli, *options], expected=1)
+        rejected = json.loads(Path(runner.commands[-1]['stderr']).read_bytes())
+        require(rejected['succeeded'] is False, 'Invalid CLI selection did not emit structured failure')
+        if options and options[0] == 'evaluate':
+            require(rejected['failure']['reason'] == 'invalid_request', 'Point command lost invalid-input diagnostics')
+        elif options and options[0] == 'inspect':
+            require(rejected['reason'] == 'invalid_request', 'Inspection command lost invalid-input diagnostics')
+        else:
+            require(rejected['reason'] == 'invalid_command', 'Root command lost structured selection diagnostics')
+    inspection = request(libraries[0])
+    inspection['schemaVersion'] = 1
+    inspection['verifyStorage'] = True
+    inspect_input = runner.scratch / 'inspect-request.json'
+    inspect_output = runner.scratch / 'inspect-report.json'
+    save(inspect_input, inspection)
+    runner.run([cli, 'inspect', '--request', inspect_input, '--output', inspect_output])
+    inspected = round_trip(inspect_output)
+    require(inspected['succeeded'] is True and inspected['storageVerified'] is True
+            and inspected['descriptors'][0]['name'] == 'protocol_transport',
+            'Inspection command did not execute native storage admission')
+    inspection['expectedSHA256'] = '0' * 64
+    save(inspect_input, inspection)
+    runner.run([cli, 'inspect', '--request', inspect_input, '--output', inspect_output], expected=1)
+    require(round_trip(inspect_output)['succeeded'] is False, 'Inspection accepted an incorrect artifact identity')
     for name, library, expected_exit in [('state', libraries[0], 0), ('fatal', libraries[1], 1)]:
         value = request(library)
         request_path = runner.scratch / f'{name}-request.json'
         report_path = runner.scratch / f'{name}-cli-report.json'
         save(request_path, value)
-        runner.run([cli_dir / 'osdi-evaluate', '--request', request_path, '--output', report_path], expected=expected_exit)
+        runner.run([cli_dir / 'osdi', 'evaluate', '--request', request_path, '--output', report_path], expected=expected_exit)
         report = round_trip(report_path)
         require(report['requestBinding'] == {'sha256': sha(request_path), 'byteCount': request_path.stat().st_size},
                 'CLI request binding differs')

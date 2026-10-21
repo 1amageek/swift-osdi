@@ -23,7 +23,7 @@ The numeric worker alone owns MPFR/GMP arithmetic and its fixed arena.
 |---|---|---|---|---|
 | [COSDI](../DESIGN.md) | parent | Public native module | C process boundary | Upstream model ABI stays fixed |
 | [CompilerPrecision](../CompilerPrecision/DESIGN.md) | depends on | Immutable program/setup format | Original model function | No rounded native-cache constants |
-| [Numeric worker](../../COSDIPrecision/DESIGN.md) | coordinates with | Fixed-arena interval interpreter | Model arithmetic only | Worker failure publishes no candidate |
+| [Numeric worker](../../OSDIPrecisionWorker/DESIGN.md) | coordinates with | Fixed-arena interval interpreter | Model arithmetic only | Worker failure publishes no candidate |
 | [PointEvaluation](../../OSDIRuntime/PrecisionExecution/DESIGN.md) | used by | Noncopyable precision owner and scoped views | Swift lifetime | All I/O outside Mutex |
 | [Causal Range Boundary](../../../DESIGN.md#causal-range-boundary) | parent requirement | Separate smooth-box constitutive operation | Preserves the complete spatial/time box | Spatial G/C does not certify explicit time partials |
 

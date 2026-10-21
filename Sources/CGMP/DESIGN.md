@@ -17,12 +17,12 @@ The ordinary OSDI runtime and portable value targets do not depend on this modul
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Optional native worker composition | System binding | No portable GMP capability is inferred |
-| [COSDIPrecision](../COSDIPrecision/DESIGN.md) | used by | Upstream GMP allocation API | Isolated arithmetic | The worker is the sole allocator authority |
+| [OSDIPrecisionWorker](../OSDIPrecisionWorker/DESIGN.md) | used by | Upstream GMP allocation API | Isolated arithmetic | The worker is the sole allocator authority |
 
 ## Architecture
 
 ```text
-COSDIPrecision -> CGMP shim -> installed upstream GMP
+OSDIPrecisionWorker -> CGMP shim -> installed upstream GMP
 ```
 
 ## Contracts and Invariants

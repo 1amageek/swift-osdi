@@ -19,7 +19,7 @@ Newton iteration, integration, acceptance and compensated solution coordinates.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [COSDI](../DESIGN.md) | parent | Native module boundary | Optional artifact inspection | OSDI 0.4 is unchanged |
-| [ProgramEvaluation](../../COSDIPrecision/ProgramEvaluation/DESIGN.md) | coordinates with | Source-observable value validity | Inactive arithmetic and proved pure control regions | Numeric owner defines and independently validates demand/failure semantics |
+| [ProgramEvaluation](../../OSDIPrecisionWorker/ProgramEvaluation/DESIGN.md) | coordinates with | Source-observable value validity | Inactive arithmetic and proved pure control regions | Numeric owner defines and independently validates demand/failure semantics |
 | [DeviceEvaluation](../DeviceEvaluation/DESIGN.md) | coordinates with | Admitted preparation and precision request | Image and preparation identity | Native caches are not precision constants |
 | [Compiler profile](../../../../swift-openvaf/Tools/OpenVAFCompilerProfile/DESIGN.md) | depends on | Exact patched compiler | Source of programs and AD roots | Changes require new compiler and model identities |
 
@@ -149,7 +149,7 @@ phi predecessors, roots, topology, state slots, unsupported opcodes or callbacks
 reject admission. Ambiguous interval predicates, domain failure, exhausted
 precision/work/storage and abnormal helper termination remain explicit failures.
 Arithmetic validity follows the source-observable policy owned by
-[ProgramEvaluation](../../COSDIPrecision/ProgramEvaluation/DESIGN.md); inactive
+[ProgramEvaluation](../../OSDIPrecisionWorker/ProgramEvaluation/DESIGN.md); inactive
 undefined temporaries are not fabricated finite intervals. The semantic-profile
 identity binds this policy. No failed candidate is published or retried by silently shrinking its timestep.
 The helper's fixed arena is process-owned; exhaustion terminates that helper and

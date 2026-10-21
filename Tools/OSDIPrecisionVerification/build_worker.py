@@ -25,14 +25,14 @@ def main():
     selected = native_build.resolve(args)
     compiler, sdk = selected['compiler'], selected['sdk']
     mpfr, gmp = selected['numeric']['mpfr'], selected['numeric']['gmp']
-    sources = sorted((ROOT / 'Sources/COSDIPrecision').rglob('*.c')) + [ROOT / 'Sources/OSDIPrecisionWorker/WorkerEntry.c']
-    headers = sorted((ROOT / 'Sources/COSDIPrecision').rglob('*.h')) + [ROOT / 'Sources/COSDI/include/OSDICompilerPrecision.h', ROOT / 'Sources/COSDI/include/OSDIPrecisionProtocol.h', mpfr['header'], gmp['header']]
+    sources = sorted((ROOT / 'Sources/OSDIPrecisionWorker').rglob('*.c'))
+    headers = sorted((ROOT / 'Sources/OSDIPrecisionWorker').rglob('*.h')) + [ROOT / 'Sources/COSDI/include/OSDICompilerPrecision.h', ROOT / 'Sources/COSDI/include/OSDIPrecisionProtocol.h', mpfr['header'], gmp['header']]
     archives = [mpfr['archive'], gmp['archive']]
     worker = output / 'osdi-precision-worker'
     command = [str(compiler), '-isysroot', str(sdk), '-std=c11', '-O2', '-g', '-Wall', '-Wextra', '-Werror', '-fno-fast-math', '-ffp-contract=off']
     if args.sanitize:
         command += ['-fsanitize=address,undefined', '-fno-omit-frame-pointer']
-    for path in [ROOT / 'Sources/COSDIPrecision/include', ROOT / 'Sources/COSDI/include', mpfr['include'], gmp['include']]:
+    for path in [ROOT / 'Sources/COSDI/include', mpfr['include'], gmp['include']]:
         command += ['-I', str(path)]
     command += [str(path) for path in sources + archives] + ['-o', str(worker)]
     before = {str(p): digest(p) for p in sources + headers + archives}

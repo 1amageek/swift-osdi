@@ -5,23 +5,17 @@ import Foundation
 import OSDIContracts
 import OSDIRuntime
 
-@main
-enum OSDIInspectEntry {
+enum OSDIInspectCommand {
     private enum Failure: Error { case arguments, schema, storage }
 
-    static func main() async {
-        if CommandLine.arguments == [CommandLine.arguments[0], "--help"] {
-            print("Usage: osdi-inspect --request REQUEST.json --output REPORT.json")
-            return
-        }
+    static func run(arguments args: [String]) async -> Bool {
         var output: URL?
         var request: OSDIInspectRequest?
         do {
-            let args = CommandLine.arguments
-            guard args.count == 5, args[1] == "--request", args[3] == "--output" else { throw Failure.arguments }
-            output = URL(fileURLWithPath: args[4])
+            guard args.count == 4, args[0] == "--request", args[2] == "--output" else { throw Failure.arguments }
+            output = URL(fileURLWithPath: args[3])
             let decoded = try JSONDecoder().decode(OSDIInspectRequest.self,
-                from: Data(contentsOf: URL(fileURLWithPath: args[2])))
+                from: Data(contentsOf: URL(fileURLWithPath: args[1])))
             request = decoded
             guard decoded.schemaVersion == 1 else { throw Failure.schema }
             let report = try await execute(decoded)
@@ -39,8 +33,9 @@ enum OSDIInspectEntry {
             } catch {
                 FileHandle.standardError.write(Data("OSDI report write failed: \(error)\n".utf8))
             }
-            exit(1)
+            return false
         }
+        return true
     }
 
     private static func execute(_ request: OSDIInspectRequest) async throws -> OSDIInspectReport {

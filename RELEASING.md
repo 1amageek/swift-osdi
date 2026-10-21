@@ -1,5 +1,13 @@
 # Source release procedure
 
+The current working source contains next-major compatibility changes: the public
+COSDI product is removed, precision arithmetic is part of its executable target,
+and CLI entrypoints are `osdi inspect`, `osdi evaluate` and `osdi precision`.
+The 1.2.0 release record and checklist below remain historical authority for that
+immutable release. A future release must select a new major version and freshly
+qualify the changed source, CLI and exact worker/profile; this task creates no tag,
+release or deployment.
+
 The source release is prepared as **1.2.0**, dated **2026-10-19**. This
 document describes admission and manual publication; prepared version metadata
 does not mean a tag or release has been published.

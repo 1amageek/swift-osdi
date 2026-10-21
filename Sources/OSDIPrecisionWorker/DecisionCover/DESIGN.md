@@ -2,7 +2,7 @@
 
 ## Purpose and Scope
 
-Parent: [COSDIPrecision](../DESIGN.md). No children. Own finite construction and independent checking of an exhaustive decision tree for one immutable admitted source program/setup/topology and one exact closed coordinate/time box. Source interpretation belongs to ProgramEvaluation and arithmetic cells to Arithmetic. A complete decision cover is not a root, nonempty-chart, flow, reset, history, tube or event certificate.
+Parent: [OSDIPrecisionWorker](../DESIGN.md). No children. Own finite construction and independent checking of an exhaustive decision tree for one immutable admitted source program/setup/topology and one exact closed coordinate/time box. Source interpretation belongs to ProgramEvaluation and arithmetic cells to Arithmetic. A complete decision cover is not a root, nonempty-chart, flow, reset, history, tube or event certificate.
 
 ## Responsibilities and Boundaries
 
@@ -18,7 +18,7 @@ Construct bounded candidate trees using exact source frontiers, then independent
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [COSDIPrecision](../DESIGN.md) | parent | Fixed arena and execution provenance | Owns native composition | No alternate allocation/work owner |
+| [OSDIPrecisionWorker](../DESIGN.md) | parent | Fixed arena and execution provenance | Owns native composition | No alternate allocation/work owner |
 | [ProgramEvaluation](../ProgramEvaluation/DESIGN.md#exact-decision-frontiers) | depends on | Bound source prefix replay/frontier | Source order, all stages, actual equality values | No sampled tapes or guessed branch |
 | [Arithmetic](../Arithmetic/DESIGN.md#decision-cell-contract) | depends on | Exact relation and integer-cell partitions | Source primitive semantics | Domain/precision failures are not exclusions |
 | [WorkerProtocol](../WorkerProtocol/DESIGN.md#complete-decision-cover-transport) | used by | Atomic complete-only publication | Same exclusive process lifecycle | No pending frontier is published as complete |

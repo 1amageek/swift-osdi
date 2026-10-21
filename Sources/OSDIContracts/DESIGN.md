@@ -8,7 +8,7 @@ Own portable immutable values used during native model admission and point evalu
 
 ## Responsibilities and Boundaries
 
-Carry bounds and pointer-free metadata. No dynamic loading, raw ABI structures,
+Carry standard-library-only bounds and pointer-free metadata. No dynamic loading, raw ABI structures,
 serialization, digest computation, file paths, solver or model equations.
 
 ## Related Designs
@@ -16,7 +16,6 @@ serialization, digest computation, file paths, solver or model equations.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [Runtime](../OSDIRuntime/DESIGN.md) | used by | Validated limits and descriptor values | Native admission | Metadata is not initialized device state |
-| [Foundation](../../../CircuiteFoundation/DESIGN.md) | depends on | Portable exact artifact identity | Shared vocabulary | No host imports |
 
 ## Architecture
 

@@ -17,12 +17,12 @@ Ordinary OSDI operations and portable value targets do not depend on this module
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [Package](../../DESIGN.md) | parent | Optional native worker composition | System binding | Native qualification is explicit |
-| [COSDIPrecision](../COSDIPrecision/DESIGN.md) | used by | Directed-rounding MPFR API | Enclosed arithmetic | The worker owns precision, caches and resource admission |
+| [OSDIPrecisionWorker](../OSDIPrecisionWorker/DESIGN.md) | used by | Directed-rounding MPFR API | Enclosed arithmetic | The worker owns precision, caches and resource admission |
 
 ## Architecture
 
 ```text
-COSDIPrecision -> CMPFR shim -> installed upstream MPFR -> GMP
+OSDIPrecisionWorker -> CMPFR shim -> installed upstream MPFR -> GMP
 ```
 
 ## Contracts and Invariants

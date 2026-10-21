@@ -5,28 +5,17 @@ import Foundation
 import OSDIContracts
 import OSDIRuntime
 
-@main
-enum OSDIEvaluateEntry {
-    static func main() async {
-        if CommandLine.arguments == [CommandLine.arguments[0], "--help"] {
-            print("Usage: osdi-evaluate --request REQUEST.json --output REPORT.json\n       osdi-evaluate --precision-request REQUEST.json --output REPORT.json\nPrecision input selects stateless-precision-v1 or explicit stateless-smooth-box-v2 enclosure.")
-            return
-        }
-        let arguments = CommandLine.arguments
-        if arguments.count == 5, arguments[1] == "--precision-request", arguments[3] == "--output" {
-            let succeeded = await OSDIEvaluatePrecisionCommand.run(requestPath: arguments[2], outputPath: arguments[4])
-            if !succeeded { exit(1) }; return
-        }
+enum OSDIEvaluateCommand {
+    static func run(arguments args: [String]) async -> Bool {
         var output: URL?
         var request: OSDIEvaluateRequest?
         var binding: OSDIEvaluateReport.Binding?
         do {
-            let args = CommandLine.arguments
-            guard args.count == 5, args[1] == "--request", args[3] == "--output" else {
+            guard args.count == 4, args[0] == "--request", args[2] == "--output" else {
                 throw OSDIEvaluateFailure.invalidRequest("Expected --request PATH --output PATH")
             }
-            output = URL(fileURLWithPath: args[4])
-            let bytes = try Data(contentsOf: URL(fileURLWithPath: args[2]))
+            output = URL(fileURLWithPath: args[3])
+            let bytes = try Data(contentsOf: URL(fileURLWithPath: args[1]))
             binding = try requestBinding(bytes)
             let decoded = try JSONDecoder().decode(OSDIEvaluateRequest.self, from: bytes)
             request = decoded
@@ -46,8 +35,9 @@ enum OSDIEvaluateEntry {
             } catch {
                 FileHandle.standardError.write(Data("OSDI report write failed: \(error)\n".utf8))
             }
-            exit(1)
+            return false
         }
+        return true
     }
 
     private static func requestBinding(_ data: Data) throws -> OSDIEvaluateReport.Binding {

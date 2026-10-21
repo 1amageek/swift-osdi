@@ -2,7 +2,7 @@
 
 ## Purpose and Scope
 
-Parent: [COSDIPrecision](../DESIGN.md). No children. This internal component
+Parent: [OSDIPrecisionWorker](../DESIGN.md). No children. This internal component
 constructs candidate linear relations between every raw F or Q output and checks
 them independently against the original admitted source program. It owns no
 circuit equations, charge-coordinate choice, numerical rank decision, root,
@@ -23,7 +23,7 @@ Circuit assembly and original-equation equivalence proofs remain consumer owned.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [COSDIPrecision](../DESIGN.md) | parent | Exclusive worker and fixed arena | Existing allocation/lifecycle owner | No independent deadline or cancellation owner |
+| [OSDIPrecisionWorker](../DESIGN.md) | parent | Exclusive worker and fixed arena | Existing allocation/lifecycle owner | No independent deadline or cancellation owner |
 | [ProgramEvaluation](../ProgramEvaluation/DESIGN.md) | depends on | Actual SSA/input/phi/root observations | Original source replay | Observation cannot change values or source decisions |
 | [DecisionCover](../DecisionCover/DESIGN.md) | depends on | Independently checked complete tree and terminal replay | Whole-cover proof binding | One terminal does not establish a whole-cover identity |
 | [CompilerPrecision](../../COSDI/CompilerPrecision/DESIGN.md) | depends on | Exact literal bits, F/Q replacement roots and full raw axes | Immutable source/setup authority | Native cached values are not source constants |

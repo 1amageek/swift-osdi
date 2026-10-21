@@ -1,7 +1,7 @@
 # ProgramEvaluation
 
 ## Purpose and Scope
-Validate and execute the compiler-owned stateless setup/evaluation program. Parent: [COSDIPrecision](../DESIGN.md). No children.
+Validate and execute the compiler-owned stateless setup/evaluation program. Parent: [OSDIPrecisionWorker](../DESIGN.md). No children.
 
 ## Responsibilities and Boundaries
 Each endpoint executes all three stages, simultaneous phi transfers and explicit scoped facts. Kind 15 reads the exact requested-scope immutable given bit; existing kind 2 retains instance-or-model presence. Source guards, not merged resolved values, choose the original setup branch. Compiler-proved preparation-only collapse guards may be serialized in evaluation; after each complete three-stage endpoint, their equivalence must match the supplied map before publication. Original derivative roots supply inexact Newton midpoints.
@@ -16,7 +16,7 @@ owner is introduced.
 ## Related Designs
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [COSDIPrecision](../DESIGN.md) | parent | Isolated precision execution | Owns composition and resource contract | Failure never changes accepted circuit state |
+| [OSDIPrecisionWorker](../DESIGN.md) | parent | Isolated precision execution | Owns composition and resource contract | Failure never changes accepted circuit state |
 
 ## Architecture
 ```text

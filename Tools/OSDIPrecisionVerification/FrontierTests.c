@@ -1,5 +1,5 @@
-#include "../../Sources/COSDIPrecision/ProgramEvaluation/Frontier.h"
-#include "../../Sources/COSDIPrecision/Arena/Arena.h"
+#include "../../Sources/OSDIPrecisionWorker/ProgramEvaluation/Frontier.h"
+#include "../../Sources/OSDIPrecisionWorker/Arena/Arena.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

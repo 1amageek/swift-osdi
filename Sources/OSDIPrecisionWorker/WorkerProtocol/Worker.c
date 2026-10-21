@@ -3,7 +3,7 @@
 #include "../ProgramEvaluation/Chart.h"
 #include "DecisionCover/Transport.h"
 #include "ConstitutiveIdentities/Transport.h"
-#include <COSDIPrecision.h>
+#include "Worker.h"
 #include <OSDIPrecisionProtocol.h>
 #include <errno.h>
 #include <float.h>

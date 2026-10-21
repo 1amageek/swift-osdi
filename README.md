@@ -27,9 +27,7 @@ native runtime.
 |---|---|
 | `OSDIContracts` | Immutable metadata, preparation, contexts, budgets and typed failures |
 | `OSDIRuntime` | Exact artifact loading, library lifetime, stable storage, point and optional precision sessions |
-| `COSDI` | Pinned upstream ABI and native loading/evaluation/process boundary |
-| `osdi-inspect` | Descriptor inspection and optional zeroed-storage verification |
-| `osdi-evaluate` | Preparation, ordinary point evaluation and explicit precision JSON requests/reports |
+| `osdi` | `inspect`, `evaluate` and `precision` subcommands with structured JSON requests/reports |
 | `osdi-precision-worker` | Optional GMP/MPFR arithmetic worker; requires separately qualified identity/profile |
 
 | Profile | Result and caller obligation |
@@ -54,6 +52,26 @@ constructors and foreign functions. Digest verification establishes exact bytes,
 not publisher trust, a malicious-code sandbox or physical correctness. An
 in-process model call cannot be forcibly interrupted; use an outer process
 deadline for unbounded native code.
+
+## Next-major module composition
+
+The working source exposes two Swift libraries, `OSDIContracts` and `OSDIRuntime`,
+and two executables, `osdi` and `osdi-precision-worker`. COSDI is an internal C
+target. Contracts use only the Swift standard library. The precision executable
+owns its entrypoint and arithmetic components; ordinary products do not link GMP
+or MPFR. Published 1.x tags and their original qualification evidence are unchanged.
+
+| Previous 1.x command | Current working-source command |
+|---|---|
+| `osdi-inspect --request INPUT --output REPORT` | `osdi inspect --request INPUT --output REPORT` |
+| `osdi-evaluate --request INPUT --output REPORT` | `osdi evaluate --request INPUT --output REPORT` |
+| `osdi-evaluate --precision-request INPUT --output REPORT` | `osdi precision --request INPUT --output REPORT` |
+
+JSON request/report schemas and Swift public library names remain unchanged.
+Consumers of the former COSDI product must use the Swift Runtime API; its product
+removal and the executable changes are next-major compatibility changes. Existing
+1.x release instructions below describe those immutable releases, not a new
+publication or qualification of the changed working source.
 
 ## Build from a standalone checkout
 
@@ -126,8 +144,7 @@ except BaseException:
 raise SystemExit(code)
 PYTIMEOUT
 }
-bounded 600 swift build --product osdi-inspect --jobs 2
-bounded 600 swift build --product osdi-evaluate --jobs 2
+bounded 600 swift build --product osdi --jobs 2
 ```
 
 ## Verification lanes
@@ -180,7 +197,7 @@ identity before loading staged bytes.
 
 The separate [constitutive identity API](Sources/OSDIRuntime/ConstitutiveIdentities/DESIGN.md)
 documents source-linear F/Q claims and their explicit coordinate conditions;
-the [source checker contract](Sources/COSDIPrecision/ConstitutiveIdentities/DESIGN.md)
+the [source checker contract](Sources/OSDIPrecisionWorker/ConstitutiveIdentities/DESIGN.md)
 owns their proof scope and limitations.
 
 ```text
@@ -233,9 +250,9 @@ for complete artifact binding, API use and failure handling.
 ## JSON CLI
 
 ```sh
-bounded 10 .build/debug/osdi-inspect --request request.json --output report.json
-bounded 10 .build/debug/osdi-evaluate --request point-request.json --output point-report.json
-bounded 10 .build/debug/osdi-evaluate --precision-request precision-request.json --output precision-report.json
+bounded 10 .build/debug/osdi inspect --request request.json --output report.json
+bounded 10 .build/debug/osdi evaluate --request point-request.json --output point-report.json
+bounded 10 .build/debug/osdi precision --request precision-request.json --output precision-report.json
 ```
 
 Check both process exit status and report `succeeded`. Reports retain exact

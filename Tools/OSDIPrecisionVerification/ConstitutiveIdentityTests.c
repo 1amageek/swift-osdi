@@ -12,7 +12,7 @@ static void *verifier_calloc(size_t count,size_t stride){
 #include "DecisionCoverTests.c"
 #undef main
 #undef calloc
-#include "../../Sources/COSDIPrecision/ConstitutiveIdentities/ConstitutiveIdentities.h"
+#include "../../Sources/OSDIPrecisionWorker/ConstitutiveIdentities/ConstitutiveIdentities.h"
 
 typedef struct {
   CSOsdiPrecisionProgramHeader program;

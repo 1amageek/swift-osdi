@@ -17,7 +17,7 @@ and refuse changes to those inputs during the build.
 ## Related Designs
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [COSDIPrecision](../../Sources/COSDIPrecision/DESIGN.md) | verifies | Arithmetic, program, resource and IPC | Exact worker path | Focused fixtures do not certify physical models |
+| [OSDIPrecisionWorker](../../Sources/OSDIPrecisionWorker/DESIGN.md) | verifies | Arithmetic, program, resource and IPC | Exact worker path | Focused fixtures do not certify physical models |
 
 ## Architecture
 ```text

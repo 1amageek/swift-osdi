@@ -24,7 +24,7 @@ promotes it to rank, root, flow or history authority.
 | [PrecisionExecution](../PrecisionExecution/DESIGN.md) | depends on | Noncopyable session, handle isolation and cleanup | Existing lifecycle owner | Same session across attempts |
 | [Portable values](../../OSDIContracts/ConstitutiveIdentities/DESIGN.md) | depends on | Kind and immutable capability limits | Public input vocabulary | No capability defaults |
 | [Parent C boundary](../../COSDI/PrecisionProcess/ConstitutiveIdentities/DESIGN.md) | depends on | Fully validated borrowed result | Native process bridge | Wire checks do not replace source checks |
-| [Source algorithm](../../COSDIPrecision/ConstitutiveIdentities/DESIGN.md) | semantic reference | Exact source-linear proof scope | Owns identity meaning | No nonlinear-rank or root promotion |
+| [Source algorithm](../../OSDIPrecisionWorker/ConstitutiveIdentities/DESIGN.md) | semantic reference | Exact source-linear proof scope | Owns identity meaning | No nonlinear-rank or root promotion |
 
 ## Architecture
 

@@ -11,10 +11,9 @@ ordinary point evaluation and separate explicit precision/range sessions. It doe
 not implement device physics, a Verilog-A compiler or a circuit solver. Historical
 S1/S2/S3/S4 labels below identify development stages, not release support levels.
 Children: [COSDI](Sources/COSDI/DESIGN.md), [OSDIContracts](Sources/OSDIContracts/DESIGN.md),
-[OSDIRuntime](Sources/OSDIRuntime/DESIGN.md), [OSDIInspect](Sources/OSDIInspect/DESIGN.md), [OSDIEvaluate](Sources/OSDIEvaluate/DESIGN.md).
+[OSDIRuntime](Sources/OSDIRuntime/DESIGN.md), [OSDICLI](Sources/OSDICLI/DESIGN.md).
 The S4D optional native precision path adds
-[COSDIPrecision](Sources/COSDIPrecision/DESIGN.md), the
-[worker entrypoint](Sources/OSDIPrecisionWorker/DESIGN.md), and the host system
+[OSDIPrecisionWorker](Sources/OSDIPrecisionWorker/DESIGN.md) and the host system
 bindings [CMPFR](Sources/CMPFR/DESIGN.md) / [CGMP](Sources/CGMP/DESIGN.md).
 Their selected contracts do not establish a qualified implementation.
 Verification children include [runtime tests](Tests/OSDIRuntimeTests/DESIGN.md),
@@ -25,6 +24,41 @@ Verification children include [runtime tests](Tests/OSDIRuntimeTests/DESIGN.md),
 [compiler fixture](Tools/OpenVAFCompilerFixture/DESIGN.md),
 [standalone verification](Tools/OSDIStandaloneVerification/DESIGN.md), and the
 [external public-product consumer](Tools/OSDIConsumerVerification/DESIGN.md).
+
+## Module Composition
+
+The next-major source layout exposes four products: `OSDIContracts`,
+`OSDIRuntime`, `osdi`, and `osdi-precision-worker`. Seven production targets
+implement them; `COSDI`, `CGMP` and `CMPFR` are internal build dependencies.
+`OSDIContracts` uses only the Swift standard library. Runtime owns native image,
+artifact and process lifetimes; the worker alone links GMP/MPFR and installs
+process-global numeric allocation hooks. Ordinary products must build and run
+without those numeric libraries.
+
+```text
+contract-only consumers -> OSDIContracts
+native consumers / osdi -> OSDIRuntime -> OSDIContracts + COSDI
+OSDIRuntime -- exact-artifact launch and IPC --> OSDIPrecisionWorker
+OSDIPrecisionWorker -> COSDI wire headers + CGMP + CMPFR
+```
+
+The worker contains its entrypoint, arithmetic, program and transport components
+in one executable target. The CLI contains inspection, point and precision command
+components in one executable target; only its composition root calls process exit.
+All numerical algorithms, protocol bytes, explicit budgets, borrowed-result
+lifetimes and typed cleanup contracts remain owned by their existing components.
+LocalAccess remains a separate design-only handoff, not an implementation
+prerequisite or an additional product in this composition task.
+
+Removal of the `COSDI` library product and replacement of `osdi-inspect` and
+`osdi-evaluate` are next-major compatibility changes. Existing 1.x tags and
+qualification receipts remain immutable. CLI payload schemas remain unchanged:
+`osdi inspect --request`, `osdi evaluate --request`, and
+`osdi precision --request` replace the former executable/precision-flag selection.
+A moved/rebuilt worker requires a fresh exact worker/numeric-profile binding.
+Verification covers contract-only execution, ordinary link dependencies, real
+native loading/evaluation, complete worker IPC, CLI persisted success/refusal and
+an external public Swift consumer. Historical evidence is not a fresh build claim.
 
 ## Responsibilities and Boundaries
 
@@ -60,8 +94,7 @@ ArtifactReference + availability + ArtifactAccessing
         -> exclusive prepared point session / scoped F/Q/G/C and candidate state
 ```
 
-The portable Contracts target depends only on Foundation Core (the LSI package,
-not Apple's Foundation). Only Runtime imports host I/O/digest implementations and
+The portable Contracts target uses only the Swift standard library. Only Runtime imports host I/O/digest implementations and
 COSDI. Existing Rust consumers were examined; their solver coupling or incomplete
 validation/state handling does not justify adding them as production dependencies.
 No new ABI definitions duplicate the upstream OsdiDescriptor.
@@ -98,8 +131,8 @@ failure -> close read session + native handle + private file, retaining primary 
 failed native cleanup -> explicit retryable cleanup owner in the typed error
 ```
 
-Ordinary execution never launches or installs a compiler. `osdi-inspect` inspects
-metadata and exercises storage. `osdi-evaluate` invokes the public preparation/evaluation protocols
+Ordinary execution never launches or installs a compiler. `osdi inspect` inspects
+metadata and exercises storage. `osdi evaluate` invokes the public preparation/evaluation protocols
 and serializes raw descriptor-coordinate values plus topology and exact inputs.
 Neither command claims a solved circuit, physical operating point or interval proof.
 
@@ -247,7 +280,7 @@ without relaxing the original circuit-equation tolerances. Numerical semantics
 belong to [Model Evaluation](Sources/OSDIContracts/ModelEvaluation/DESIGN.md#s4d-precision-boundary--d1-proposal),
 compiler program transport to [DeviceEvaluation](Sources/COSDI/DeviceEvaluation/DESIGN.md#s4d-optional-precision-extension--d1-contract),
 process/resource ownership to [PointEvaluation](Sources/OSDIRuntime/PointEvaluation/DESIGN.md#s4d-precision-session--d1-contract),
-and enclosed arithmetic to [COSDIPrecision](Sources/COSDIPrecision/DESIGN.md).
+and enclosed arithmetic to [OSDIPrecisionWorker](Sources/OSDIPrecisionWorker/DESIGN.md).
 These child contracts are the authority; this section does not establish a
 qualified implementation.
 
@@ -375,7 +408,7 @@ inputs or outputs as a box.
 The [precision contract](Sources/OSDIContracts/PrecisionEvaluation/DESIGN.md),
 [runtime](Sources/OSDIRuntime/PrecisionExecution/DESIGN.md),
 [process](Sources/COSDI/PrecisionProcess/DESIGN.md) and
-[interpreter](Sources/COSDIPrecision/ProgramEvaluation/DESIGN.md) own their
+[interpreter](Sources/OSDIPrecisionWorker/ProgramEvaluation/DESIGN.md) own their
 respective implementation details. Verification must include a floor-crossing
 counterexample, closed boxes touching switch/domain faces, nonlinear closed-form
 F/Q/G/C bounds, point-regression parity, invalid box geometry, work/storage limits,
@@ -403,4 +436,4 @@ A chart succeeds only at its local conditional formula contract. It does not est
 
 ## Complete Source Decision Cover Boundary
 
-[DecisionCover](Sources/COSDIPrecision/DecisionCover/DESIGN.md) owns finite exhaustive construction plus independent source replay checking. The separate [public runtime](Sources/OSDIRuntime/DecisionCover/DESIGN.md) exposes only checked complete trees/all terminal formula leaves over the original exact box, through protocol 4 and the existing exclusive session. Program ABI 1 and protocols 1–3 retain their exact contracts. Complete decision coverage does not establish feasible charts, circuit roots, continuity/resets, physical flow, entire history or model calibration; those upper obligations and the original source admission remain unchanged.
+[DecisionCover](Sources/OSDIPrecisionWorker/DecisionCover/DESIGN.md) owns finite exhaustive construction plus independent source replay checking. The separate [public runtime](Sources/OSDIRuntime/DecisionCover/DESIGN.md) exposes only checked complete trees/all terminal formula leaves over the original exact box, through protocol 4 and the existing exclusive session. Program ABI 1 and protocols 1–3 retain their exact contracts. Complete decision coverage does not establish feasible charts, circuit roots, continuity/resets, physical flow, entire history or model calibration; those upper obligations and the original source admission remain unchanged.

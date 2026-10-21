@@ -1,6 +1,6 @@
 /* Direct production evaluation with private-arena counters; no timing claims. */
-#include "../../Sources/COSDIPrecision/Arena/Arena.h"
-#include "../../Sources/COSDIPrecision/ProgramEvaluation/Program.h"
+#include "../../Sources/OSDIPrecisionWorker/Arena/Arena.h"
+#include "../../Sources/OSDIPrecisionWorker/ProgramEvaluation/Program.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>

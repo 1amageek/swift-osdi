@@ -1,6 +1,6 @@
 /* Invalid-response generator only. Source computation uses the real worker;
  * mutations after its successful checker are never numerical evidence. */
-#include "../../Sources/COSDIPrecision/include/COSDIPrecision.h"
+#include "../../Sources/OSDIPrecisionWorker/WorkerProtocol/Worker.h"
 #include "../../Sources/COSDI/include/OSDIPrecisionProtocol.h"
 #include <dlfcn.h>
 #include <math.h>

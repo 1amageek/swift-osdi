@@ -83,7 +83,7 @@ These do not alter the nineteen numeric model points or finite-difference matrix
 
 ## Real-Family CLI Matrix
 
-`verify_families.py` executes the actual `osdi-evaluate` process for every real-device
+`verify_families.py` executes the actual `osdi evaluate` process for every real-device
 case in an explicit manifest and the ordinary six-context matrix. Each request,
 report, invocation, diagnostics and exact tool/model identity is retained. A separate
 read/decode checks saved bit patterns and exact request binding; all raw values,

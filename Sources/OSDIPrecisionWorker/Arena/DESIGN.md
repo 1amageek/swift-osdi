@@ -1,7 +1,7 @@
 # Arena
 
 ## Purpose and Scope
-Own the sole-process GMP allocator and fixed resident arena. Parent: [COSDIPrecision](../DESIGN.md). No children.
+Own the sole-process GMP allocator and fixed resident arena. Parent: [OSDIPrecisionWorker](../DESIGN.md). No children.
 
 ## Responsibilities and Boundaries
 Aligned blocks split, merge and reallocate inside one admitted region; exhaustion exits 80 and invariant failure exits 81. GMP hooks never return NULL or longjmp.
@@ -9,7 +9,7 @@ Aligned blocks split, merge and reallocate inside one admitted region; exhaustio
 ## Related Designs
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [COSDIPrecision](../DESIGN.md) | parent | Isolated precision execution | Owns composition and resource contract | Failure never changes accepted circuit state |
+| [OSDIPrecisionWorker](../DESIGN.md) | parent | Isolated precision execution | Owns composition and resource contract | Failure never changes accepted circuit state |
 
 ## Architecture
 ```text

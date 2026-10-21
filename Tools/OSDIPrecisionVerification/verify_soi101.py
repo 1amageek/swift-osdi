@@ -173,7 +173,7 @@ def main():
     def run(name, request):
         request_path, report_path = out / (name + '-request.json'), out / (name + '-report.json')
         save(request_path, request)
-        argv = [str(args.cli.resolve()), '--precision-request', str(request_path), '--output', str(report_path)]
+        argv = [str(args.cli.resolve()), 'precision', '--request', str(request_path), '--output', str(report_path)]
         started = time.monotonic()
         with (out / (name + '.stdout')).open('xb') as stdout, (out / (name + '.stderr')).open('xb') as stderr:
             child = subprocess.Popen(argv, stdout=stdout, stderr=stderr, start_new_session=True)

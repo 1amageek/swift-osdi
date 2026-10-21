@@ -19,7 +19,7 @@ wire validity does not establish algebraic truth, rank, a root or history.
 |---|---|---|---|---|
 | [PrecisionProcess](../DESIGN.md) | parent | Exact child, mapping, admission and cleanup | Existing process owner | No second process lifecycle |
 | [DecisionCover boundary](../DecisionCover/DESIGN.md) | depends on | Complete source-cover response checks | Shared cover prefix and binding | All cover records must validate |
-| [Worker projection](../../../COSDIPrecision/WorkerProtocol/ConstitutiveIdentities/DESIGN.md) | coordinates with | Canonical protocol-5 wire representation | Producer/consumer ABI | Changes require both sides |
+| [Worker projection](../../../OSDIPrecisionWorker/WorkerProtocol/ConstitutiveIdentities/DESIGN.md) | coordinates with | Canonical protocol-5 wire representation | Producer/consumer ABI | Changes require both sides |
 | [Swift runtime](../../../OSDIRuntime/ConstitutiveIdentities/DESIGN.md) | used by | Validated C result borrow | Public native access | No callback on failure |
 
 ## Architecture

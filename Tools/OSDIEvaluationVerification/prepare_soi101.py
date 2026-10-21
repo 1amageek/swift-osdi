@@ -87,7 +87,7 @@ def prepare(args):
         del request['simulationParameters'][0]['scope']
         request_path, report_path = output/(identifier+'-prepare-request.json'), output/(identifier+'-prepare-report.json')
         save(request_path, request)
-        run([cli, '--request', request_path, '--output', report_path], output, identifier+'-prepare', receipts)
+        run([cli, 'evaluate', '--request', request_path, '--output', report_path], output, identifier+'-prepare', receipts)
         report = json.loads(report_path.read_bytes())
         require(report['succeeded'] and report['input'] == request, identifier+': public prepare')
         require(report['requestBinding'] == {'sha256': digest(request_path), 'byteCount': request_path.stat().st_size},

@@ -1,8 +1,8 @@
-# OSDIInspect
+# Inspection CLI Command
 
 ## Purpose and Scope
 
-Parent: [package](../../DESIGN.md). No children. Own a host-only inspection CLI for
+Parent: [OSDICLI](../DESIGN.md). No children. Own a host-only inspection CLI for
 S1's public artifact/library/storage path; it is not a circuit simulator.
 
 ## Responsibilities and Boundaries
@@ -15,8 +15,8 @@ replace a digest, initialize model physics or select a circuit solver.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [Runtime](../OSDIRuntime/DESIGN.md) | depends on | load/storage/close | Actual public path | Metadata/storage success is not model evaluation |
-| [Foundation](../../../CircuiteFoundation/DESIGN.md) | depends on | Local exact artifact source | Bounded acquisition | Caller supplies expected digest/size and budgets |
+| [Runtime](../../OSDIRuntime/DESIGN.md) | depends on | load/storage/close | Actual public path | Metadata/storage success is not model evaluation |
+| [Foundation](../../../../CircuiteFoundation/DESIGN.md) | depends on | Local exact artifact source | Bounded acquisition | Caller supplies expected digest/size and budgets |
 
 ## Architecture
 

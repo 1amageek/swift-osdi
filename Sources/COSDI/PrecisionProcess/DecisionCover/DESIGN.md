@@ -6,14 +6,14 @@ Parent: [PrecisionProcess](../DESIGN.md). No children. Own protocol-4 tree/cell/
 
 ## Responsibilities and Boundaries
 
-Project a successful checked native cover into fixed pointer-free wire records and admit the complete response before borrowing. The numeric worker's [independent checker](../../../COSDIPrecision/DecisionCover/DESIGN.md) owns source replay; parent validation is additional wire/partition/incidence/provenance validation, not an independent physical proof. Compiler program ABI 1 and protocols 1–3 remain exact.
+Project a successful checked native cover into fixed pointer-free wire records and admit the complete response before borrowing. The numeric worker's [independent checker](../../../OSDIPrecisionWorker/DecisionCover/DESIGN.md) owns source replay; parent validation is additional wire/partition/incidence/provenance validation, not an independent physical proof. Compiler program ABI 1 and protocols 1–3 remain exact.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PrecisionProcess](../DESIGN.md) | parent | Exact child, geometry, sequence, timeout/cancel, close | Sole lifecycle | No duplicate spawn/reap implementation |
-| [Worker Cover Transport](../../../COSDIPrecision/WorkerProtocol/DecisionCover/DESIGN.md) | coordinates with | Atomic complete-only wire | Shared record contract | Native padding is never serialized |
+| [Worker Cover Transport](../../../OSDIPrecisionWorker/WorkerProtocol/DecisionCover/DESIGN.md) | coordinates with | Atomic complete-only wire | Shared record contract | Native padding is never serialized |
 | [Runtime DecisionCover](../../../OSDIRuntime/DecisionCover/DESIGN.md) | used by | Borrowed validated tree/leaf pool | Scoped public API | No partial view |
 
 ## Architecture
