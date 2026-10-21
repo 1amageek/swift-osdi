@@ -67,21 +67,13 @@ SWIFT="$HOME/Library/Developer/Toolchains/swift-6.4.0-RELEASE.xctoolchain/usr/bi
 "$SWIFT" --version
 ```
 
-The package requires CircuiteFoundation at exact stable version **26.1021.0**
-from its public Git URL. [Package.swift](Package.swift) owns that version
-requirement; [Package.resolved](Package.resolved) binds it to commit
-`4d03b5a561c82a756aaf93860f657733371538dc`. Release admission verifies both the
-published version tag and the resolved commit. No sibling workspace checkout,
-SwiftPM mirror or local override is required; see [RELEASING.md](RELEASING.md).
-
-The source-release target is **1.2.1**; publication is established by its verified
-remote tag and release. It retains the exact stable CircuiteFoundation dependency
-`26.1021.0`. Version 1.0.1 corrected the superseded 1.0.0 revision-only dependency;
-1.1.0 added finite source guard/chart/cover and conditional identity contracts.
-1.2.0 adds typed simulation-REAL and own-scope Given inputs, and caller-controlled
-snapshot construction. Version 1.2.1 aligns the stable Foundation dependency without
-changing SDK API, worker/model source or numerical semantics. Release admission checks downstream `exact: "1.2.1"`
-resolution.
+The 1.2.2 source-only compatibility candidate requires canonical public
+CircuiteFoundation exact **26.1021.1**, whose published tag and fresh resolved lock
+bind `7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3`. A revision-only selector, sibling
+workspace, mirror or local override is not a stable-version substitute. All SDK
+implementation/test/tool/worker/model bytes remain identical to public 1.2.1.
+Old tags remain immutable. Release admission separately verifies the fresh public
+`exact: "1.2.2"` consumer after the new SDK tag; preparation is not publication.
 
 For cumulatively bounded snapshot construction, implement
 `OSDIPrecisionSnapshotControlling` and call the public
@@ -173,7 +165,7 @@ The [external consumer tool](Tools/OSDIConsumerVerification/DESIGN.md) performs 
 fresh source/dependency resolution with explicit public version and commit
 bindings; its
 `--help` documents the exact invocation. It requires no experimental Swift flags
-in the consuming package. Select `--precision` for the required 1.2.1 release/CI
+in the consuming package. Select `--precision` for the required 1.2.2 release/CI
 public source-fact probe, including an actual optional precision export, borrowed
 conditional identities, wrong-operation/limit refusals and explicit cleanup.
 Ordinary mode remains available for lightweight point API/CLI checks. The source
@@ -356,8 +348,10 @@ receipts only apply while their bound source/profile assumptions remain valid.
 The SDK is licensed under **GPL-3.0-only**; see the root [LICENSE](LICENSE)
 and [NOTICE](NOTICE).
 CircuiteFoundation is a separate **MIT-licensed** dependency at exact stable
-version **26.1021.0**, bound by [Package.resolved](Package.resolved) to
-[`4d03b5a561c82a756aaf93860f657733371538dc`](https://github.com/1amageek/CircuiteFoundation/blob/4d03b5a561c82a756aaf93860f657733371538dc/LICENSE).
+version **26.1021.1**, bound by [Package.resolved](Package.resolved) to
+[`7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3`](https://github.com/1amageek/CircuiteFoundation/blob/7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3/LICENSE).
+The prior 1.2.1 lock and its 26.1021.0 dependency remain historical evidence.
+The current dependency preserves the original MIT license and notices.
 Preserve its copyright and license notice when redistributing its source. Upstream OSDI header license text,
 notices and exact provenance remain under
 [ThirdParty/OpenVAF-Reloaded](ThirdParty/OpenVAF-Reloaded).
@@ -371,7 +365,7 @@ OpenVAFSupport — Copyright (c) 2026, 1amageek — originates from
 notice and its visible attribution requirements. Upstream-derived compiler patch
 material remains subject to its upstream GPL terms as that notice specifies.
 
-Version 1.2.1 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
+Version 1.2.2 is prepared as a **source-only** compatibility successor. No compiled CLI, precision worker,
 model library or GMP/MPFR archive is included as a release asset. Local builds
 remain supported; binary redistribution requires reviewing the actual linked
 licenses and satisfying their corresponding-source/relinking obligations.

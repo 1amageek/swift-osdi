@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.2 — 2026-10-21 — source compatibility release candidate
+
+- Align exact stable CircuiteFoundation 26.1021.1 with its published commit
+  `7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3` and fresh canonical lock.
+  Do not substitute a Git revision requirement.
+- Preserve all production/test/tool/worker/model/numeric source bytes from public
+  1.2.1 and retain its original finite qualification/model evidence separately.
+- Require the release procedure and fresh public exact-version consumer before
+  publication. Old tags, GPL/MIT terms, upstream notices and source-only scope
+  remain unchanged. No new numerical or model qualification is claimed.
+
 ## 1.2.1 — 2026-10-21 — source compatibility release candidate
 
 - Align CircuiteFoundation with exact stable `26.1021.0`, resolving to

@@ -411,3 +411,26 @@ A chart succeeds only at its local conditional formula contract. It does not est
 ## Complete Source Decision Cover Boundary
 
 [DecisionCover](Sources/COSDIPrecision/DecisionCover/DESIGN.md) owns finite exhaustive construction plus independent source replay checking. The separate [public runtime](Sources/OSDIRuntime/DecisionCover/DESIGN.md) exposes only checked complete trees/all terminal formula leaves over the original exact box, through protocol 4 and the existing exclusive session. Program ABI 1 and protocols 1–3 retain their exact contracts. Complete decision coverage does not establish feasible charts, circuit roots, continuity/resets, physical flow, entire history or model calibration; those upper obligations and the original source admission remain unchanged.
+
+
+### 1.2.2 compatibility successor
+
+This isolated candidate preserves all Sources, Tests, Tools, models, worker and
+numeric source bytes and modes from public 1.2.1 at
+010f633892177322b433de3c64548999dbeaa0a1. Only dependency/release metadata is
+aligned to exact public CircuiteFoundation 26.1021.1, whose published tag binds
+7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3. Fresh canonical resolution must verify that
+same version and commit; a revision-only requirement cannot replace stable-version
+resolution. ToolQualification remains a sibling consumer, not a new SDK edge.
+Existing tags and licenses remain unchanged.
+
+RELEASING owns fresh Native Debug, precision Release, Address Sanitizer and
+public exact-version consumer admission. Original model/source/worker evidence
+may compose only through explicit unchanged bindings; it is not re-executed or
+requalified by metadata edits. Fresh public consumer qualification covers generic SDK API/CLI and precision
+fixtures, including persistence and lifecycle, on the new exact dependency graph.
+The final release binding separately joins the historical actual four-family
+model evidence while its exact source/program/setup/worker/input assumptions
+remain unchanged. The generic consumer does not rerun or newly qualify those
+models. The new patch makes no numerical, source-proof, circuit, history or
+foundry claim.
