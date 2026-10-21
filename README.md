@@ -71,15 +71,15 @@ The existing Swift 6.4 release/macOS SDK/Clang and numeric-library build
 prerequisites still apply. Explicit real-model/independent precision qualification
 tools retain Python where required; those gates are separate from ordinary tests.
 
-## Next-major module composition
+## Version 2.0 migration
 
-The working source exposes two Swift libraries, `OSDIContracts` and `OSDIRuntime`,
+Version 2.0 exposes two Swift libraries, `OSDIContracts` and `OSDIRuntime`,
 and two executables, `osdi` and `osdi-precision-worker`. COSDI is an internal C
 target. Contracts use only the Swift standard library. The precision executable
 owns its entrypoint and arithmetic components; ordinary products do not link GMP
 or MPFR. Published 1.x tags and their original qualification evidence are unchanged.
 
-| Previous 1.x command | Current working-source command |
+| Previous 1.x command | Version 2.0 command |
 |---|---|
 | `osdi-inspect --request INPUT --output REPORT` | `osdi inspect --request INPUT --output REPORT` |
 | `osdi-evaluate --request INPUT --output REPORT` | `osdi evaluate --request INPUT --output REPORT` |
@@ -87,29 +87,24 @@ or MPFR. Published 1.x tags and their original qualification evidence are unchan
 
 JSON request/report schemas and Swift public library names remain unchanged.
 Consumers of the former COSDI product must use the Swift Runtime API; its product
-removal and the executable changes are next-major compatibility changes. Existing
-1.x release instructions below describe those immutable releases, not a new
-publication or qualification of the changed working source.
+removal and executable changes require migrating 1.x consumers to version 2.0.
+Existing 1.x tags remain unchanged.
 
 ## Build from a standalone checkout
 
 Requires Swift 6.4.0 and an Xcode/macOS SDK supporting macOS 26.
 Use the default `swift` executable.
 
-The package requires CircuiteFoundation at exact stable version **26.1018.0**
-from its public Git URL. [Package.swift](Package.swift) owns that version
-requirement; [Package.resolved](Package.resolved) binds it to commit
-`5f132c58209123433e0e479e1ea61096e46061ba`. Release admission verifies both the
-published version tag and the resolved commit. No sibling workspace checkout,
-SwiftPM mirror or local override is required; see [RELEASING.md](RELEASING.md).
+The source-only release target is **2.0.0**. It includes the migration above and
+Python-free ordinary fixture preparation. Release admission verifies the canonical
+public `exact: "2.0.0"` consumer, API/CLI persistence and precision worker binding.
 
-The source-release target is **1.2.0**; publication is established by its verified
-remote tag and release. It retains the exact stable CircuiteFoundation dependency
-`26.1018.0`. Version 1.0.1 corrected the superseded 1.0.0 revision-only dependency;
-1.1.0 added finite source guard/chart/cover and conditional identity contracts.
-1.2.0 adds typed simulation-REAL and own-scope Given inputs, and caller-controlled
-snapshot construction. Release admission checks downstream `exact: "1.2.0"`
-resolution.
+[Package.swift](Package.swift) requires exact public CircuiteFoundation **26.1021.1**;
+[Package.resolved](Package.resolved) binds it to
+`7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3`. Host-only test support uses exact
+SignoffToolSupport **26.1018.0**, bound to
+`e15ea6cd60ca1957297aafbba839e51a478d735e`. Neither dependency requires a sibling
+workspace, local override or mirror. See [RELEASING.md](RELEASING.md).
 
 For cumulatively bounded snapshot construction, implement
 `OSDIPrecisionSnapshotControlling` and call the public
@@ -198,7 +193,7 @@ The [external consumer tool](Tools/OSDIConsumerVerification/DESIGN.md) performs 
 fresh source/dependency resolution with explicit public version and commit
 bindings; its
 `--help` documents the exact invocation. It requires no experimental Swift flags
-in the consuming package. Select `--precision` for the required 1.2.0 release/CI
+in the consuming package. Select `--precision` for the required 2.0.0 release/CI
 public source-fact probe, including an actual optional precision export, borrowed
 conditional identities, wrong-operation/limit refusals and explicit cleanup.
 Ordinary mode remains available for lightweight point API/CLI checks. The source
@@ -383,8 +378,8 @@ and [NOTICE](NOTICE).
 The host-only test support also uses MIT-licensed SignoffToolSupport at exact
 stable version `26.1018.0`; its original license is retained in the dependency checkout.
 CircuiteFoundation is a separate **MIT-licensed** dependency at exact stable
-version **26.1018.0**, bound by [Package.resolved](Package.resolved) to
-[`5f132c58209123433e0e479e1ea61096e46061ba`](https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE).
+version **26.1021.1**, bound by [Package.resolved](Package.resolved) to
+[`7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3`](https://github.com/1amageek/CircuiteFoundation/blob/7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3/LICENSE).
 Preserve its copyright and license notice when redistributing its source. Upstream OSDI header license text,
 notices and exact provenance remain under
 [ThirdParty/OpenVAF-Reloaded](ThirdParty/OpenVAF-Reloaded).
@@ -398,7 +393,7 @@ OpenVAFSupport — Copyright (c) 2026, 1amageek — originates from
 notice and its visible attribution requirements. Upstream-derived compiler patch
 material remains subject to its upstream GPL terms as that notice specifies.
 
-Version 1.2.0 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
+Version 2.0.0 is prepared as a **source-only** distribution. No compiled CLI, precision worker,
 model library or GMP/MPFR archive is included as a release asset. Local builds
 remain supported; binary redistribution requires reviewing the actual linked
 licenses and satisfying their corresponding-source/relinking obligations.

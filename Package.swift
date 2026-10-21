@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/1amageek/CircuiteFoundation.git",
-                 exact: "26.1018.0"),
+                 exact: "26.1021.1"),
         .package(url: "https://github.com/1amageek/SignoffToolSupport.git",
                  exact: "26.1018.0")
     ],

@@ -1,7 +1,7 @@
 {
   "schema": "osdi.release-qualification-index.v1",
-  "releaseVersion": "1.2.0",
-  "intendedSourceReleaseDate": "2026-10-19",
+  "releaseVersion": "2.0.0",
+  "intendedSourceReleaseDate": "2026-10-21",
   "status": "scope-index-not-a-publication-or-success-receipt",
   "host": {
     "platform": "macOS",
@@ -16,6 +16,12 @@
       "entrypoint": "Tools/OSDIStandaloneVerification/run.py",
       "externalModels": false,
       "proofScope": "tracked native admission, lifecycle, API/CLI point and transport fixtures"
+    },
+    {
+      "id": "ordinary-swift-cache",
+      "entrypoint": "swift test",
+      "externalModels": false,
+      "proofScope": "Swift-owned native fixture preparation; Python-denied cold/warm runs, compiler launch counts, immutable artifact reuse, isolated lifetime observations and bounded failure/cleanup"
     },
     {
       "id": "deterministic-precision",
@@ -99,9 +105,9 @@
       "identifier": "MIT",
       "repository": "https://github.com/1amageek/CircuiteFoundation.git",
       "notice": "Preserve the license and copyright at the exact dependency revision",
-      "revision": "5f132c58209123433e0e479e1ea61096e46061ba",
-      "text": "https://github.com/1amageek/CircuiteFoundation/blob/5f132c58209123433e0e479e1ea61096e46061ba/LICENSE",
-      "exactVersion": "26.1018.0",
+      "revision": "7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3",
+      "text": "https://github.com/1amageek/CircuiteFoundation/blob/7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3/LICENSE",
+      "exactVersion": "26.1021.1",
       "versionAuthority": "Package.swift",
       "resolvedCommitAuthority": "Package.resolved"
     },
@@ -110,6 +116,14 @@
       "text": "Tools/OpenVAFCompilerFixture/NOTICE",
       "attribution": "OpenVAFSupport \u2014 Copyright (c) 2026, 1amageek \u2014 https://github.com/1amageek/swift-openvaf",
       "upstreamDerivedPatch": "Retains upstream GPL terms as specified in NOTICE"
+    },
+    "SignoffToolSupport": {
+      "identifier": "MIT",
+      "repository": "https://github.com/1amageek/SignoffToolSupport.git",
+      "exactVersion": "26.1018.0",
+      "revision": "e15ea6cd60ca1957297aafbba839e51a478d735e",
+      "scope": "host-only test support; no production product dependency",
+      "notice": "Preserve the original copyright and license"
     }
   }
 }

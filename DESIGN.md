@@ -29,7 +29,7 @@ The host-only [test support](Tests/OSDITestSupport/DESIGN.md) owns automatic cac
 
 ## Module Composition
 
-The next-major source layout exposes four products: `OSDIContracts`,
+The version 2.0 source layout exposes four products: `OSDIContracts`,
 `OSDIRuntime`, `osdi`, and `osdi-precision-worker`. Seven production targets
 implement them; `COSDI`, `CGMP` and `CMPFR` are internal build dependencies.
 `OSDIContracts` uses only the Swift standard library. Runtime owns native image,
@@ -53,7 +53,7 @@ LocalAccess remains a separate design-only handoff, not an implementation
 prerequisite or an additional product in this composition task.
 
 Removal of the `COSDI` library product and replacement of `osdi-inspect` and
-`osdi-evaluate` are next-major compatibility changes. Existing 1.x tags and
+`osdi-evaluate` are version 2.0 compatibility changes. Existing 1.x tags and
 qualification receipts remain immutable. CLI payload schemas remain unchanged:
 `osdi inspect --request`, `osdi evaluate --request`, and
 `osdi precision --request` replace the former executable/precision-flag selection.
@@ -201,17 +201,21 @@ or all-corner obligations below.
 
 ### Independent release dependency
 
-The release candidate requires exact stable CircuiteFoundation version
-`26.1018.0`, with Package.resolved binding its publicly retrievable commit
-`5f132c58209123433e0e479e1ea61096e46061ba`. It adds only an MIT license to
-`ae88104c556f5802819713ed741f5b2fffffc2d9`; all implementation, manifest and test
-bytes are unchanged. The prior separate SwiftPM consumer compiled, linked and
-exercised the public artifact, preparation, evaluation and cleanup contracts at
-`ae88104c556f5802819713ed741f5b2fffffc2d9` without client experimental flags or
-dependency mirrors. Publication additionally verifies the new exact graph. This replaces the historical unpublished S3 availability input below;
-the used public contracts are unchanged. The publisher approved GPL-3.0-only for this source distribution and MIT for
-CircuiteFoundation. Root LICENSE/NOTICE and separately identified upstream notices
-are authoritative; public Git availability alone does not imply permission.
+Version 2.0 requires exact stable CircuiteFoundation `26.1021.1`, with
+Package.resolved binding `7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3`.
+Host-only test support directly uses exact SignoffToolSupport `26.1018.0`, resolved
+to `e15ea6cd60ca1957297aafbba839e51a478d735e`. It is outside every production product's
+reachable target graph. Both dependencies retain MIT permission and original notices.
+The root LICENSE/NOTICE and separately identified upstream exceptions are authoritative.
+
+[Release admission](RELEASING.md) owns fresh Native Debug, precision Release,
+Address Sanitizer, ordinary Python-denied cache verification and independent public
+`exact: "2.0.0"` consumer gates. Prior 1.2.1/1.2.2 metadata-only compatibility
+receipts remain historical. Version 2.0 changes module/CLI composition and native
+test preparation; those old receipts do not qualify the changed executable or new
+dependency graph. Current finite generic fixtures bind a freshly built worker and
+profile. Historical actual-model evidence retains its original exact worker/source
+scope and is not claimed as fresh version 2.0 model qualification.
 
 ### Historical S3 dependency compatibility — development only
 

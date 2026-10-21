@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.0.0 — 2026-10-21 — source release candidate
+
+- Expose four products: OSDIContracts, OSDIRuntime, osdi and osdi-precision-worker.
+  COSDI becomes internal; precision implementation joins its executable target.
+- Replace osdi-inspect/osdi-evaluate with osdi inspect/evaluate/precision.
+  Preserve typed model evaluation, refusals, lifecycle and precision wire semantics.
+- Remove the Contracts-to-Foundation dependency; contract-only clients remain isolated.
+- Prepare ordinary native fixtures in Swift during swift test. Cache immutable
+  content-keyed compiler outputs, coordinate concurrent processes, and isolate
+  per-run lifetime evidence. Input changes/corruption rebuild affected artifacts;
+  failed or cancelled compilation never publishes success.
+- Integrate public Foundation 26.1021.1 and test-only SignoffToolSupport 26.1018.0.
+  Add Python-denied cold/warm cache verification to CI. Optional independent
+  numerical/model qualification retains Python and explicit input selection.
+- Retain macOS 26+ arm64/Swift 6.4.0, GPL-3.0-only, dependency/upstream notices
+  and source-only distribution. Historical model/worker evidence keeps its exact
+  original scope; no new circuit, history, corner or model-qualification claim.
+
+## 1.2.2 — 2026-10-21 — source compatibility release candidate
+
+- Align exact stable CircuiteFoundation 26.1021.1 with its published commit
+  `7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3` and fresh canonical lock.
+  Do not substitute a Git revision requirement.
+- Preserve all production/test/tool/worker/model/numeric source bytes from public
+  1.2.1 and retain its original finite qualification/model evidence separately.
+- Require the release procedure and fresh public exact-version consumer before
+  publication. Old tags, GPL/MIT terms, upstream notices and source-only scope
+  remain unchanged. No new numerical or model qualification is claimed.
+
+## 1.2.1 — 2026-10-21 — source compatibility release candidate
+
+- Align CircuiteFoundation with exact stable `26.1021.0`, resolving to
+  `4d03b5a561c82a756aaf93860f657733371538dc`.
+- Preserve all SDK API, worker/model source, numeric profiles, wire layouts and
+  failure/ownership semantics from immutable `1.2.0`.
+- Require fresh Native release gates and the independent public exact-version
+  consumer. Historical model evidence keeps its original scope.
+- Retain GPL-3.0-only, MIT dependency notices, upstream exceptions and source-only
+  distribution. Old tags remain unchanged; no new circuit/history/corner claim.
+
 ## 1.2.0 — 2026-10-19 — source release candidate
 
 - Add precision-program input kinds 13 (`SIM_REAL_VALUE`) and 14
