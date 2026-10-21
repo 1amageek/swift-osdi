@@ -238,8 +238,9 @@ success receipt or a substitute for exact per-run evidence.
 consumer checks on `macos-26` arm64, with `contents: read`, no deployment token and
 no publishing job. Main-branch source changes, pull requests and manual dispatch
 run qualification; progress-ledger-only pushes and tag pushes do not repeat an
-already qualified source build. It verifies the default Swift executable against the fixed release baseline
-before use. An unexpected default compiler fails explicitly. Generated receipts and
+already qualified source build. It automatically installs and verifies the fixed signed release, then exports
+its bin directory through GITHUB_PATH. All subsequent commands use ordinary
+`swift` from PATH. Unexpected installer identity or compiler version fails explicitly. Generated receipts and
 logs are CI evidence; compiled binaries are not release assets.
 
 The runner label, installation process and action revisions were checked against

@@ -38,20 +38,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Verify default Swift 6.4.0 release
+      - name: Install and verify Swift 6.4.0 release
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PYVERSION'
+          python3 - <<'PY'
+          import os
+          import pathlib
           import platform
-          import re
           import subprocess
+          import re
           assert platform.machine() == 'arm64', 'macos-26 must provide arm64'
           assert int(platform.mac_ver()[0].split('.')[0]) >= 26
-          version = subprocess.check_output(['swift', '--version'], text=True, timeout=30)
-          assert re.search(r'\bSwift version 6\.4(?:\.0)?(?:\s|\()', version) and 'DEVELOPMENT' not in version and '-dev' not in version, version
+          package = pathlib.Path(os.environ['RUNNER_TEMP']) / 'swift-6.4.0-RELEASE-osx.pkg'
+          url = 'https://download.swift.org/swift-6.4.0-release/xcode/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE-osx.pkg'
+          subprocess.run(['curl', '--fail', '--location', '--retry', '2', '--max-time', '180',
+                          '--output', str(package), url], check=True, timeout=200)
+          signature = subprocess.check_output(['pkgutil', '--check-signature', str(package)], text=True, timeout=30)
+          assert 'Developer ID Installer: Swift Open Source (V9AUD2URP3)' in signature, signature
+          subprocess.run(['installer', '-target', 'CurrentUserHomeDirectory', '-pkg', str(package)],
+                         check=True, timeout=300)
+          swift = pathlib.Path.home() / 'Library/Developer/Toolchains/swift-6.4.0-RELEASE.xctoolchain/usr/bin/swift'
+          version = subprocess.check_output([str(swift), '--version'], text=True, timeout=30)
+          assert re.search(r'\bSwift version 6\.4(?:\.0)?(?:\s|\()', version) and 'DEVELOPMENT' not in version, version
           print(version)
-          PYVERSION
+          with open(os.environ['GITHUB_PATH'], 'a') as stream:
+              stream.write(str(swift.parent) + '\n')
+          PY
       - name: Install numeric build prerequisites
         shell: bash
         run: |
